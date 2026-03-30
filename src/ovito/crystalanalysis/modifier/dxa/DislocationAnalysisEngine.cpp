@@ -82,7 +82,8 @@ void DislocationAnalysisEngine::identifyStructures(const Particles* particles, c
     _simCellVolume = simulationCell->volume3D();
     _structureAnalysis.emplace(positions, simulationCell, (StructureAnalysis::LatticeStructureType)_inputCrystalStructure, selection,
                                const_cast<ClusterGraph*>(_dislocationNetwork->clusterGraph()), structures(),
-                               std::move(_preferredCrystalOrientations), !_onlyPerfectDislocations);
+                               std::move(_preferredCrystalOrientations), !_onlyPerfectDislocations,
+                               StructureAnalysis::METHOD_PTM);
     _tessellation.emplace();
     _elasticMapping.emplace(*_structureAnalysis, *_tessellation);
     _interfaceMesh.emplace(*_elasticMapping, simulationCell);
