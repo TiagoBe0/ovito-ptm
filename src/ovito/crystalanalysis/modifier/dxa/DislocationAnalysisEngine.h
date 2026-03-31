@@ -45,7 +45,8 @@ public:
                               std::vector<Matrix3> preferredCrystalOrientations, bool onlyPerfectDislocations, bool markCoreAtoms,
                               int defectMeshSmoothingLevel, DataOORef<DislocationNetwork> dislocationNetwork,
                               DataOORef<SurfaceMesh> defectMesh, DataOORef<SurfaceMesh> outputInterfaceMesh, int lineSmoothingLevel,
-                              FloatType linePointInterval);
+                              FloatType linePointInterval,
+                              StructureAnalysis::IdentificationMethod identificationMethod = StructureAnalysis::METHOD_PTM);
 
     /// Performs the atomic structure classification.
     virtual void identifyStructures(const Particles* particles, const SimulationCell* simulationCell, const Property* selection) override;
@@ -92,6 +93,7 @@ private:
 private:
     int _inputCrystalStructure;
     bool _onlyPerfectDislocations;
+    StructureAnalysis::IdentificationMethod _identificationMethod;
     bool _markCoreAtoms;
     int _defectMeshSmoothingLevel;
     int _lineSmoothingLevel;

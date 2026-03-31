@@ -110,6 +110,9 @@ void DislocationAnalysisModifierEditor::createUI(const RolloutInsertionParameter
     BooleanParameterUI* onlyPerfectDislocationsUI = createParamUI<BooleanParameterUI>(PROPERTY_FIELD(DislocationAnalysisModifier::onlyPerfectDislocations));
     sublayout->addWidget(onlyPerfectDislocationsUI->checkBox(), row++, 0);
 
+    BooleanParameterUI* usePTMUI = createParamUI<BooleanParameterUI>(PROPERTY_FIELD(DislocationAnalysisModifier::usePTM));
+    sublayout->addWidget(usePTMUI->checkBox(), row++, 0);
+
     QGroupBox* postprocessingBox = new QGroupBox(tr("Post-processing"));
     layout->addWidget(postprocessingBox);
     sublayout = new QGridLayout(postprocessingBox);

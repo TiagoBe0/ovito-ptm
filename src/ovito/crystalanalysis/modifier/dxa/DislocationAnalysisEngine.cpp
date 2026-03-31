@@ -48,10 +48,12 @@ DislocationAnalysisEngine::DislocationAnalysisEngine(PropertyPtr structures, siz
                                                      bool onlyPerfectDislocations, bool markCoreAtoms, int defectMeshSmoothingLevel,
                                                      DataOORef<DislocationNetwork> dislocationNetwork, DataOORef<SurfaceMesh> defectMesh,
                                                      DataOORef<SurfaceMesh> outputInterfaceMesh, int lineSmoothingLevel,
-                                                     FloatType linePointInterval)
+                                                     FloatType linePointInterval,
+                                                     StructureAnalysis::IdentificationMethod identificationMethod)
     : StructureIdentificationModifier::Algorithm(std::move(structures)),
       _inputCrystalStructure(inputCrystalStructure),
       _onlyPerfectDislocations(onlyPerfectDislocations),
+      _identificationMethod(identificationMethod),
       _markCoreAtoms(markCoreAtoms),
       _defectMeshSmoothingLevel(defectMeshSmoothingLevel),
       _lineSmoothingLevel(lineSmoothingLevel),
@@ -83,7 +85,7 @@ void DislocationAnalysisEngine::identifyStructures(const Particles* particles, c
     _structureAnalysis.emplace(positions, simulationCell, (StructureAnalysis::LatticeStructureType)_inputCrystalStructure, selection,
                                const_cast<ClusterGraph*>(_dislocationNetwork->clusterGraph()), structures(),
                                std::move(_preferredCrystalOrientations), !_onlyPerfectDislocations,
-                               StructureAnalysis::METHOD_PTM);
+                               _identificationMethod);
     _tessellation.emplace();
     _elasticMapping.emplace(*_structureAnalysis, *_tessellation);
     _interfaceMesh.emplace(*_elasticMapping, simulationCell);
