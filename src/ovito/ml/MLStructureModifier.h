@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include <ovito/ml/MLPlugin.h>
 #include <ovito/core/dataset/pipeline/Modifier.h>
 #include <ovito/core/dataset/pipeline/PipelineFlowState.h>
 #include <ovito/particles/Particles.h>

@@ -20,6 +20,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////////////
 
+#include <ovito/ml/MLPlugin.h>
 #include <ovito/core/dataset/DataSet.h>
 #include <ovito/core/dataset/pipeline/ModificationNode.h>
 #include <ovito/core/dataset/pipeline/ModifierEvaluationRequest.h>
