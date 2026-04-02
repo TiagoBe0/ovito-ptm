@@ -81,16 +81,16 @@ private:
 
     /// Filesystem path to a TorchScript model file (.pt).
     /// Set via the property field system so OVITO can serialize/deserialize it.
-    DECLARE_MODIFIABLE_PROPERTY_FIELD(QString, modelPath, setModelPath);
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(QString{}, modelPath, setModelPath);
 
     /// Cutoff radius used to build the local environment descriptor (Angstrom).
     /// Must match the value used when training the model (default: 5.0 Å).
-    DECLARE_MODIFIABLE_PROPERTY_FIELD(FloatType, cutoffRadius, setCutoffRadius);
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(FloatType{5.0}, cutoffRadius, setCutoffRadius);
 
     /// Maximum number of neighbors included in the descriptor vector.
     /// Distances are sorted ascending; shorter vectors are padded with cutoffRadius.
     /// Must match MAX_NEIGH in the Python training script (default: 16).
-    DECLARE_MODIFIABLE_PROPERTY_FIELD(int, numNeighbors, setNumNeighbors);
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(int{16}, numNeighbors, setNumNeighbors);
 };
 
 }  // namespace Ovito
