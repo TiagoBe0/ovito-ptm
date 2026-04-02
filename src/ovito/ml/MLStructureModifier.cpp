@@ -20,6 +20,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////////////
 
+#include <ovito/ml/MLPlugin.h>
 #include <ovito/core/dataset/DataSet.h>
 #include <ovito/core/dataset/pipeline/ModificationNode.h>
 #include <ovito/core/dataset/pipeline/ModifierEvaluationRequest.h>
@@ -43,7 +44,7 @@ namespace Ovito {
 
 IMPLEMENT_CREATABLE_OVITO_CLASS(MLStructureModifier);
 OVITO_CLASSINFO(MLStructureModifier, "DisplayName",      "ML Structure Modifier");
-OVITO_CLASSINFO(MLStructureModifier, "ModifierCategory", "Analysis");
+OVITO_CLASSINFO(MLStructureModifier, "ModifierCategory", "Structure identification");
 
 DEFINE_PROPERTY_FIELD(MLStructureModifier, modelPath);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, cutoffRadius);
