@@ -167,15 +167,18 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
     }
 
     // Wrap the descriptor buffer in a LibTorch tensor (zero-copy via from_blob).
+    // Use int64_t for dimensions — required by LibTorch >= 1.5.
     // descriptorBuf must outlive the tensor – it is alive for the rest of this scope.
     auto inputTensor = torch::from_blob(
         descriptorBuf.data(),
-        {static_cast<long>(N), static_cast<long>(maxK)},
+        {static_cast<int64_t>(N), static_cast<int64_t>(maxK)},
         torch::kFloat32);
 
     // Forward pass → logits [N, num_classes].
+    // torch::NoGradGuard disables autograd, reducing memory usage (required in LibTorch >= 1.9+).
     at::Tensor logits;
     try {
+        torch::NoGradGuard no_grad;
         logits = model.forward({inputTensor}).toTensor();
     }
     catch(const c10::Error& e) {
@@ -188,8 +191,9 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
                           "got [%2, ...].").arg(N).arg(logits.size(0)));
 
     // Argmax over class dimension → [N] int32 predictions.
+    // Use int32_t (explicit) — avoids ambiguity in newer LibTorch where int may differ.
     at::Tensor predictions = logits.argmax(/*dim=*/1).to(torch::kInt32).contiguous();
-    const int* predData = predictions.data_ptr<int>();
+    const int32_t* predData = predictions.data_ptr<int32_t>();
     for(size_t i = 0; i < N; ++i)
         outputData[i] = predData[i];
 
