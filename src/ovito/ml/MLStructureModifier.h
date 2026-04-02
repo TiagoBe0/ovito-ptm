@@ -37,9 +37,17 @@ namespace Ovito {
  *
  * Pipeline:
  *   1. Reads particle positions and simulation cell from PipelineFlowState.
- *   2. Builds descriptor tensors (currently: raw xyz coordinates per atom).
- *   3. Forwards through a TorchScript model loaded from modelPath().
- *   4. Writes integer class predictions into a new "ML_Structure" particle property.
+ *   2. For each atom, collects neighbor distances within cutoffRadius() using
+ *      CutoffNeighborFinder, sorts them, pads to numNeighbors() slots, and
+ *      normalises by cutoffRadius().  Produces a [N, numNeighbors] float tensor.
+ *   3. Forwards the tensor through a TorchScript model loaded from modelPath().
+ *      The model must return class logits [N, C]; argmax gives the class index.
+ *   4. Writes integer class indices into a new "ML_Structure" particle property.
+ *
+ * Descriptor: sorted normalised neighbor distances.
+ *   - Rotation & translation invariant.
+ *   - Must match the descriptor used during Python training
+ *     (see scripts/train_structure_classifier.py).
  *
  * When OVITO_ML_HAS_LIBTORCH is not defined, step 3 is skipped and the output
  * property is filled with zeros (placeholder mode, useful for integration testing
@@ -76,7 +84,13 @@ private:
     DECLARE_MODIFIABLE_PROPERTY_FIELD(QString, modelPath, setModelPath);
 
     /// Cutoff radius used to build the local environment descriptor (Angstrom).
+    /// Must match the value used when training the model (default: 5.0 Å).
     DECLARE_MODIFIABLE_PROPERTY_FIELD(FloatType, cutoffRadius, setCutoffRadius);
+
+    /// Maximum number of neighbors included in the descriptor vector.
+    /// Distances are sorted ascending; shorter vectors are padded with cutoffRadius.
+    /// Must match MAX_NEIGH in the Python training script (default: 16).
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(int, numNeighbors, setNumNeighbors);
 };
 
 }  // namespace Ovito
