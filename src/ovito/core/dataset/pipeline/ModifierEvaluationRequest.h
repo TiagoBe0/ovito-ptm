@@ -25,6 +25,7 @@
 
 #include <ovito/core/Core.h>
 #include <ovito/core/dataset/pipeline/PipelineEvaluationRequest.h>
+#include <ovito/core/dataset/pipeline/ModificationNode.h>
 
 namespace Ovito {
 
@@ -62,8 +63,6 @@ private:
 using ModifierInitializationRequest = ModifierEvaluationRequest;
 
 }   // End of namespace
-
-#include "ModificationNode.h"
 
 namespace Ovito {
 
