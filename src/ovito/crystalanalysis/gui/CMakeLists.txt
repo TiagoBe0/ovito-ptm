@@ -32,6 +32,7 @@ OVITO_STANDARD_PLUGIN(CrystalAnalysisGui
         modifier/ElasticStrainModifierEditor.cpp
         modifier/GrainSegmentationModifierEditor.cpp
         util/DislocationInspectionApplet.cpp
+    PRIVATE_LIB_DEPENDENCIES PolyhedralTemplateMatching
     PLUGIN_DEPENDENCIES CrystalAnalysis Particles ParticlesGui
     GUI_PLUGIN
     HAS_NO_EXPORTS
