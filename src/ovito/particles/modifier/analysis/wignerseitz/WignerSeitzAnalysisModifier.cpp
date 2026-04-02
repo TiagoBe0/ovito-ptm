@@ -249,26 +249,50 @@ void WignerSeitzAnalysisModifier::WignerSeitzAnalysisEngine::perform(PipelineFlo
             siteAtomCount[siteIdx]++;
         }
 
-        // Compute per-site power-diagram weight: w_j = strainSensitivity * avg_disp_sq_j.
-        // Sites in high-strain regions (larger average displacement) get larger weights,
-        // expanding their effective cell so they attract more atoms.
-        std::vector<FloatType> siteWeight(refPositions()->size(), 0.0);
-        double globalDispSqSum = 0.0;
+        // Compute per-site average displacement (linear) and global mean.
+        std::vector<FloatType> siteAvgDisp(refPositions()->size(), 0.0);
+        double globalDispSum = 0.0;
         int nOccupied = 0;
         for(size_t s = 0; s < refPositions()->size(); s++) {
             if(siteAtomCount[s] > 0) {
-                FloatType avgDispSq = (FloatType)(siteDispSqSum[s] / siteAtomCount[s]);
-                siteWeight[s] = _strainSensitivity * avgDispSq;
-                globalDispSqSum += avgDispSq;
+                siteAvgDisp[s] = std::sqrt((FloatType)(siteDispSqSum[s] / siteAtomCount[s]));
+                globalDispSum += siteAvgDisp[s];
                 nOccupied++;
             }
         }
-        // Unoccupied (vacant) sites receive the global average weight.
-        FloatType globalAvgWeight = (nOccupied > 0) ?
-            _strainSensitivity * (FloatType)(globalDispSqSum / nOccupied) : FloatType(0);
-        for(size_t s = 0; s < refPositions()->size(); s++) {
-            if(siteAtomCount[s] == 0)
-                siteWeight[s] = globalAvgWeight;
+        FloatType globalAvgDisp = (nOccupied > 0) ? (FloatType)(globalDispSum / nOccupied) : FloatType(0);
+
+        // Estimate reference nearest-neighbor distance from a sample of reference sites.
+        // Used to scale weights so strainSensitivity has a physically intuitive meaning
+        // (a value of 1 shifts the boundary by ~r_nn/2 at 100% excess displacement).
+        FloatType r_nn_sq = FloatType(0);
+        if(globalAvgDisp > 0 && refPositions()->size() > 1) {
+            BufferReadAccess<Point3> refPosArray(refPositions());
+            const size_t nSample = std::min(refPositions()->size(), (size_t)20);
+            FloatType minNNSq = FLOATTYPE_MAX;
+            for(size_t s = 0; s < nSample; s++) {
+                FloatType d;
+                neighborTree.findClosestParticle(refPosArray[s], d, /*includeSelf=*/false);
+                if(d < minNNSq) minNNSq = d;
+            }
+            r_nn_sq = minNNSq;
+        }
+
+        // Power-diagram weights: w_j = strainSensitivity * r_nn² * max(0, avgDisp_j/globalAvgDisp - 1).
+        // Only sites with ABOVE-AVERAGE displacement receive a positive weight so their cell
+        // expands. Sites at or below average keep weight 0 (standard Voronoi boundary).
+        // This avoids the positive-feedback artifact where uniform low-level displacements
+        // would cause explosive cell growth even in low-strain crystals.
+        std::vector<FloatType> siteWeight(refPositions()->size(), 0.0);
+        if(globalAvgDisp > 0 && r_nn_sq > 0) {
+            for(size_t s = 0; s < refPositions()->size(); s++) {
+                if(siteAtomCount[s] > 0) {
+                    FloatType excess = siteAvgDisp[s] / globalAvgDisp - FloatType(1);
+                    if(excess > 0)
+                        siteWeight[s] = _strainSensitivity * r_nn_sq * excess;
+                }
+                // Vacant and below-average sites keep weight = 0.
+            }
         }
 
         // Maximum site weight — used to bound the power-diagram search radius.
