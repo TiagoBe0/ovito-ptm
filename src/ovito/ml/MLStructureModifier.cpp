@@ -190,7 +190,7 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
 
     // Argmax over class dimension → [N] int32 predictions.
     at::Tensor predictions = logits.argmax(/*dim=*/1).to(torch::kInt32).contiguous();
-    const int* predData = predictions.data_ptr<int>();
+    const int32_t* predData = predictions.data_ptr<int32_t>();
     for(size_t i = 0; i < N; ++i)
         outputData[i] = predData[i];
 
@@ -198,7 +198,8 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
 
     // LibTorch not available — zero-fill (placeholder / integration test).
     // The descriptor was already computed; it's just not fed to the model.
-    Q_UNUSED(outputData);
+    for(size_t i = 0; i < N; ++i)
+        outputData[i] = 0;
 
 #endif  // OVITO_ML_HAS_LIBTORCH
 
