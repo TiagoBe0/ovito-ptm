@@ -190,7 +190,7 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
 
     // Argmax over class dimension → [N] int32 predictions.
     at::Tensor predictions = logits.argmax(/*dim=*/1).to(torch::kInt32).contiguous();
-    const int32_t* predData = predictions.data_ptr<int32_t>();
+    const int32_t* predData = static_cast<const int32_t*>(predictions.data_ptr());
     for(size_t i = 0; i < N; ++i)
         outputData[i] = predData[i];
 
