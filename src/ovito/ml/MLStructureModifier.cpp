@@ -54,7 +54,7 @@ SET_PROPERTY_FIELD_LABEL(MLStructureModifier, cutoffRadius, "Cutoff radius (Å)"
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, numNeighbors, "Max neighbors in descriptor");
 
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLStructureModifier, cutoffRadius, WorldParameterUnit, 0);
-SET_PROPERTY_FIELD_RANGE(MLStructureModifier, numNeighbors, 1, 64);
+SET_PROPERTY_FIELD_UNITS_AND_RANGE(MLStructureModifier, numNeighbors, IntegerParameterUnit, 1, 64);
 
 // ---------------------------------------------------------------------------
 // OOMetaClass::isApplicableTo
@@ -190,7 +190,8 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
     // Argmax over class dimension → [N] int32 predictions.
     at::Tensor predictions = logits.argmax(/*dim=*/1).to(torch::kInt32).contiguous();
     const int* predData = predictions.data_ptr<int>();
-    std::copy(predData, predData + N, outputData);
+    for(size_t i = 0; i < N; ++i)
+        outputData[i] = predData[i];
 
 #else
 
