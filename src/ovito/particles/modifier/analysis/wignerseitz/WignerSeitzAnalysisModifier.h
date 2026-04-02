@@ -56,6 +56,7 @@ private:
         WignerSeitzAnalysisEngine(ConstPropertyPtr positions, const SimulationCell* simCell,
                 PipelineFlowState referenceState, ConstPropertyPtr refPositions, const SimulationCell* simCellRef, AffineMappingType affineMapping,
                 ConstPropertyPtr typeProperty, int ptypeMinId, int ptypeMaxId, ConstPropertyPtr referenceTypeProperty, ConstPropertyPtr referenceIdentifierProperty,
+                bool adaptiveCell, FloatType strainSensitivity,
                 OOWeakRef<const PipelineNode> createdByNode) :
             Engine(std::move(positions), simCell, std::move(refPositions), simCellRef,
                 nullptr, nullptr, affineMapping, false),
@@ -64,6 +65,8 @@ private:
             _referenceTypeProperty(std::move(referenceTypeProperty)),
             _referenceIdentifierProperty(std::move(referenceIdentifierProperty)),
             _referenceState(std::move(referenceState)),
+            _adaptiveCell(adaptiveCell),
+            _strainSensitivity(strainSensitivity),
             _createdByNode(std::move(createdByNode)) {}
 
         /// Performs the actual computation of the modifier's results.
@@ -119,6 +122,8 @@ private:
         int _ptypeMinId;
         int _ptypeMaxId;
         const PipelineFlowState _referenceState;
+        bool _adaptiveCell;
+        FloatType _strainSensitivity;
         PropertyPtr _occupancyNumbers;
         PropertyPtr _siteTypes;
         PropertyPtr _siteIndices;
@@ -133,6 +138,12 @@ private:
 
     /// Enables output of displaced atomic configuration instead of reference configuration.
     DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(bool{false}, outputCurrentConfig, setOutputCurrentConfig, PROPERTY_FIELD_MEMORIZE)
+
+    /// Enables the adaptive Wigner-Seitz cell algorithm based on local strain.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(bool{false}, adaptiveCell, setAdaptiveCell, PROPERTY_FIELD_MEMORIZE)
+
+    /// Controls the sensitivity of the adaptive cell to local strain (scale factor for power diagram weights).
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(FloatType{1.0}, strainSensitivity, setStrainSensitivity, PROPERTY_FIELD_MEMORIZE)
 };
 
 }   // End of namespace

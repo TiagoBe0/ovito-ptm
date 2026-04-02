@@ -80,6 +80,9 @@ private:
     /// Restricts the identification to perfect lattice dislocations.
     DECLARE_MODIFIABLE_PROPERTY_FIELD(bool{false}, onlyPerfectDislocations, setOnlyPerfectDislocations);
 
+    /// Selects PTM (true) or CNA (false) for local structure identification.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(bool{true}, usePTM, setUsePTM);
+
     /// Mark atoms belonging to the dislocation cores.
     DECLARE_MODIFIABLE_PROPERTY_FIELD(bool{false}, markCoreAtoms, setMarkCoreAtoms);
 

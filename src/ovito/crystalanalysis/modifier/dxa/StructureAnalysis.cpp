@@ -65,7 +65,8 @@ StructureAnalysis::StructureAnalysis(
         ConstPropertyPtr particleSelection,
         ClusterGraph* clusterGraph,
         PropertyPtr outputStructures, std::vector<Matrix3> preferredCrystalOrientations,
-        bool identifyPlanarDefects) :
+        bool identifyPlanarDefects,
+        IdentificationMethod method) :
     _positions(positions),
     _simCell(simCell),
     _inputCrystalType(inputCrystalType),
@@ -77,7 +78,8 @@ StructureAnalysis::StructureAnalysis(
     _atomSymmetryPermutations(positions->size()),
     _clusterGraph(clusterGraph),
     _preferredCrystalOrientations(std::move(preferredCrystalOrientations)),
-    _identifyPlanarDefects(identifyPlanarDefects)
+    _identifyPlanarDefects(identifyPlanarDefects),
+    _identificationMethod(method)
 {
     // One-time initialization of precomputed structure information.
     static std::mutex mutex;
@@ -462,6 +464,11 @@ void StructureAnalysis::initializeListOfStructures()
 ******************************************************************************/
 void StructureAnalysis::identifyStructures(TaskProgress& progress, const SimulationCell* simulationCell)
 {
+    if(_identificationMethod == METHOD_PTM) {
+        identifyStructuresPTM(progress, simulationCell);
+        return;
+    }
+
     // Prepare the neighbor list.
     int maxNeighborListSize = std::min((int)_neighborListsSize + 1, (int)MAX_NEIGHBORS);
     NearestNeighborFinder neighFinder(maxNeighborListSize, positions(), simulationCell, _particleSelection.buffer());
@@ -472,6 +479,145 @@ void StructureAnalysis::identifyStructures(TaskProgress& progress, const Simulat
     parallelFor(positions()->size(), 1024, progress, [this, &neighFinder](size_t index) {
         determineLocalStructure(neighFinder, index);
     });
+}
+
+/******************************************************************************
+* Maps a PTM structure type to a DXA coordination structure type.
+******************************************************************************/
+StructureAnalysis::CoordinationStructureType StructureAnalysis::ptmTypeToCoordType(PTMAlgorithm::StructureType ptmType)
+{
+    switch(ptmType) {
+        case PTMAlgorithm::FCC:           return COORD_FCC;
+        case PTMAlgorithm::HCP:           return COORD_HCP;
+        case PTMAlgorithm::BCC:           return COORD_BCC;
+        case PTMAlgorithm::CUBIC_DIAMOND: return COORD_CUBIC_DIAMOND;
+        case PTMAlgorithm::HEX_DIAMOND:   return COORD_HEX_DIAMOND;
+        default:                          return COORD_OTHER;
+    }
+}
+
+/******************************************************************************
+* Identifies atomic structures using PTM instead of CNA.
+******************************************************************************/
+void StructureAnalysis::identifyStructuresPTM(TaskProgress& progress, const SimulationCell* simulationCell)
+{
+    // Initialize the PTM algorithm.
+    // Pass the selection buffer so that non-selected atoms are excluded from the neighbor lists.
+    const DataBuffer* selectionBuf = _particleSelection ? _particleSelection.buffer().get() : nullptr;
+    PTMAlgorithm ptm(BufferReadAccess<Point3>(positions()), simulationCell, BufferReadAccess<SelectionIntType>(selectionBuf));
+
+    // Enable the structure types relevant to the target crystal type.
+    switch(_inputCrystalType) {
+        case LATTICE_FCC:
+            ptm.setStructureTypeIdentification(PTMAlgorithm::FCC, true);
+            if(_identifyPlanarDefects) ptm.setStructureTypeIdentification(PTMAlgorithm::HCP, true);
+            break;
+        case LATTICE_HCP:
+            ptm.setStructureTypeIdentification(PTMAlgorithm::HCP, true);
+            if(_identifyPlanarDefects) ptm.setStructureTypeIdentification(PTMAlgorithm::FCC, true);
+            break;
+        case LATTICE_BCC:
+            ptm.setStructureTypeIdentification(PTMAlgorithm::BCC, true);
+            break;
+        case LATTICE_CUBIC_DIAMOND:
+            ptm.setStructureTypeIdentification(PTMAlgorithm::CUBIC_DIAMOND, true);
+            if(_identifyPlanarDefects) ptm.setStructureTypeIdentification(PTMAlgorithm::HEX_DIAMOND, true);
+            break;
+        case LATTICE_HEX_DIAMOND:
+            ptm.setStructureTypeIdentification(PTMAlgorithm::HEX_DIAMOND, true);
+            if(_identifyPlanarDefects) ptm.setStructureTypeIdentification(PTMAlgorithm::CUBIC_DIAMOND, true);
+            break;
+        default:
+            return;
+    }
+
+    // Use a slightly more lenient RMSD cutoff than the default to capture defect-zone atoms.
+    ptm.setRmsdCutoff(0.12);
+
+    size_t n = positions()->size();
+
+    // Pass 1: Cache topological neighbor orderings for all atoms (required by multi-shell structures).
+    std::vector<uint64_t> cachedNeighbors(n, 0);
+    {
+        PTMAlgorithm::Kernel kernel(ptm);
+        for(size_t i = 0; i < n; i++) {
+            kernel.cacheNeighbors(i, &cachedNeighbors[i]);
+        }
+    }
+
+    // Pass 2: Identify the structure type and fill the neighbor list for each atom.
+    _maximumNeighborDistance = 0;
+    PTMAlgorithm::Kernel kernel(ptm);
+    for(size_t particleIndex = 0; particleIndex < n; particleIndex++) {
+
+        // Skip atoms excluded by the particle selection.
+        if(_particleSelection && _particleSelection[particleIndex] == 0)
+            continue;
+
+        PTMAlgorithm::StructureType ptmType = kernel.identifyStructure(particleIndex, cachedNeighbors);
+
+        if(ptmType == PTMAlgorithm::OTHER)
+            continue;
+
+        CoordinationStructureType coordType = ptmTypeToCoordType(ptmType);
+        if(coordType == COORD_OTHER)
+            continue;
+
+        // Determine number of template neighbors for this structure type.
+        int numNeighbors;
+        switch(coordType) {
+            case COORD_FCC:           numNeighbors = 12; break;
+            case COORD_HCP:           numNeighbors = 12; break;
+            case COORD_BCC:           numNeighbors = 14; break;
+            case COORD_CUBIC_DIAMOND: numNeighbors = 16; break;
+            case COORD_HEX_DIAMOND:   numNeighbors = 16; break;
+            default: continue;
+        }
+
+        // Access the atomic environment produced by PTM (output_env after ptm_index).
+        // output_env->atom_indices[i] for i=1..numNeighbors is the global atom index at template position i.
+        // output_env->points[i] for i=1..numNeighbors is the displacement vector for template position i.
+        const ptm_atomicenv_t& env = kernel.atomicEnvironment();
+
+        // Verify we have enough points (center + numNeighbors).
+        if(env.num < numNeighbors + 1)
+            continue;
+
+        // Fill the neighbor list in template order and compute the maximum neighbor distance.
+        FloatType maxNeighborDist = 0;
+        bool valid = true;
+        for(int slot = 0; slot < numNeighbors; slot++) {
+            int envIdx = slot + 1;  // template position: 0=center, 1..N=neighbors
+
+            Vector3 neighborVector(
+                (FloatType)env.points[envIdx][0],
+                (FloatType)env.points[envIdx][1],
+                (FloatType)env.points[envIdx][2]);
+
+            // Verify the neighbor vector does not span more than half the simulation cell.
+            for(size_t dim = 0; dim < 3; dim++) {
+                if(cell().hasPbc(dim)) {
+                    if(std::abs(cell().reciprocalCellMatrix().prodrow(neighborVector, dim)) >= FloatType(0.5) + FLOATTYPE_EPSILON)
+                        generateCellTooSmallError(dim);
+                }
+            }
+
+            setNeighbor(particleIndex, slot, (int)env.atom_indices[envIdx]);
+
+            FloatType dist = neighborVector.length();
+            if(dist > maxNeighborDist) maxNeighborDist = dist;
+        }
+
+        if(!valid)
+            continue;
+
+        // Assign the identified structure type.
+        _structureTypesArray[particleIndex] = coordType;
+
+        // Thread-safe update of the maximum neighbor distance.
+        FloatType prev_value = _maximumNeighborDistance;
+        while(prev_value < maxNeighborDist && !_maximumNeighborDistance.compare_exchange_weak(prev_value, maxNeighborDist)) {}
+    }
 }
 
 /******************************************************************************

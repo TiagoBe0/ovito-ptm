@@ -37,8 +37,12 @@ OVITO_CLASSINFO(WignerSeitzAnalysisModifier, "Description", "Identify point defe
 OVITO_CLASSINFO(WignerSeitzAnalysisModifier, "ModifierCategory", "Analysis");
 DEFINE_PROPERTY_FIELD(WignerSeitzAnalysisModifier, perTypeOccupancy);
 DEFINE_PROPERTY_FIELD(WignerSeitzAnalysisModifier, outputCurrentConfig);
+DEFINE_PROPERTY_FIELD(WignerSeitzAnalysisModifier, adaptiveCell);
+DEFINE_PROPERTY_FIELD(WignerSeitzAnalysisModifier, strainSensitivity);
 SET_PROPERTY_FIELD_LABEL(WignerSeitzAnalysisModifier, perTypeOccupancy, "Compute per-type occupancies");
 SET_PROPERTY_FIELD_LABEL(WignerSeitzAnalysisModifier, outputCurrentConfig, "Output current configuration");
+SET_PROPERTY_FIELD_LABEL(WignerSeitzAnalysisModifier, adaptiveCell, "Adaptive Wigner-Seitz cell");
+SET_PROPERTY_FIELD_LABEL(WignerSeitzAnalysisModifier, strainSensitivity, "Strain sensitivity");
 
 /******************************************************************************
 * Adopts existing computation results for an interactive pipeline evaluation.
@@ -131,6 +135,7 @@ std::unique_ptr<ReferenceConfigurationModifier::Engine> WignerSeitzAnalysisModif
             referenceState,
             refPosProperty, refCell, affineMapping(), typeProperty, ptypeMinId, ptypeMaxId,
             referenceTypeProperty, referenceIdentifierProperty,
+            adaptiveCell(), strainSensitivity(),
             request.modificationNode());
 
     // Create output properties:
@@ -186,13 +191,20 @@ void WignerSeitzAnalysisModifier::WignerSeitzAnalysisEngine::perform(PipelineFlo
     for(auto& o : occupancyArray)
         o.store(0, std::memory_order_relaxed);
 
-    // Allocate atoms -> sites lookup map if needed.
+    // Allocate atoms -> sites lookup map if needed for output mode or adaptive cell.
+    const bool needAtomSiteMapping = (siteTypes() != nullptr) || _adaptiveCell;
     std::vector<size_t> atomsToSites;
-    if(siteTypes()) {
+    if(needAtomSiteMapping) {
         atomsToSites.resize(positions()->size());
     }
 
-    // Assign particles to reference sites.
+    // For the adaptive cell algorithm: store per-atom displacement-squared from pass 1.
+    std::vector<FloatType> atomDispSq;
+    if(_adaptiveCell) {
+        atomDispSq.resize(positions()->size(), 0.0);
+    }
+
+    // Pass 1: Assign particles to reference sites using standard nearest-neighbor (Wigner-Seitz) rule.
     BufferReadAccess<Point3> positionsArray(positions());
     if(ncomponents == 1) {
         // Without per-type occupancies:
@@ -204,6 +216,8 @@ void WignerSeitzAnalysisModifier::WignerSeitzAnalysisEngine::perform(PipelineFlo
             occupancyArray[closestIndex].fetch_add(1, std::memory_order_relaxed);
             if(!atomsToSites.empty())
                 atomsToSites[index] = closestIndex;
+            if(!atomDispSq.empty())
+                atomDispSq[index] = closestDistanceSq;
         });
     }
     else {
@@ -218,7 +232,133 @@ void WignerSeitzAnalysisModifier::WignerSeitzAnalysisEngine::perform(PipelineFlo
             occupancyArray[closestIndex * ncomponents + offset].fetch_add(1, std::memory_order_relaxed);
             if(!atomsToSites.empty())
                 atomsToSites[index] = closestIndex;
+            if(!atomDispSq.empty())
+                atomDispSq[index] = closestDistanceSq;
         });
+    }
+
+    // Pass 2 (adaptive cell): use a power diagram (weighted Voronoi) to refine assignments
+    // based on local strain estimated from pass 1 displacements.
+    if(_adaptiveCell && _strainSensitivity > 0) {
+        // Aggregate per-atom displacement squared into per-site statistics.
+        std::vector<double> siteDispSqSum(refPositions()->size(), 0.0);
+        std::vector<int> siteAtomCount(refPositions()->size(), 0);
+        for(size_t atomIdx = 0; atomIdx < positions()->size(); atomIdx++) {
+            size_t siteIdx = atomsToSites[atomIdx];
+            siteDispSqSum[siteIdx] += atomDispSq[atomIdx];
+            siteAtomCount[siteIdx]++;
+        }
+
+        // Compute per-site average displacement (linear, sqrt of mean squared disp).
+        std::vector<FloatType> siteAvgDisp(refPositions()->size(), 0.0);
+        for(size_t s = 0; s < refPositions()->size(); s++) {
+            if(siteAtomCount[s] > 0)
+                siteAvgDisp[s] = std::sqrt((FloatType)(siteDispSqSum[s] / siteAtomCount[s]));
+        }
+
+        // Estimate the reference nearest-neighbor distance r_nn from a sample of reference sites.
+        // The natural Wigner-Seitz cell radius is tau = r_nn/2: atoms displaced by less than
+        // tau are safely inside their reference cell and need no correction.
+        FloatType r_nn = FloatType(0);
+        if(refPositions()->size() > 1) {
+            BufferReadAccess<Point3> refPosArray(refPositions());
+            const size_t nSample = std::min(refPositions()->size(), (size_t)20);
+            FloatType minNNSq = FLOATTYPE_MAX;
+            for(size_t s = 0; s < nSample; s++) {
+                FloatType d;
+                neighborTree.findClosestParticle(refPosArray[s], d, /*includeSelf=*/false);
+                if(d < minNNSq) minNNSq = d;
+            }
+            r_nn = (minNNSq < FLOATTYPE_MAX) ? std::sqrt(minNNSq) : FloatType(0);
+        }
+        const FloatType tau = r_nn / 2; // Voronoi cell radius of the perfect reference lattice
+
+        // Power-diagram weights: w_j = strainSensitivity * max(0, avgDisp_j - tau) * r_nn
+        //
+        // The threshold tau = r_nn/2 is the physical boundary of the standard WS cell.
+        // - Displacement < tau  →  atom is safely inside its cell  →  w_j = 0  →  no change
+        // - Displacement > tau  →  atom may have crossed the Voronoi boundary  →  w_j > 0
+        //   The cell expands proportionally to re-capture the displaced atom.
+        //
+        // Critical property: for low-strain crystals where all displacements << tau,
+        // ALL weights remain exactly 0 and the result is identical to standard WS.
+        std::vector<FloatType> siteWeight(refPositions()->size(), 0.0);
+        if(tau > 0) {
+            for(size_t s = 0; s < refPositions()->size(); s++) {
+                if(siteAtomCount[s] > 0) {
+                    FloatType excess = siteAvgDisp[s] - tau;
+                    if(excess > 0)
+                        siteWeight[s] = _strainSensitivity * excess * r_nn;
+                }
+                // Vacant sites and sites with displacement <= tau keep weight = 0.
+            }
+        }
+
+        // Maximum site weight — used to bound the power-diagram search radius.
+        FloatType w_max = *std::max_element(siteWeight.begin(), siteWeight.end());
+
+        // Reset occupancy array for the reassignment.
+        for(auto& o : occupancyArray)
+            o.store(0, std::memory_order_relaxed);
+
+        // Power-diagram reassignment: each atom is assigned to the reference site j
+        // minimizing (|p - r_j|^2 - w_j) instead of just |p - r_j|^2.
+        if(ncomponents == 1) {
+            parallelFor(positions()->size(), 1024, progress, [&](size_t atomIdx) {
+                Point3 p = positionsArray[atomIdx];
+                if(affineMapping() == TO_REFERENCE_CELL) p = tm * p;
+
+                FloatType minPowerDist = FLOATTYPE_MAX;
+                size_t bestSite = 0;
+
+                // Custom visitor: tracks minimum power distance and prunes the tree search.
+                // A branch at geometric distance^2 = d^2 can only improve the current best
+                // if d^2 - w_max < minPowerDist, i.e. d^2 < minPowerDist + w_max.
+                auto powerVisitor = [&](const NearestNeighborFinder::Neighbor& n, FloatType& mrs) {
+                    FloatType powerDist = n.distanceSq - siteWeight[n.index];
+                    if(powerDist < minPowerDist) {
+                        minPowerDist = powerDist;
+                        bestSite = n.index;
+                        FloatType new_mrs = minPowerDist + w_max;
+                        if(new_mrs < mrs) mrs = new_mrs;
+                    }
+                };
+                neighborTree.visitNeighbors(p, powerVisitor);
+
+                OVITO_ASSERT(bestSite < occupancyArray.size());
+                occupancyArray[bestSite].fetch_add(1, std::memory_order_relaxed);
+                if(!atomsToSites.empty())
+                    atomsToSites[atomIdx] = bestSite;
+            });
+        }
+        else {
+            // With per-type occupancies:
+            BufferReadAccess<int32_t> particleTypesArray(particleTypes());
+            parallelFor(positions()->size(), 1024, progress, [&](size_t atomIdx) {
+                Point3 p = positionsArray[atomIdx];
+                if(affineMapping() == TO_REFERENCE_CELL) p = tm * p;
+
+                FloatType minPowerDist = FLOATTYPE_MAX;
+                size_t bestSite = 0;
+
+                auto powerVisitor = [&](const NearestNeighborFinder::Neighbor& n, FloatType& mrs) {
+                    FloatType powerDist = n.distanceSq - siteWeight[n.index];
+                    if(powerDist < minPowerDist) {
+                        minPowerDist = powerDist;
+                        bestSite = n.index;
+                        FloatType new_mrs = minPowerDist + w_max;
+                        if(new_mrs < mrs) mrs = new_mrs;
+                    }
+                };
+                neighborTree.visitNeighbors(p, powerVisitor);
+
+                int offset = particleTypesArray[atomIdx] - typemin;
+                OVITO_ASSERT(bestSite * ncomponents + offset < occupancyArray.size());
+                occupancyArray[bestSite * ncomponents + offset].fetch_add(1, std::memory_order_relaxed);
+                if(!atomsToSites.empty())
+                    atomsToSites[atomIdx] = bestSite;
+            });
+        }
     }
 
     // Create output storage.

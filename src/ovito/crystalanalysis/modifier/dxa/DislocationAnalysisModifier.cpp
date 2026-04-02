@@ -41,6 +41,7 @@ DEFINE_PROPERTY_FIELD(DislocationAnalysisModifier, maxTrialCircuitSize);
 DEFINE_PROPERTY_FIELD(DislocationAnalysisModifier, circuitStretchability);
 DEFINE_PROPERTY_FIELD(DislocationAnalysisModifier, outputInterfaceMesh);
 DEFINE_PROPERTY_FIELD(DislocationAnalysisModifier, onlyPerfectDislocations);
+DEFINE_PROPERTY_FIELD(DislocationAnalysisModifier, usePTM);
 DEFINE_PROPERTY_FIELD(DislocationAnalysisModifier, markCoreAtoms);
 DEFINE_PROPERTY_FIELD(DislocationAnalysisModifier, defectMeshSmoothingLevel);
 DEFINE_PROPERTY_FIELD(DislocationAnalysisModifier, lineSmoothingEnabled);
@@ -55,6 +56,7 @@ SET_PROPERTY_FIELD_LABEL(DislocationAnalysisModifier, maxTrialCircuitSize, "Tria
 SET_PROPERTY_FIELD_LABEL(DislocationAnalysisModifier, circuitStretchability, "Circuit stretchability");
 SET_PROPERTY_FIELD_LABEL(DislocationAnalysisModifier, outputInterfaceMesh, "Output interface mesh");
 SET_PROPERTY_FIELD_LABEL(DislocationAnalysisModifier, onlyPerfectDislocations, "Generate perfect dislocations");
+SET_PROPERTY_FIELD_LABEL(DislocationAnalysisModifier, usePTM, "Use PTM for structure identification");
 SET_PROPERTY_FIELD_LABEL(DislocationAnalysisModifier, markCoreAtoms, "Mark dislocation core atoms");
 SET_PROPERTY_FIELD_LABEL(DislocationAnalysisModifier, defectMeshSmoothingLevel, "Defect mesh smoothing");
 SET_PROPERTY_FIELD_LABEL(DislocationAnalysisModifier, lineSmoothingEnabled, "Line smoothing enabled");
@@ -227,7 +229,8 @@ std::shared_ptr<StructureIdentificationModifier::Algorithm> DislocationAnalysisM
         std::move(structures), particles->elementCount(), inputCrystalStructure(), maxTrialCircuitSize(), circuitStretchability(),
         selectionProperty, grainProperty, std::move(preferredCrystalOrientations), onlyPerfectDislocations(), markCoreAtoms(),
         defectMeshSmoothingLevel(), std::move(dislocations), std::move(defectMesh), std::move(interfaceMesh),
-        lineSmoothingEnabled() ? lineSmoothingLevel() : 0, lineCoarseningEnabled() ? linePointInterval() : 0);
+        lineSmoothingEnabled() ? lineSmoothingLevel() : 0, lineCoarseningEnabled() ? linePointInterval() : 0,
+        usePTM() ? StructureAnalysis::METHOD_PTM : StructureAnalysis::METHOD_CNA);
 }
 
 /******************************************************************************

@@ -282,6 +282,9 @@ public:
         /// The index of the structure template.
         int templateIndex() const { return _templateIndex; }
 
+        /// Returns the atomic environment data (correspondences and atom indices) computed by the PTM routine.
+        const ptm_atomicenv_t& atomicEnvironment() const { return _env; }
+
         /// Returns the number of neighbors for the PTM structure found for the current particle.
         int numTemplateNeighbors() const;
 

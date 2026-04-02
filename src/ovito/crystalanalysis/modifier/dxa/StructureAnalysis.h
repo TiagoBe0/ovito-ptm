@@ -26,6 +26,7 @@
 #include <ovito/crystalanalysis/CrystalAnalysis.h>
 #include <ovito/crystalanalysis/objects/ClusterGraph.h>
 #include <ovito/particles/modifier/analysis/cna/CommonNeighborAnalysisModifier.h>
+#include <ovito/particles/modifier/analysis/ptm/PTMAlgorithm.h>
 
 namespace Ovito {
 
@@ -62,6 +63,12 @@ public:
 
     /// The maximum number of neighbor atoms taken into account for the common neighbor analysis.
     enum { MAX_NEIGHBORS = 16 };
+
+    /// Selects the method used for local structure identification.
+    enum IdentificationMethod {
+        METHOD_CNA = 0,  //< Common Neighbor Analysis (original)
+        METHOD_PTM = 1   //< Polyhedral Template Matching (more robust)
+    };
 
     struct CoordinationStructure {
         int numNeighbors;
@@ -101,7 +108,8 @@ public:
             ClusterGraph* clusterGraph,
             PropertyPtr outputStructures,
             std::vector<Matrix3> preferredCrystalOrientations = std::vector<Matrix3>(),
-            bool identifyPlanarDefects = true);
+            bool identifyPlanarDefects = true,
+            IdentificationMethod method = METHOD_CNA);
 
     /// Identifies the atomic structures.
     void identifyStructures(TaskProgress& progress, const SimulationCell* simulationCell);
@@ -198,8 +206,14 @@ public:
 
 private:
 
-    /// Determines the coordination structure of a particle.
+    /// Determines the coordination structure of a particle using CNA.
     void determineLocalStructure(NearestNeighborFinder& neighList, size_t particleIndex);
+
+    /// Identifies atomic structures using PTM instead of CNA.
+    void identifyStructuresPTM(TaskProgress& progress, const SimulationCell* simulationCell);
+
+    /// Maps a PTM structure type to a DXA coordination structure type.
+    static CoordinationStructureType ptmTypeToCoordType(PTMAlgorithm::StructureType ptmType);
 
     /// Prepares the list of coordination and lattice structures.
     static void initializeListOfStructures();
@@ -208,6 +222,7 @@ private:
 
     const LatticeStructureType _inputCrystalType;
     bool _identifyPlanarDefects;
+    IdentificationMethod _identificationMethod;
     const ConstPropertyPtr _positions;
     const PropertyPtr _structureTypes;
     BufferWriteAccess<int32_t, access_mode::discard_read_write> _structureTypesArray;

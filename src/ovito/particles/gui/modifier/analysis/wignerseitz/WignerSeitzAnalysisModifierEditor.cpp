@@ -26,6 +26,7 @@
 #include <ovito/gui/desktop/properties/BooleanRadioButtonParameterUI.h>
 #include <ovito/gui/desktop/properties/IntegerParameterUI.h>
 #include <ovito/gui/desktop/properties/IntegerRadioButtonParameterUI.h>
+#include <ovito/gui/desktop/properties/FloatParameterUI.h>
 #include <ovito/gui/desktop/properties/SubObjectParameterUI.h>
 #include <ovito/gui/desktop/properties/ObjectStatusDisplay.h>
 #include <ovito/core/dataset/io/FileSource.h>
@@ -68,6 +69,24 @@ void WignerSeitzAnalysisModifierEditor::createUI(const RolloutInsertionParameter
 
     sublayout->setRowMinimumHeight(3, 6);
     sublayout->addWidget(perTypeOccupancyUI->checkBox(), 4, 0, 1, 2);
+
+    QGroupBox* adaptiveCellGroupBox = new QGroupBox(tr("Adaptive Wigner-Seitz cell"));
+    layout->addWidget(adaptiveCellGroupBox);
+
+    QGridLayout* adaptiveLayout = new QGridLayout(adaptiveCellGroupBox);
+    adaptiveLayout->setContentsMargins(4,4,4,4);
+    adaptiveLayout->setSpacing(4);
+
+    BooleanParameterUI* adaptiveCellUI = createParamUI<BooleanParameterUI>(PROPERTY_FIELD(WignerSeitzAnalysisModifier::adaptiveCell));
+    adaptiveCellUI->checkBox()->setText(tr("Enable adaptive cell (strain-weighted Voronoi)"));
+    adaptiveLayout->addWidget(adaptiveCellUI->checkBox(), 0, 0, 1, 3);
+
+    FloatParameterUI* strainSensitivityUI = createParamUI<FloatParameterUI>(PROPERTY_FIELD(WignerSeitzAnalysisModifier::strainSensitivity));
+    strainSensitivityUI->label()->setText(tr("Strain sensitivity:"));
+    adaptiveLayout->addWidget(strainSensitivityUI->label(), 1, 1);
+    adaptiveLayout->addLayout(strainSensitivityUI->createFieldLayout(), 1, 2);
+    strainSensitivityUI->setEnabled(false);
+    connect(adaptiveCellUI->checkBox(), &QCheckBox::toggled, strainSensitivityUI, &FloatParameterUI::setEnabled);
 
     QGroupBox* mappingGroupBox = new QGroupBox(tr("Affine mapping of simulation cell"));
     layout->addWidget(mappingGroupBox);
