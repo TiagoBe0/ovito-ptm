@@ -31,5 +31,6 @@
 #include <ovito/stdobj/StdObj.h>
 
 namespace Ovito {
+class MLPerAtomModifier;
 class MLStructureModifier;
 }  // namespace Ovito

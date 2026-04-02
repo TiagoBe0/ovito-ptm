@@ -31,6 +31,7 @@ ENDIF()
 # Define the plugin module.
 OVITO_STANDARD_PLUGIN(MLPlugin
     SOURCES
+        MLPerAtomModifier.cpp
         MLStructureModifier.cpp
     PLUGIN_DEPENDENCIES Particles
     PRECOMPILED_HEADERS MLPlugin.h
