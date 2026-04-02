@@ -24,8 +24,13 @@
 # To enable: cmake -DOVITO_USE_LIBTORCH=ON -DCMAKE_PREFIX_PATH=/path/to/libtorch ..
 OPTION(OVITO_USE_LIBTORCH "Enable LibTorch (PyTorch C++) support in the ML plugin." "OFF")
 IF(OVITO_USE_LIBTORCH)
-    FIND_PACKAGE(Torch REQUIRED)
-    MESSAGE(STATUS "LibTorch found: ${TORCH_VERSION}")
+    FIND_PACKAGE(Torch QUIET)
+    IF(Torch_FOUND)
+        MESSAGE(STATUS "LibTorch found: ${TORCH_VERSION}")
+    ELSE()
+        MESSAGE(WARNING "LibTorch requested (OVITO_USE_LIBTORCH=ON) but not found. Building ML plugin in placeholder mode without LibTorch.")
+        SET(OVITO_USE_LIBTORCH OFF)
+    ENDIF()
 ENDIF()
 
 # Define the plugin module.

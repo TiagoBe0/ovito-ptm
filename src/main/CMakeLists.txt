@@ -83,6 +83,11 @@ ENDIF()
 # Set name of executable.
 SET_TARGET_PROPERTIES(Ovito PROPERTIES OUTPUT_NAME "ovito")
 
+# Ensure the runtime output directory exists even when only plugin targets are built.
+# This helps users/scripts that expect the build tree to contain a bin/ folder.
+FILE(MAKE_DIRECTORY "${Ovito_BINARY_DIR}/bin")
+
+
 # Copy in HTML/JS launch files.
 IF(EMSCRIPTEN)
     GET_TARGET_PROPERTY(APPNAME Ovito OUTPUT_NAME)
