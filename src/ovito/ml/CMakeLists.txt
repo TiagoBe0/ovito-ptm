@@ -23,8 +23,26 @@
 # Optional LibTorch (PyTorch C++) integration.
 # To enable: cmake -DOVITO_USE_LIBTORCH=ON -DCMAKE_PREFIX_PATH=/path/to/libtorch ..
 OPTION(OVITO_USE_LIBTORCH "Enable LibTorch (PyTorch C++) support in the ML plugin." "OFF")
+SET(OVITO_LIBTORCH_ROOT "" CACHE PATH "Root folder of a LibTorch distribution (contains share/cmake/Torch).")
 IF(OVITO_USE_LIBTORCH)
-    FIND_PACKAGE(Torch REQUIRED)
+    # Help CMake find TorchConfig.cmake in common LibTorch layouts.
+    IF(OVITO_LIBTORCH_ROOT)
+        LIST(APPEND CMAKE_PREFIX_PATH
+            "${OVITO_LIBTORCH_ROOT}"
+            "${OVITO_LIBTORCH_ROOT}/share/cmake/Torch"
+        )
+    ENDIF()
+
+    FIND_PACKAGE(Torch QUIET CONFIG)
+    IF(NOT Torch_FOUND)
+        MESSAGE(FATAL_ERROR
+            "LibTorch requested, but TorchConfig.cmake was not found.\n"
+            "Set one of:\n"
+            "  -DOVITO_LIBTORCH_ROOT=/path/to/libtorch\n"
+            "  -DTorch_DIR=/path/to/libtorch/share/cmake/Torch\n"
+            "  -DCMAKE_PREFIX_PATH=/path/to/libtorch\n"
+        )
+    ENDIF()
     MESSAGE(STATUS "LibTorch found: ${TORCH_VERSION}")
 ENDIF()
 
