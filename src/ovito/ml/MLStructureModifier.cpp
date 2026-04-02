@@ -110,7 +110,7 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
         CutoffNeighborFinder neighborFinder(cutoff,
             posProp,          // positions property
             simCell,          // SimulationCellData (implicit conversion)
-            nullptr);         // no selection filter
+            {});              // no selection filter
 
         const float invCutoff = 1.0f / static_cast<float>(cutoff);
 
@@ -143,7 +143,7 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
         QStringLiteral("ML_Structure"),
         Property::Int32,
         1);
-    BufferWriteAccess<int32_t, access_mode::discard_write> outputData(structProp);
+    BufferWriteAccess<int32_t, access_mode::write> outputData(structProp);
 
     // --- 5. Run ML inference ----------------------------------------------
 
