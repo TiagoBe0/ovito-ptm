@@ -43,7 +43,7 @@ namespace Ovito {
 
 IMPLEMENT_CREATABLE_OVITO_CLASS(MLStructureModifier);
 OVITO_CLASSINFO(MLStructureModifier, "DisplayName",      "ML Structure Modifier");
-OVITO_CLASSINFO(MLStructureModifier, "ModifierCategory", "Analysis");
+OVITO_CLASSINFO(MLStructureModifier, "ModifierCategory", "Structure identification");
 
 DEFINE_PROPERTY_FIELD(MLStructureModifier, modelPath);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, cutoffRadius);
@@ -54,7 +54,7 @@ SET_PROPERTY_FIELD_LABEL(MLStructureModifier, cutoffRadius, "Cutoff radius (Å)"
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, numNeighbors, "Max neighbors in descriptor");
 
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLStructureModifier, cutoffRadius, WorldParameterUnit, 0);
-SET_PROPERTY_FIELD_RANGE(MLStructureModifier, numNeighbors, 1, 64);
+SET_PROPERTY_FIELD_UNITS_AND_RANGE(MLStructureModifier, numNeighbors, IntegerParameterUnit, 1, 64);
 
 // ---------------------------------------------------------------------------
 // OOMetaClass::isApplicableTo
@@ -110,7 +110,7 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
         CutoffNeighborFinder neighborFinder(cutoff,
             posProp,          // positions property
             simCell,          // SimulationCellData (implicit conversion)
-            nullptr);         // no selection filter
+            {});              // no selection filter
 
         const float invCutoff = 1.0f / static_cast<float>(cutoff);
 
@@ -143,7 +143,7 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
         QStringLiteral("ML_Structure"),
         Property::Int32,
         1);
-    int* outputData = structProp->dataInt();
+    BufferWriteAccess<int32_t, access_mode::write> outputData(structProp);
 
     // --- 5. Run ML inference ----------------------------------------------
 
@@ -190,7 +190,8 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
     // Argmax over class dimension → [N] int32 predictions.
     at::Tensor predictions = logits.argmax(/*dim=*/1).to(torch::kInt32).contiguous();
     const int* predData = predictions.data_ptr<int>();
-    std::copy(predData, predData + N, outputData);
+    for(size_t i = 0; i < N; ++i)
+        outputData[i] = predData[i];
 
 #else
 
