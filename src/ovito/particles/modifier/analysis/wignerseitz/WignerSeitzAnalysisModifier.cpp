@@ -249,24 +249,18 @@ void WignerSeitzAnalysisModifier::WignerSeitzAnalysisEngine::perform(PipelineFlo
             siteAtomCount[siteIdx]++;
         }
 
-        // Compute per-site average displacement (linear) and global mean.
+        // Compute per-site average displacement (linear, sqrt of mean squared disp).
         std::vector<FloatType> siteAvgDisp(refPositions()->size(), 0.0);
-        double globalDispSum = 0.0;
-        int nOccupied = 0;
         for(size_t s = 0; s < refPositions()->size(); s++) {
-            if(siteAtomCount[s] > 0) {
+            if(siteAtomCount[s] > 0)
                 siteAvgDisp[s] = std::sqrt((FloatType)(siteDispSqSum[s] / siteAtomCount[s]));
-                globalDispSum += siteAvgDisp[s];
-                nOccupied++;
-            }
         }
-        FloatType globalAvgDisp = (nOccupied > 0) ? (FloatType)(globalDispSum / nOccupied) : FloatType(0);
 
-        // Estimate reference nearest-neighbor distance from a sample of reference sites.
-        // Used to scale weights so strainSensitivity has a physically intuitive meaning
-        // (a value of 1 shifts the boundary by ~r_nn/2 at 100% excess displacement).
-        FloatType r_nn_sq = FloatType(0);
-        if(globalAvgDisp > 0 && refPositions()->size() > 1) {
+        // Estimate the reference nearest-neighbor distance r_nn from a sample of reference sites.
+        // The natural Wigner-Seitz cell radius is tau = r_nn/2: atoms displaced by less than
+        // tau are safely inside their reference cell and need no correction.
+        FloatType r_nn = FloatType(0);
+        if(refPositions()->size() > 1) {
             BufferReadAccess<Point3> refPosArray(refPositions());
             const size_t nSample = std::min(refPositions()->size(), (size_t)20);
             FloatType minNNSq = FLOATTYPE_MAX;
@@ -275,23 +269,28 @@ void WignerSeitzAnalysisModifier::WignerSeitzAnalysisEngine::perform(PipelineFlo
                 neighborTree.findClosestParticle(refPosArray[s], d, /*includeSelf=*/false);
                 if(d < minNNSq) minNNSq = d;
             }
-            r_nn_sq = minNNSq;
+            r_nn = (minNNSq < FLOATTYPE_MAX) ? std::sqrt(minNNSq) : FloatType(0);
         }
+        const FloatType tau = r_nn / 2; // Voronoi cell radius of the perfect reference lattice
 
-        // Power-diagram weights: w_j = strainSensitivity * r_nn² * max(0, avgDisp_j/globalAvgDisp - 1).
-        // Only sites with ABOVE-AVERAGE displacement receive a positive weight so their cell
-        // expands. Sites at or below average keep weight 0 (standard Voronoi boundary).
-        // This avoids the positive-feedback artifact where uniform low-level displacements
-        // would cause explosive cell growth even in low-strain crystals.
+        // Power-diagram weights: w_j = strainSensitivity * max(0, avgDisp_j - tau) * r_nn
+        //
+        // The threshold tau = r_nn/2 is the physical boundary of the standard WS cell.
+        // - Displacement < tau  →  atom is safely inside its cell  →  w_j = 0  →  no change
+        // - Displacement > tau  →  atom may have crossed the Voronoi boundary  →  w_j > 0
+        //   The cell expands proportionally to re-capture the displaced atom.
+        //
+        // Critical property: for low-strain crystals where all displacements << tau,
+        // ALL weights remain exactly 0 and the result is identical to standard WS.
         std::vector<FloatType> siteWeight(refPositions()->size(), 0.0);
-        if(globalAvgDisp > 0 && r_nn_sq > 0) {
+        if(tau > 0) {
             for(size_t s = 0; s < refPositions()->size(); s++) {
                 if(siteAtomCount[s] > 0) {
-                    FloatType excess = siteAvgDisp[s] / globalAvgDisp - FloatType(1);
+                    FloatType excess = siteAvgDisp[s] - tau;
                     if(excess > 0)
-                        siteWeight[s] = _strainSensitivity * r_nn_sq * excess;
+                        siteWeight[s] = _strainSensitivity * excess * r_nn;
                 }
-                // Vacant and below-average sites keep weight = 0.
+                // Vacant sites and sites with displacement <= tau keep weight = 0.
             }
         }
 
