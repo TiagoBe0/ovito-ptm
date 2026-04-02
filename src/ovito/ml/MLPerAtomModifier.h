@@ -37,7 +37,7 @@ namespace Ovito {
  */
 class OVITO_MLPLUGIN_EXPORT MLPerAtomModifier : public Modifier
 {
-    class OOMetaClass : public Modifier::OOMetaClass
+    class OVITO_MLPLUGIN_EXPORT OOMetaClass : public Modifier::OOMetaClass
     {
     public:
         using Modifier::OOMetaClass::OOMetaClass;

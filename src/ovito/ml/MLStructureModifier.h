@@ -56,7 +56,7 @@ namespace Ovito {
 class OVITO_MLPLUGIN_EXPORT MLStructureModifier : public Modifier
 {
     /// Give this modifier class its own metaclass.
-    class OOMetaClass : public Modifier::OOMetaClass
+    class OVITO_MLPLUGIN_EXPORT OOMetaClass : public Modifier::OOMetaClass
     {
     public:
         using Modifier::OOMetaClass::OOMetaClass;
