@@ -54,7 +54,7 @@ SET_PROPERTY_FIELD_LABEL(MLStructureModifier, cutoffRadius, "Cutoff radius (Å)"
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, numNeighbors, "Max neighbors in descriptor");
 
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLStructureModifier, cutoffRadius, WorldParameterUnit, 0);
-SET_PROPERTY_FIELD_RANGE(MLStructureModifier, numNeighbors, 1, 64);
+SET_PROPERTY_FIELD_UNITS_AND_RANGE(MLStructureModifier, numNeighbors, IntegerParameterUnit, 1, 64);
 
 // ---------------------------------------------------------------------------
 // OOMetaClass::isApplicableTo
@@ -63,7 +63,7 @@ SET_PROPERTY_FIELD_RANGE(MLStructureModifier, numNeighbors, 1, 64);
 bool MLStructureModifier::OOMetaClass::isApplicableTo(const DataCollection& input) const
 {
     if(const Particles* particles = input.getObject<Particles>())
-        return particles->getProperty(ParticlesObject::PositionProperty) != nullptr;
+        return particles->getProperty(Particles::PositionProperty) != nullptr;
     return false;
 }
 
@@ -81,16 +81,16 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
     const int       maxK   = numNeighbors();
 
     if(cutoff <= 0)
-        throwException(tr("MLStructureModifier: cutoff radius must be positive."));
+        throw Exception(tr("MLStructureModifier: cutoff radius must be positive."));
     if(maxK <= 0)
-        throwException(tr("MLStructureModifier: numNeighbors must be at least 1."));
+        throw Exception(tr("MLStructureModifier: numNeighbors must be at least 1."));
 
     // --- 2. Extract particle data -----------------------------------------
 
     const SimulationCell* simCell  = input.getObject<SimulationCell>();
     const Particles*  particlesObj = input.expectObject<Particles>();
-    const PropertyObject* posProp  =
-        particlesObj->expectProperty(ParticlesObject::PositionProperty);
+    const Property* posProp  =
+        particlesObj->expectProperty(Particles::PositionProperty);
 
     const size_t N = posProp->size();
 
@@ -138,19 +138,19 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
     // --- 4. Allocate output property "ML_Structure" -----------------------
 
     Particles* outputParticles = input.expectMutableObject<Particles>();
-    PropertyObject* structProp = outputParticles->createProperty(
+    Property* structProp = outputParticles->createProperty(
+        DataBuffer::Initialized,
         QStringLiteral("ML_Structure"),
-        PropertyObject::Int,
-        1,
-        /*initializeMemory=*/true);
-    int* outputData = structProp->dataInt();
+        Property::Int32,
+        1);
+    int32_t* outputData = static_cast<int32_t*>(structProp->data());
 
     // --- 5. Run ML inference ----------------------------------------------
 
 #ifdef OVITO_ML_HAS_LIBTORCH
 
     if(modelPath().isEmpty())
-        throwException(tr("MLStructureModifier: no model path specified."));
+        throw Exception(tr("MLStructureModifier: no model path specified."));
 
     // Load TorchScript model.
     // TODO: cache the loaded module as a member variable and reload only when
@@ -161,7 +161,7 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
         model.eval();
     }
     catch(const c10::Error& e) {
-        throwException(tr("MLStructureModifier: failed to load model '%1': %2")
+        throw Exception(tr("MLStructureModifier: failed to load model '%1': %2")
             .arg(modelPath())
             .arg(QString::fromStdString(e.what())));
     }
@@ -179,18 +179,19 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
         logits = model.forward({inputTensor}).toTensor();
     }
     catch(const c10::Error& e) {
-        throwException(tr("MLStructureModifier: model forward() failed: %1")
+        throw Exception(tr("MLStructureModifier: model forward() failed: %1")
             .arg(QString::fromStdString(e.what())));
     }
 
     if(logits.dim() != 2 || static_cast<size_t>(logits.size(0)) != N)
-        throwException(tr("MLStructureModifier: expected model output shape [%1, C], "
+        throw Exception(tr("MLStructureModifier: expected model output shape [%1, C], "
                           "got [%2, ...].").arg(N).arg(logits.size(0)));
 
     // Argmax over class dimension → [N] int32 predictions.
     at::Tensor predictions = logits.argmax(/*dim=*/1).to(torch::kInt32).contiguous();
     const int* predData = predictions.data_ptr<int>();
-    std::copy(predData, predData + N, outputData);
+    for(size_t i = 0; i < N; ++i)
+        outputData[i] = predData[i];
 
 #else
 
