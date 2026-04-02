@@ -33,7 +33,14 @@ IF(OVITO_USE_LIBTORCH)
         )
     ENDIF()
 
-    FIND_PACKAGE(Torch QUIET CONFIG)
+    # Favor the user-specified Torch_DIR over any stale paths coming from a
+    # globally configured CMAKE_PREFIX_PATH. This avoids mixing multiple
+    # LibTorch installations, which can produce RPATH cycles and link errors.
+    IF(Torch_DIR)
+        FIND_PACKAGE(Torch QUIET CONFIG PATHS "${Torch_DIR}" NO_DEFAULT_PATH)
+    ELSE()
+        FIND_PACKAGE(Torch QUIET CONFIG)
+    ENDIF()
     IF(NOT Torch_FOUND)
         MESSAGE(FATAL_ERROR
             "LibTorch requested, but TorchConfig.cmake was not found.\n"
@@ -63,7 +70,14 @@ IF(OVITO_USE_LIBTORCH)
     SEPARATE_ARGUMENTS(TORCH_CXX_FLAGS_LIST NATIVE_COMMAND "${TORCH_CXX_FLAGS}")
     TARGET_COMPILE_OPTIONS(MLPlugin PRIVATE ${TORCH_CXX_FLAGS_LIST})
 
-    TARGET_LINK_LIBRARIES(MLPlugin PRIVATE ${TORCH_LIBRARIES})
+    # Prefer the imported CMake target from TorchConfig when available. It
+    # carries a consistent set of link/interface properties for one LibTorch
+    # install and avoids manually expanding ${TORCH_LIBRARIES}.
+    IF(TARGET Torch::Torch)
+        TARGET_LINK_LIBRARIES(MLPlugin PRIVATE Torch::Torch)
+    ELSE()
+        TARGET_LINK_LIBRARIES(MLPlugin PRIVATE ${TORCH_LIBRARIES})
+    ENDIF()
     TARGET_INCLUDE_DIRECTORIES(MLPlugin PRIVATE "${TORCH_INCLUDE_DIRS}")
     TARGET_COMPILE_DEFINITIONS(MLPlugin PRIVATE "OVITO_ML_HAS_LIBTORCH=1")
 ENDIF()
