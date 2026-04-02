@@ -143,7 +143,7 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
         QStringLiteral("ML_Structure"),
         Property::Int32,
         1);
-    int32_t* outputData = static_cast<int32_t*>(structProp->data());
+    BufferWriteAccess<int32_t, access_mode::discard_write> outputData(structProp);
 
     // --- 5. Run ML inference ----------------------------------------------
 
