@@ -20,7 +20,11 @@
 //
 ////////////////////////////////////////////////////////////////////////////////////////
 
-#include <ovito/core/dataset/pipeline/ModifierEvaluationRequest.h>
+// Fix 1: Include ModificationNode.h (not ModifierEvaluationRequest.h directly).
+// The inline modificationNodeWeak() function in ModifierEvaluationRequest.h performs
+// an OORef<ModificationNode> -> OOWeakRef<const PipelineNode> upcast, which requires
+// ModificationNode to be fully declared. Including ModificationNode.h ensures this.
+#include <ovito/core/dataset/pipeline/ModificationNode.h>
 #include <ovito/core/utilities/units/UnitsManager.h>
 #include <ovito/stdobj/simcell/SimulationCell.h>
 #include <ovito/stdobj/properties/Property.h>
@@ -45,14 +49,14 @@ DEFINE_PROPERTY_FIELD(MLPerAtomModifier, outputPropertyName);
 DEFINE_PROPERTY_FIELD(MLPerAtomModifier, taskType);
 
 SET_PROPERTY_FIELD_LABEL(MLPerAtomModifier, modelPath,         "Model path (.pt)");
-SET_PROPERTY_FIELD_LABEL(MLPerAtomModifier, cutoffRadius,      "Cutoff radius (Å)");
+SET_PROPERTY_FIELD_LABEL(MLPerAtomModifier, cutoffRadius,      "Cutoff radius (\u00c5)");
 SET_PROPERTY_FIELD_LABEL(MLPerAtomModifier, numNeighbors,      "Max neighbors in descriptor");
 SET_PROPERTY_FIELD_LABEL(MLPerAtomModifier, outputPropertyName,"Output property name");
 SET_PROPERTY_FIELD_LABEL(MLPerAtomModifier, taskType,          "Task type (0=class, 1=reg)");
 
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLPerAtomModifier, cutoffRadius, WorldParameterUnit, 0);
-SET_PROPERTY_FIELD_UNITS_AND_RANGE(MLPerAtomModifier, numNeighbors, IntegerParameterUnit, 1, 64);
-SET_PROPERTY_FIELD_UNITS_AND_RANGE(MLPerAtomModifier, taskType, IntegerParameterUnit, 0, 1);
+SET_PROPERTY_FIELD_RANGE(MLPerAtomModifier, numNeighbors, 1, 64);
+SET_PROPERTY_FIELD_RANGE(MLPerAtomModifier, taskType, 0, 1);
 
 bool MLPerAtomModifier::OOMetaClass::isApplicableTo(const DataCollection& input) const
 {
@@ -165,7 +169,9 @@ Future<PipelineFlowState> MLPerAtomModifier::evaluateModifier(
             throw Exception(tr("MLPerAtomModifier: output first dimension (%1) does not match atom count (%2).")
                 .arg(pred.size(0)).arg(N));
 
-        const int* predData = pred.data_ptr<int>();
+        // Fix 2: Use static_cast instead of template data_ptr<int>() — GCC cannot
+        // parse LibTorch template member calls of the form tensor.data_ptr<T>().
+        const int* predData = static_cast<const int*>(pred.data_ptr());
         for(size_t i = 0; i < N; ++i)
             labels[i] = static_cast<int32_t>(predData[i]);
     }
@@ -184,7 +190,9 @@ Future<PipelineFlowState> MLPerAtomModifier::evaluateModifier(
             throw Exception(tr("MLPerAtomModifier: output first dimension (%1) does not match atom count (%2).")
                 .arg(scalar.size(0)).arg(N));
 
-        const float* outData = scalar.data_ptr<float>();
+        // Fix 3: Use static_cast instead of template data_ptr<float>() — same
+        // GCC parsing issue as above.
+        const float* outData = static_cast<const float*>(scalar.data_ptr());
         for(size_t i = 0; i < N; ++i)
             values[i] = outData[i];
     }
