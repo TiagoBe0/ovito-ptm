@@ -202,8 +202,15 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
     }
     catch(const c10::Error& e) {
         throw Exception(tr("MLStructureModifier: failed to load model '%1': %2")
-            .arg(modelPath())
-            .arg(QString::fromStdString(e.what())));
+            .arg(modelPath()).arg(QString::fromStdString(e.what())));
+    }
+    catch(const std::exception& e) {
+        throw Exception(tr("MLStructureModifier: failed to load model '%1': %2")
+            .arg(modelPath()).arg(QString::fromStdString(e.what())));
+    }
+    catch(...) {
+        throw Exception(tr("MLStructureModifier: failed to load model '%1' (unknown exception).")
+            .arg(modelPath()));
     }
 
     // Wrap the descriptor buffer in a LibTorch tensor (zero-copy via from_blob).
@@ -222,8 +229,20 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
         logits = model.forward({inputTensor}).toTensor();
     }
     catch(const c10::Error& e) {
-        throw Exception(tr("MLStructureModifier: model forward() failed: %1")
-            .arg(QString::fromStdString(e.what())));
+        throw Exception(tr("MLStructureModifier: model forward() failed "
+                           "(input shape [%1 atoms x %2 features]): %3")
+            .arg(N).arg(numFeatures).arg(QString::fromStdString(e.what())));
+    }
+    catch(const std::exception& e) {
+        throw Exception(tr("MLStructureModifier: model forward() failed "
+                           "(input shape [%1 atoms x %2 features]): %3")
+            .arg(N).arg(numFeatures).arg(QString::fromStdString(e.what())));
+    }
+    catch(...) {
+        throw Exception(tr("MLStructureModifier: model forward() failed with unknown exception. "
+                           "Input tensor shape: [%1 atoms x %2 features]. "
+                           "The model's first layer must accept exactly %2 input features.")
+            .arg(N).arg(numFeatures));
     }
 
     if(logits.dim() != 2 || static_cast<size_t>(logits.size(0)) != N)
