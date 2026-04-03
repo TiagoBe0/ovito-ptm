@@ -30,6 +30,8 @@
 #include <ovito/stdobj/simcell/SimulationCell.h>
 #include <ovito/stdobj/properties/Property.h>
 #include <ovito/stdobj/properties/PropertyReference.h>
+#include <ovito/stdobj/properties/ElementType.h>
+#include <ovito/stdobj/properties/OwnerPropertyRef.h>
 #include <ovito/particles/objects/Particles.h>
 #include <ovito/particles/util/CutoffNeighborFinder.h>
 #include "MLStructureModifier.h"
@@ -57,6 +59,7 @@ DEFINE_PROPERTY_FIELD(MLStructureModifier, numNeighbors);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, inputProperties);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, outputMode);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, outputPropertyName);
+DEFINE_PROPERTY_FIELD(MLStructureModifier, classNames);
 
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, modelPath,           "Model path (.pt)");
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, inputMode,           "Input mode");
@@ -65,6 +68,7 @@ SET_PROPERTY_FIELD_LABEL(MLStructureModifier, numNeighbors,        "Max neighbor
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, inputProperties,     "Input property columns");
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, outputMode,          "Output mode");
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, outputPropertyName,  "Output property name");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, classNames,          "Class names");
 
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLStructureModifier, cutoffRadius, WorldParameterUnit, 0);
 SET_PROPERTY_FIELD_UNITS_AND_RANGE(MLStructureModifier, numNeighbors, IntegerParameterUnit, 1, 64);
@@ -106,6 +110,7 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
     const QString     outPropName = outputPropertyName().isEmpty()
                                         ? QStringLiteral("ML_Structure")
                                         : outputPropertyName();
+    const QStringList cNames      = classNames();
 
     // Validate early (on calling thread) to give fast feedback.
     if(iMode == InputMode::NeighborDistances) {
@@ -151,7 +156,8 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
             columns     = std::move(columns),
             propRefs,           // kept for error messages
             modelFile,
-            outPropName
+            outPropName,
+            cNames
             ]() mutable -> PipelineFlowState
     {
         TaskProgress progress(this_task::ui());
@@ -295,7 +301,12 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
 
         if(oMode == OutputMode::Classification) {
 
-            // ---- 4a. Classification: argmax → Int32 property ---------------
+            // ---- 4a. Classification: argmax → typed Int32 property ---------
+            //
+            // K = number of class logits (must be ≥ 2).
+            // The output property carries ElementType objects (one per class)
+            // with user-provided names and OVITO's standard color palette,
+            // so OVITO can display colored labels just like PTM/CNA output.
 
             if(K < 2)
                 throw Exception(
@@ -305,8 +316,22 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
 
             Property* outProp = particlesObj->createProperty(
                 DataBuffer::Initialized, outPropName, Property::Int32, 1);
-            BufferWriteAccess<int32_t, access_mode::read_write> outAccess{outProp};
 
+            // Add one ElementType per class with auto-assigned colors from
+            // OVITO's default palette (cycles every 9 entries).
+            // Names come from the user-supplied list; fall back to "Class N".
+            OwnerPropertyRef ownerRef(&Particles::OOClass(), outPropName);
+            for(int64_t k = 0; k < K; ++k) {
+                DataOORef<ElementType> etype = DataOORef<ElementType>::create();
+                etype->setNumericId(static_cast<int>(k));
+                etype->setName(k < static_cast<int64_t>(cNames.size())
+                                   ? cNames[static_cast<int>(k)]
+                                   : tr("Class %1").arg(k));
+                etype->initializeType(ownerRef, /*loadUserDefaults=*/false);
+                outProp->addElementType(std::move(etype));
+            }
+
+            BufferWriteAccess<int32_t, access_mode::read_write> outAccess{outProp};
             at::Tensor preds = rawOutput.argmax(/*dim=*/1).to(torch::kInt32).contiguous();
             const int32_t* predData = preds.data_ptr<int32_t>();
             for(size_t i = 0; i < N; ++i)

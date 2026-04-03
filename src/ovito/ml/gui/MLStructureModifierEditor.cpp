@@ -223,19 +223,42 @@ void MLStructureModifierEditor::createUI(const RolloutInsertionParameters& rollo
     }
 
     // -----------------------------------------------------------------------
-    // Classification key (shown only in Classification mode)
+    // Class names (shown only in Classification mode)
     // -----------------------------------------------------------------------
     {
-        _classInfoBox = new QGroupBox(tr("Class index key"), rollout);
+        _classInfoBox = new QGroupBox(tr("Class names (Classification mode)"), rollout);
         QVBoxLayout* lay = new QVBoxLayout(_classInfoBox);
         lay->setContentsMargins(4, 4, 4, 4);
+        lay->setSpacing(4);
 
         lay->addWidget(new QLabel(
-            tr("Integer written per particle (depends on your training labels):\n"
-               "  0, 1, 2, … → class indices as defined in your dataset"),
+            tr("One name per line (index 0, 1, 2, …).\n"
+               "Leave empty to use automatic labels (\"Class 0\", \"Class 1\", …).\n"
+               "Names are shown as colored labels in OVITO."),
             _classInfoBox));
 
+        _classNamesEdit = new QPlainTextEdit(_classInfoBox);
+        _classNamesEdit->setPlaceholderText(
+            tr("e.g.:\nFCC\nBCC\nHCP\nAmorphous"));
+        _classNamesEdit->setMaximumHeight(100);
+        lay->addWidget(_classNamesEdit);
+
         mainLayout->addWidget(_classInfoBox);
+
+        // Sync modifier → text edit.
+        connect(this, &PropertiesEditor::contentsChanged, this, [this]() {
+            if(_updatingClassNames) return;
+            auto* mod = static_cast<MLStructureModifier*>(editObject());
+            if(!mod || !_classNamesEdit) return;
+            _updatingClassNames = true;
+            const QString text = mod->classNames().join('\n');
+            if(_classNamesEdit->toPlainText() != text)
+                _classNamesEdit->setPlainText(text);
+            _updatingClassNames = false;
+        });
+
+        // Sync text edit → modifier (on focus lost / Enter in last line).
+        connect(_classNamesEdit, &QPlainTextEdit::textChanged, this, &MLStructureModifierEditor::onClassNamesChanged);
     }
 
     // -----------------------------------------------------------------------
@@ -327,6 +350,32 @@ void MLStructureModifierEditor::updatePropertyList()
     }
 
     _updatingPropertyList = false;
+}
+
+/******************************************************************************
+* Commits the class-names text edit content to the modifier.
+******************************************************************************/
+void MLStructureModifierEditor::onClassNamesChanged()
+{
+    if(_updatingClassNames) return;
+    auto* mod = static_cast<MLStructureModifier*>(editObject());
+    if(!mod || !_classNamesEdit) return;
+
+    // Split by newlines; trim each line; drop trailing empty entries.
+    QStringList lines = _classNamesEdit->toPlainText().split('\n');
+    while(!lines.isEmpty() && lines.last().trimmed().isEmpty())
+        lines.removeLast();
+    // Trim each name.
+    for(QString& s : lines) s = s.trimmed();
+
+    if(lines == mod->classNames()) return;
+
+    _updatingClassNames = true;
+    UndoableTransaction t;
+    t.begin(ui(), tr("Change class names"));
+    mod->setClassNames(lines);
+    t.commit();
+    _updatingClassNames = false;
 }
 
 /******************************************************************************
