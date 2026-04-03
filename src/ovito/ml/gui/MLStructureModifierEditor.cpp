@@ -25,11 +25,11 @@
 #include <ovito/stdobj/properties/PropertyReference.h>
 #include <ovito/particles/objects/Particles.h>
 #include <ovito/core/dataset/pipeline/PipelineFlowState.h>
+#include <ovito/core/app/undo/UndoableTransaction.h>
 #include <ovito/gui/desktop/properties/FilenameParameterUI.h>
 #include <ovito/gui/desktop/properties/FloatParameterUI.h>
 #include <ovito/gui/desktop/properties/IntegerParameterUI.h>
 #include <ovito/gui/desktop/properties/ObjectStatusDisplay.h>
-#include <ovito/core/app/undo/UndoableTransaction.h>
 #include <QRadioButton>
 #include <QButtonGroup>
 #include "MLStructureModifierEditor.h"
@@ -69,7 +69,7 @@ void MLStructureModifierEditor::createUI(const RolloutInsertionParameters& rollo
     }
 
     // -----------------------------------------------------------------------
-    // Input mode radio buttons
+    // Input mode
     // -----------------------------------------------------------------------
     {
         QGroupBox* box = new QGroupBox(tr("Input features"), rollout);
@@ -78,33 +78,28 @@ void MLStructureModifierEditor::createUI(const RolloutInsertionParameters& rollo
         lay->setSpacing(2);
 
         QButtonGroup* btnGroup = new QButtonGroup(box);
-
-        QRadioButton* rbNeigh = new QRadioButton(
-            tr("Neighbour distances (sorted, normalised)"), box);
-        QRadioButton* rbProp  = new QRadioButton(
-            tr("Particle property columns"), box);
-
+        QRadioButton* rbNeigh  = new QRadioButton(tr("Neighbour distances (sorted, normalised)"), box);
+        QRadioButton* rbProp   = new QRadioButton(tr("Particle property columns"), box);
         btnGroup->addButton(rbNeigh, static_cast<int>(MLStructureModifier::InputMode::NeighborDistances));
         btnGroup->addButton(rbProp,  static_cast<int>(MLStructureModifier::InputMode::ParticleProperties));
-
         lay->addWidget(rbNeigh);
         lay->addWidget(rbProp);
         mainLayout->addWidget(box);
 
-        // Sync radio buttons → modifier field.
         connect(btnGroup, &QButtonGroup::idClicked, this, [this](int id) {
             if(auto* mod = static_cast<MLStructureModifier*>(editObject())) {
-                UndoableTransaction transaction;
-                transaction.begin(ui(), tr("Change input mode"));
+                UndoableTransaction t;
+                t.begin(ui(), tr("Change input mode"));
                 mod->setInputMode(static_cast<MLStructureModifier::InputMode>(id));
-                transaction.commit();
+                t.commit();
             }
         });
 
-        // Sync modifier field → radio buttons.
         connect(this, &PropertiesEditor::contentsChanged, this, [btnGroup, this]() {
-            if(auto* mod = static_cast<MLStructureModifier*>(editObject()))
-                btnGroup->button(static_cast<int>(mod->inputMode()))->setChecked(true);
+            if(auto* mod = static_cast<MLStructureModifier*>(editObject())) {
+                if(auto* btn = btnGroup->button(static_cast<int>(mod->inputMode())))
+                    btn->setChecked(true);
+            }
             onInputModeChanged();
         });
     }
@@ -129,11 +124,6 @@ void MLStructureModifierEditor::createUI(const RolloutInsertionParameters& rollo
             PROPERTY_FIELD(MLStructureModifier::numNeighbors));
         grid->addWidget(numNeighUI->label(), row, 0);
         grid->addLayout(numNeighUI->createFieldLayout(), row, 1);
-        ++row;
-
-        grid->addWidget(new QLabel(
-            tr("<small>Must match the values used when training the model.</small>"),
-            _descParamsBox), row, 0, 1, 2);
 
         mainLayout->addWidget(_descParamsBox);
     }
@@ -148,9 +138,8 @@ void MLStructureModifierEditor::createUI(const RolloutInsertionParameters& rollo
         lay->setSpacing(4);
 
         lay->addWidget(new QLabel(
-            tr("Select the columns to use as input features.\n"
-               "Order matters — must match the training data."),
-            _propSelectBox));
+            tr("Select columns used as input features.\n"
+               "Order matters — must match the training data."), _propSelectBox));
 
         _propListWidget = new QListWidget(_propSelectBox);
         _propListWidget->setSelectionMode(QAbstractItemView::NoSelection);
@@ -158,19 +147,95 @@ void MLStructureModifierEditor::createUI(const RolloutInsertionParameters& rollo
         lay->addWidget(_propListWidget);
 
         lay->addWidget(new QLabel(
-            tr("<small>Run an upstream modifier first (e.g. Voronoi Analysis) "
-               "to see its output columns here.</small>"),
-            _propSelectBox));
+            tr("<small>Apply upstream modifiers (e.g. Voronoi Analysis) first "
+               "to see their output columns here.</small>"), _propSelectBox));
 
         mainLayout->addWidget(_propSelectBox);
 
-        // Repopulate list when pipeline input changes.
         connect(this, &PropertiesEditor::pipelineInputChanged,
                 this, &MLStructureModifierEditor::updatePropertyList);
-
-        // React to item check/uncheck.
         connect(_propListWidget, &QListWidget::itemChanged,
                 this, &MLStructureModifierEditor::onPropertyItemChanged);
+    }
+
+    // -----------------------------------------------------------------------
+    // Output mode
+    // -----------------------------------------------------------------------
+    {
+        QGroupBox* box = new QGroupBox(tr("Output"), rollout);
+        QGridLayout* grid = new QGridLayout(box);
+        grid->setContentsMargins(4, 4, 4, 4);
+        grid->setColumnStretch(1, 1);
+        int row = 0;
+
+        // Radio buttons for output mode.
+        QButtonGroup* outGroup  = new QButtonGroup(box);
+        QRadioButton* rbClass   = new QRadioButton(tr("Classification  (argmax → integer class index)"), box);
+        QRadioButton* rbReg     = new QRadioButton(tr("Regression  (raw float values)"), box);
+        outGroup->addButton(rbClass, static_cast<int>(MLStructureModifier::OutputMode::Classification));
+        outGroup->addButton(rbReg,   static_cast<int>(MLStructureModifier::OutputMode::Regression));
+        grid->addWidget(rbClass, row, 0, 1, 2); ++row;
+        grid->addWidget(rbReg,   row, 0, 1, 2); ++row;
+
+        // Output property name.
+        grid->addWidget(new QLabel(tr("Output property name:"), box), row, 0);
+        _outPropNameEdit = new QLineEdit(box);
+        _outPropNameEdit->setPlaceholderText("ML_Structure");
+        grid->addWidget(_outPropNameEdit, row, 1);
+        ++row;
+
+        mainLayout->addWidget(box);
+
+        // Sync output-mode radio → modifier.
+        connect(outGroup, &QButtonGroup::idClicked, this, [this](int id) {
+            if(auto* mod = static_cast<MLStructureModifier*>(editObject())) {
+                UndoableTransaction t;
+                t.begin(ui(), tr("Change output mode"));
+                mod->setOutputMode(static_cast<MLStructureModifier::OutputMode>(id));
+                t.commit();
+            }
+            onOutputModeChanged();
+        });
+
+        // Sync modifier → radio buttons.
+        connect(this, &PropertiesEditor::contentsChanged, this, [outGroup, this]() {
+            if(auto* mod = static_cast<MLStructureModifier*>(editObject())) {
+                if(auto* btn = outGroup->button(static_cast<int>(mod->outputMode())))
+                    btn->setChecked(true);
+                _outPropNameEdit->blockSignals(true);
+                _outPropNameEdit->setText(mod->outputPropertyName());
+                _outPropNameEdit->blockSignals(false);
+            }
+            onOutputModeChanged();
+        });
+
+        // Sync property name line edit → modifier (on editing finished).
+        connect(_outPropNameEdit, &QLineEdit::editingFinished, this, [this]() {
+            if(auto* mod = static_cast<MLStructureModifier*>(editObject())) {
+                const QString name = _outPropNameEdit->text().trimmed();
+                if(name == mod->outputPropertyName()) return;
+                UndoableTransaction t;
+                t.begin(ui(), tr("Change output property name"));
+                mod->setOutputPropertyName(name.isEmpty() ? QStringLiteral("ML_Structure") : name);
+                t.commit();
+            }
+        });
+    }
+
+    // -----------------------------------------------------------------------
+    // Classification key (shown only in Classification mode)
+    // -----------------------------------------------------------------------
+    {
+        _classInfoBox = new QGroupBox(tr("Class index key"), rollout);
+        QVBoxLayout* lay = new QVBoxLayout(_classInfoBox);
+        lay->setContentsMargins(4, 4, 4, 4);
+
+        lay->addWidget(new QLabel(
+            tr("Integer written per particle (depends on your training labels):\n"
+               "  0, 1, 2, … → class indices as defined in your dataset"),
+            _classInfoBox));
+
+        mainLayout->addWidget(_classInfoBox);
     }
 
     // -----------------------------------------------------------------------
@@ -179,13 +244,13 @@ void MLStructureModifierEditor::createUI(const RolloutInsertionParameters& rollo
     mainLayout->addSpacing(4);
     mainLayout->addWidget(createParamUI<ObjectStatusDisplay>()->statusWidget());
 
-    // Initial visibility pass (will be repeated via contentsChanged signal).
     onInputModeChanged();
+    onOutputModeChanged();
     updatePropertyList();
 }
 
 /******************************************************************************
-* Shows/hides the two parameter sections based on the active input mode.
+* Shows/hides input-related sections based on active input mode.
 ******************************************************************************/
 void MLStructureModifierEditor::onInputModeChanged()
 {
@@ -193,12 +258,24 @@ void MLStructureModifierEditor::onInputModeChanged()
     bool useProps = mod &&
         mod->inputMode() == MLStructureModifier::InputMode::ParticleProperties;
 
-    if(_descParamsBox)  _descParamsBox->setVisible(!useProps);
-    if(_propSelectBox)  _propSelectBox->setVisible(useProps);
+    if(_descParamsBox) _descParamsBox->setVisible(!useProps);
+    if(_propSelectBox) _propSelectBox->setVisible(useProps);
 }
 
 /******************************************************************************
-* Repopulates the property list from the current upstream pipeline state.
+* Shows/hides output-related sections based on active output mode.
+******************************************************************************/
+void MLStructureModifierEditor::onOutputModeChanged()
+{
+    auto* mod = static_cast<MLStructureModifier*>(editObject());
+    bool isRegression = mod &&
+        mod->outputMode() == MLStructureModifier::OutputMode::Regression;
+
+    if(_classInfoBox) _classInfoBox->setVisible(!isRegression);
+}
+
+/******************************************************************************
+* Repopulates the property list from the upstream pipeline state.
 ******************************************************************************/
 void MLStructureModifierEditor::updatePropertyList()
 {
@@ -206,20 +283,17 @@ void MLStructureModifierEditor::updatePropertyList()
 
     _updatingPropertyList = true;
 
-    // Collect the currently selected properties from the modifier.
     QStringList selected;
     if(auto* mod = static_cast<MLStructureModifier*>(editObject()))
         selected = mod->inputProperties();
 
     _propListWidget->clear();
 
-    // Walk all PipelineFlowState inputs and collect particle property columns.
     for(const PipelineFlowState& state : getPipelineInputs()) {
         const Particles* particles = state.getObject<Particles>();
         if(!particles) continue;
 
         for(const Property* prop : particles->properties()) {
-            // Skip properties whose data type is not numeric.
             int dt = prop->dataType();
             if(dt != QMetaType::Float   && dt != QMetaType::Double &&
                dt != QMetaType::Int     && dt != QMetaType::LongLong)
@@ -229,7 +303,6 @@ void MLStructureModifierEditor::updatePropertyList()
             const QStringList& compNames = prop->componentNames();
 
             if(nComp == 1) {
-                // Scalar property: single entry.
                 PropertyReference ref(prop, -1);
                 QString key = ref.nameWithComponent();
                 auto* item = new QListWidgetItem(prop->name(), _propListWidget);
@@ -237,7 +310,6 @@ void MLStructureModifierEditor::updatePropertyList()
                 item->setCheckState(selected.contains(key) ? Qt::Checked : Qt::Unchecked);
                 item->setData(Qt::UserRole, key);
             } else {
-                // Vector property: one entry per component.
                 for(size_t c = 0; c < nComp; ++c) {
                     PropertyReference ref(prop, static_cast<int>(c));
                     QString key = ref.nameWithComponent();
@@ -251,16 +323,16 @@ void MLStructureModifierEditor::updatePropertyList()
                 }
             }
         }
-        break; // use only the first (immediate upstream) state
+        break;
     }
 
     _updatingPropertyList = false;
 }
 
 /******************************************************************************
-* Commits the current checkbox state to the modifier's inputProperties field.
+* Commits checked items to the modifier's inputProperties field.
 ******************************************************************************/
-void MLStructureModifierEditor::onPropertyItemChanged(QListWidgetItem* /*item*/)
+void MLStructureModifierEditor::onPropertyItemChanged(QListWidgetItem*)
 {
     if(_updatingPropertyList) return;
     auto* mod = static_cast<MLStructureModifier*>(editObject());
@@ -273,10 +345,10 @@ void MLStructureModifierEditor::onPropertyItemChanged(QListWidgetItem* /*item*/)
             newList << it->data(Qt::UserRole).toString();
     }
 
-    UndoableTransaction transaction;
-    transaction.begin(ui(), tr("Change input properties"));
+    UndoableTransaction t;
+    t.begin(ui(), tr("Change input properties"));
     mod->setInputProperties(newList);
-    transaction.commit();
+    t.commit();
 }
 
 }  // namespace Ovito

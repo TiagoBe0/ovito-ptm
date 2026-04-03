@@ -75,6 +75,13 @@ public:
     };
     Q_ENUM(InputMode)
 
+    /// How the model output is interpreted and written to a particle property.
+    enum class OutputMode {
+        Classification = 0,  ///< argmax over class logits → Int32 property (class index).
+        Regression     = 1   ///< Raw model output → Float property (one or more components).
+    };
+    Q_ENUM(OutputMode)
+
     /// Returns a human-readable title shown in the pipeline editor.
     virtual QString objectTitle() const override { return tr("ML Structure Modifier"); }
 
@@ -105,6 +112,15 @@ private:
     /// Each entry is a PropertyReference name string (e.g. "Voronoi Volume",
     /// "Position.X", "Coordination").  Order matters — it must match the training data.
     DECLARE_MODIFIABLE_PROPERTY_FIELD(QStringList{}, inputProperties, setInputProperties);
+
+    // --- Output parameters ---
+
+    /// Selects how the model output is interpreted.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(MLStructureModifier::OutputMode{MLStructureModifier::OutputMode::Classification}, outputMode, setOutputMode);
+
+    /// Name of the particle property written by this modifier.
+    /// Default "ML_Structure" for classification; the user should rename for regression.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(QString{"ML_Structure"}, outputPropertyName, setOutputPropertyName);
 };
 
 }  // namespace Ovito

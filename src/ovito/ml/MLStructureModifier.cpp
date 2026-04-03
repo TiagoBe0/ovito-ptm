@@ -53,12 +53,16 @@ DEFINE_PROPERTY_FIELD(MLStructureModifier, inputMode);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, cutoffRadius);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, numNeighbors);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, inputProperties);
+DEFINE_PROPERTY_FIELD(MLStructureModifier, outputMode);
+DEFINE_PROPERTY_FIELD(MLStructureModifier, outputPropertyName);
 
-SET_PROPERTY_FIELD_LABEL(MLStructureModifier, modelPath,        "Model path (.pt)");
-SET_PROPERTY_FIELD_LABEL(MLStructureModifier, inputMode,        "Input mode");
-SET_PROPERTY_FIELD_LABEL(MLStructureModifier, cutoffRadius,     "Cutoff radius (Å)");
-SET_PROPERTY_FIELD_LABEL(MLStructureModifier, numNeighbors,     "Max neighbors in descriptor");
-SET_PROPERTY_FIELD_LABEL(MLStructureModifier, inputProperties,  "Input property columns");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, modelPath,           "Model path (.pt)");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, inputMode,           "Input mode");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, cutoffRadius,        "Cutoff radius (Å)");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, numNeighbors,        "Max neighbors in descriptor");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, inputProperties,     "Input property columns");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, outputMode,          "Output mode");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, outputPropertyName,  "Output property name");
 
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLStructureModifier, cutoffRadius, WorldParameterUnit, 0);
 SET_PROPERTY_FIELD_UNITS_AND_RANGE(MLStructureModifier, numNeighbors, IntegerParameterUnit, 1, 64);
@@ -177,15 +181,10 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
         }
     }
 
-    // --- 3. Allocate output property "ML_Structure" -------------------------
+    // --- 3. Determine output property name ----------------------------------
 
-    Particles* outputParticles = input.expectMutableObject<Particles>();
-    Property* structProp = outputParticles->createProperty(
-        DataBuffer::Initialized,
-        QStringLiteral("ML_Structure"),
-        Property::Int32,
-        1);
-    BufferWriteAccess<int32_t, access_mode::read_write> outputData{structProp};
+    const QString outPropName = outputPropertyName().isEmpty()
+        ? QStringLiteral("ML_Structure") : outputPropertyName();
 
     // --- 4. Run ML inference ------------------------------------------------
 
@@ -213,52 +212,98 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
             .arg(modelPath()));
     }
 
-    // Wrap the descriptor buffer in a LibTorch tensor (zero-copy via from_blob).
-    // Use int64_t for dimensions — required by LibTorch >= 1.5.
-    // descriptorBuf must outlive the tensor — it is alive for the rest of this scope.
+    // Wrap descriptor in a LibTorch tensor (zero-copy via from_blob).
     auto inputTensor = torch::from_blob(
         descriptorBuf.data(),
         {static_cast<int64_t>(N), static_cast<int64_t>(numFeatures)},
         torch::kFloat32);
 
-    // Forward pass → logits [N, num_classes].
-    // torch::NoGradGuard disables autograd (best practice since LibTorch 1.9+).
-    at::Tensor logits;
+    // Forward pass.  NoGradGuard disables autograd (best practice since 1.9+).
+    at::Tensor rawOutput;
     try {
         torch::NoGradGuard no_grad;
-        logits = model.forward({inputTensor}).toTensor();
+        rawOutput = model.forward({inputTensor}).toTensor();
     }
     catch(const c10::Error& e) {
         throw Exception(tr("MLStructureModifier: model forward() failed "
-                           "(input shape [%1 atoms x %2 features]): %3")
+                           "(input [%1 atoms × %2 features]): %3")
             .arg(N).arg(numFeatures).arg(QString::fromStdString(e.what())));
     }
     catch(const std::exception& e) {
         throw Exception(tr("MLStructureModifier: model forward() failed "
-                           "(input shape [%1 atoms x %2 features]): %3")
+                           "(input [%1 atoms × %2 features]): %3")
             .arg(N).arg(numFeatures).arg(QString::fromStdString(e.what())));
     }
     catch(...) {
-        throw Exception(tr("MLStructureModifier: model forward() failed with unknown exception. "
-                           "Input tensor shape: [%1 atoms x %2 features]. "
-                           "The model's first layer must accept exactly %2 input features.")
+        throw Exception(tr("MLStructureModifier: model forward() failed (unknown exception). "
+                           "Input tensor: [%1 atoms × %2 features]. "
+                           "Verify that the model's first layer accepts %2 features.")
             .arg(N).arg(numFeatures));
     }
 
-    if(logits.dim() != 2 || static_cast<size_t>(logits.size(0)) != N)
-        throw Exception(tr("MLStructureModifier: expected model output shape [%1, C], "
-                          "got [%2, ...].").arg(N).arg(logits.size(0)));
+    // Normalise output shape to 2-D: [N, K].
+    // Models may return [N] for single-output regression — reshape to [N, 1].
+    if(rawOutput.dim() == 1)
+        rawOutput = rawOutput.unsqueeze(1);
 
-    // Argmax over class dimension → [N] int32 predictions.
-    at::Tensor predictions = logits.argmax(/*dim=*/1).to(torch::kInt32).contiguous();
-    const int32_t* predData = predictions.data_ptr<int32_t>();
-    for(size_t i = 0; i < N; ++i)
-        outputData[i] = predData[i];
+    if(rawOutput.dim() != 2 || static_cast<size_t>(rawOutput.size(0)) != N)
+        throw Exception(tr("MLStructureModifier: unexpected output shape from model "
+                           "(expected [%1, K], got tensor with %2 dimensions / %3 rows).")
+            .arg(N).arg(rawOutput.dim()).arg(rawOutput.size(0)));
+
+    const int64_t K = rawOutput.size(1);   // number of output values per atom
+
+    Particles* outputParticles = input.expectMutableObject<Particles>();
+
+    if(outputMode() == OutputMode::Classification) {
+
+        // ---- 4a. Classification: argmax → Int32 property ------------------
+
+        if(K < 2)
+            throw Exception(tr("MLStructureModifier (classification): model output has only "
+                               "%1 column(s); need at least 2 class logits. "
+                               "For single-value output use Regression mode.").arg(K));
+
+        Property* outProp = outputParticles->createProperty(
+            DataBuffer::Initialized, outPropName, Property::Int32, 1);
+        BufferWriteAccess<int32_t, access_mode::read_write> outAccess{outProp};
+
+        at::Tensor predictions = rawOutput.argmax(/*dim=*/1).to(torch::kInt32).contiguous();
+        const int32_t* predData = predictions.data_ptr<int32_t>();
+        for(size_t i = 0; i < N; ++i)
+            outAccess[i] = predData[i];
+
+    } else {
+
+        // ---- 4b. Regression: raw float values → Float property ------------
+        //
+        // Output shape [N, 1]  → scalar Float property  (1 component).
+        // Output shape [N, K>1] → vector Float property (K components).
+        // OVITO FloatType is double; convert tensor to float64 before copy.
+
+        Property* outProp = outputParticles->createProperty(
+            DataBuffer::Initialized, outPropName, Property::Float,
+            static_cast<size_t>(K));
+        BufferWriteAccess<FloatType, access_mode::read_write> outAccess{outProp};
+
+        at::Tensor vals = rawOutput.to(torch::kDouble).contiguous();
+        const double* valData = vals.data_ptr<double>();
+        const size_t total = N * static_cast<size_t>(K);
+        for(size_t idx = 0; idx < total; ++idx)
+            outAccess[idx] = static_cast<FloatType>(valData[idx]);
+    }
 
 #else
 
-    // LibTorch not available — zero-fill (placeholder / integration test).
-    Q_UNUSED(outputData);
+    // LibTorch not available — create zero-filled placeholder property.
+    Particles* outputParticles = input.expectMutableObject<Particles>();
+    if(outputMode() == OutputMode::Classification) {
+        outputParticles->createProperty(
+            DataBuffer::Initialized, outPropName, Property::Int32, 1);
+    } else {
+        outputParticles->createProperty(
+            DataBuffer::Initialized, outPropName, Property::Float, 1);
+    }
 
 #endif  // OVITO_ML_HAS_LIBTORCH
 

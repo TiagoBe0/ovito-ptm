@@ -25,6 +25,7 @@
 #include <ovito/gui/desktop/properties/PropertiesEditor.h>
 #include <QGroupBox>
 #include <QListWidget>
+#include <QLineEdit>
 
 namespace Ovito {
 
@@ -32,12 +33,11 @@ namespace Ovito {
  * \brief Properties editor panel for MLStructureModifier.
  *
  * Displays:
- *   • A file browser button to load a TorchScript (.pt) model.
- *   • Radio buttons to choose between NeighborDistances and ParticleProperties mode.
- *   • In NeighborDistances mode: spinner controls for cutoffRadius and numNeighbors.
- *   • In ParticleProperties mode: a checkable list of available particle property
- *     columns populated from the upstream pipeline state.
- *   • A status display showing modifier errors / warnings.
+ *   • Model file browser (.pt).
+ *   • Input mode: NeighborDistances or ParticleProperties (with column list).
+ *   • Output mode: Classification (argmax → Int32) or Regression (raw float).
+ *   • Output property name field.
+ *   • Status display.
  */
 class MLStructureModifierEditor : public PropertiesEditor
 {
@@ -45,32 +45,21 @@ class MLStructureModifierEditor : public PropertiesEditor
     Q_OBJECT
 
 protected:
-
-    /// Builds the rollout widget with all UI controls.
     virtual void createUI(const RolloutInsertionParameters& rolloutParams) override;
 
 private Q_SLOTS:
-
-    /// Switches which parameter group is visible based on the selected input mode.
     void onInputModeChanged();
-
-    /// Repopulates the property list from the current upstream pipeline state.
+    void onOutputModeChanged();
     void updatePropertyList();
-
-    /// Called when the user checks/unchecks an item in the property list.
     void onPropertyItemChanged(QListWidgetItem* item);
 
 private:
-
-    /// Group box shown in NeighborDistances mode.
-    QGroupBox*   _descParamsBox   = nullptr;
-    /// Group box shown in ParticleProperties mode.
-    QGroupBox*   _propSelectBox   = nullptr;
-    /// Checkable list of available particle property columns.
-    QListWidget* _propListWidget  = nullptr;
-
-    /// Guards against re-entrant updates when syncing list ↔ modifier field.
-    bool _updatingPropertyList = false;
+    QGroupBox*   _descParamsBox       = nullptr;
+    QGroupBox*   _propSelectBox       = nullptr;
+    QListWidget* _propListWidget      = nullptr;
+    QGroupBox*   _classInfoBox        = nullptr;
+    QLineEdit*   _outPropNameEdit     = nullptr;
+    bool         _updatingPropertyList = false;
 };
 
 }  // namespace Ovito
