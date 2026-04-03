@@ -23,8 +23,33 @@
 # Optional LibTorch (PyTorch C++) integration.
 # To enable: cmake -DOVITO_USE_LIBTORCH=ON -DCMAKE_PREFIX_PATH=/path/to/libtorch ..
 OPTION(OVITO_USE_LIBTORCH "Enable LibTorch (PyTorch C++) support in the ML plugin." "OFF")
+SET(OVITO_LIBTORCH_ROOT "" CACHE PATH "Root folder of a LibTorch distribution (contains share/cmake/Torch).")
 IF(OVITO_USE_LIBTORCH)
-    FIND_PACKAGE(Torch REQUIRED)
+    # Help CMake find TorchConfig.cmake in common LibTorch layouts.
+    IF(OVITO_LIBTORCH_ROOT)
+        LIST(APPEND CMAKE_PREFIX_PATH
+            "${OVITO_LIBTORCH_ROOT}"
+            "${OVITO_LIBTORCH_ROOT}/share/cmake/Torch"
+        )
+    ENDIF()
+
+    # Favor the user-specified Torch_DIR over any stale paths coming from a
+    # globally configured CMAKE_PREFIX_PATH. This avoids mixing multiple
+    # LibTorch installations, which can produce RPATH cycles and link errors.
+    IF(Torch_DIR)
+        FIND_PACKAGE(Torch QUIET CONFIG PATHS "${Torch_DIR}" NO_DEFAULT_PATH)
+    ELSE()
+        FIND_PACKAGE(Torch QUIET CONFIG)
+    ENDIF()
+    IF(NOT Torch_FOUND)
+        MESSAGE(FATAL_ERROR
+            "LibTorch requested, but TorchConfig.cmake was not found.\n"
+            "Set one of:\n"
+            "  -DOVITO_LIBTORCH_ROOT=/path/to/libtorch\n"
+            "  -DTorch_DIR=/path/to/libtorch/share/cmake/Torch\n"
+            "  -DCMAKE_PREFIX_PATH=/path/to/libtorch\n"
+        )
+    ENDIF()
     MESSAGE(STATUS "LibTorch found: ${TORCH_VERSION}")
 ENDIF()
 
@@ -38,7 +63,20 @@ OVITO_STANDARD_PLUGIN(MLPlugin
 
 # Link LibTorch when available.
 IF(OVITO_USE_LIBTORCH)
-    TARGET_LINK_LIBRARIES(MLPlugin PRIVATE "${TORCH_LIBRARIES}")
+    # Apply compiler flags required by the LibTorch package (e.g. the
+    # _GLIBCXX_USE_CXX11_ABI setting), otherwise the linker may fail with
+    # unresolved torch::jit / at:: symbols due to ABI mismatch.
+    SEPARATE_ARGUMENTS(TORCH_CXX_FLAGS_LIST NATIVE_COMMAND "${TORCH_CXX_FLAGS}")
+    TARGET_COMPILE_OPTIONS(MLPlugin PRIVATE ${TORCH_CXX_FLAGS_LIST})
+
+    # Prefer the imported CMake target from TorchConfig when available. It
+    # carries a consistent set of link/interface properties for one LibTorch
+    # install and avoids manually expanding ${TORCH_LIBRARIES}.
+    IF(TARGET Torch::Torch)
+        TARGET_LINK_LIBRARIES(MLPlugin PRIVATE Torch::Torch)
+    ELSE()
+        TARGET_LINK_LIBRARIES(MLPlugin PRIVATE ${TORCH_LIBRARIES})
+    ENDIF()
     TARGET_INCLUDE_DIRECTORIES(MLPlugin PRIVATE "${TORCH_INCLUDE_DIRS}")
     TARGET_COMPILE_DEFINITIONS(MLPlugin PRIVATE "OVITO_ML_HAS_LIBTORCH=1")
 ENDIF()

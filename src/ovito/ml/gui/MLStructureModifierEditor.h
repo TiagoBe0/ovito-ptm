@@ -23,6 +23,9 @@
 #pragma once
 
 #include <ovito/gui/desktop/properties/PropertiesEditor.h>
+#include <QGroupBox>
+#include <QListWidget>
+#include <QLineEdit>
 
 namespace Ovito {
 
@@ -30,10 +33,11 @@ namespace Ovito {
  * \brief Properties editor panel for MLStructureModifier.
  *
  * Displays:
- *   • A file browser button to load a TorchScript (.pt) model.
- *   • Spinner controls for cutoffRadius and numNeighbors.
- *   • An informational label listing the expected class-index mapping.
- *   • A status display showing modifier errors / warnings.
+ *   • Model file browser (.pt).
+ *   • Input mode: NeighborDistances or ParticleProperties (with column list).
+ *   • Output mode: Classification (argmax → Int32) or Regression (raw float).
+ *   • Output property name field.
+ *   • Status display.
  */
 class MLStructureModifierEditor : public PropertiesEditor
 {
@@ -41,9 +45,21 @@ class MLStructureModifierEditor : public PropertiesEditor
     Q_OBJECT
 
 protected:
-
-    /// Builds the rollout widget with all UI controls.
     virtual void createUI(const RolloutInsertionParameters& rolloutParams) override;
+
+private Q_SLOTS:
+    void onInputModeChanged();
+    void onOutputModeChanged();
+    void updatePropertyList();
+    void onPropertyItemChanged(QListWidgetItem* item);
+
+private:
+    QGroupBox*   _descParamsBox       = nullptr;
+    QGroupBox*   _propSelectBox       = nullptr;
+    QListWidget* _propListWidget      = nullptr;
+    QGroupBox*   _classInfoBox        = nullptr;
+    QLineEdit*   _outPropNameEdit     = nullptr;
+    bool         _updatingPropertyList = false;
 };
 
 }  // namespace Ovito

@@ -34,28 +34,27 @@ namespace Ovito {
  * \brief Modifier that runs inference with a pre-trained ML model (LibTorch .pt)
  *        and outputs per-particle structure predictions as a new particle property.
  *
- * Pipeline:
- *   1. Reads particle positions and simulation cell from PipelineFlowState.
- *   2. For each atom, collects neighbor distances within cutoffRadius() using
- *      CutoffNeighborFinder, sorts them, pads to numNeighbors() slots, and
- *      normalises by cutoffRadius().  Produces a [N, numNeighbors] float tensor.
- *   3. Forwards the tensor through a TorchScript model loaded from modelPath().
- *      The model must return class logits [N, C]; argmax gives the class index.
- *   4. Writes integer class indices into a new "ML_Structure" particle property.
+ * Two input modes are available (see InputMode):
  *
- * Descriptor: sorted normalised neighbor distances.
- *   - Rotation & translation invariant.
- *   - Must match the descriptor used during Python training
- *     (see scripts/train_structure_classifier.py).
+ *  NeighborDistances (0) — original behaviour:
+ *    For each atom, collects neighbour distances within cutoffRadius(), sorts them,
+ *    pads to numNeighbors() slots, normalises by cutoffRadius().
+ *    Produces a [N, numNeighbors] float tensor.
  *
- * When OVITO_ML_HAS_LIBTORCH is not defined, step 3 is skipped and the output
- * property is filled with zeros (placeholder mode, useful for integration testing
- * without the LibTorch dependency).
+ *  ParticleProperties (1) — column selection mode:
+ *    Builds the feature vector from an arbitrary set of particle property columns
+ *    previously computed by upstream modifiers (e.g. Voronoi volumes, PTM RMSD, …).
+ *    The user selects which property/component pairs to include; each selected column
+ *    contributes one float per particle. Produces a [N, numSelectedColumns] tensor.
+ *    The model must have been trained with the same columns in the same order.
+ *
+ * In both modes the model must return class logits [N, C]; argmax gives the class index
+ * that is written into a new "ML_Structure" integer particle property.
  */
 class OVITO_MLPLUGIN_EXPORT MLStructureModifier : public Modifier
 {
     /// Give this modifier class its own metaclass.
-    class OOMetaClass : public Modifier::OOMetaClass
+    class OVITO_MLPLUGIN_EXPORT OOMetaClass : public Modifier::OOMetaClass
     {
     public:
         using Modifier::OOMetaClass::OOMetaClass;
@@ -68,6 +67,20 @@ class OVITO_MLPLUGIN_EXPORT MLStructureModifier : public Modifier
 
 public:
 
+    /// How the per-atom input feature vector is constructed.
+    enum class InputMode {
+        NeighborDistances  = 0,  ///< Sorted normalised neighbour distances (original).
+        ParticleProperties = 1   ///< User-selected particle property columns.
+    };
+    Q_ENUM(InputMode)
+
+    /// How the model output is interpreted and written to a particle property.
+    enum class OutputMode {
+        Classification = 0,  ///< argmax over class logits → Int32 property (class index).
+        Regression     = 1   ///< Raw model output → Float property (one or more components).
+    };
+    Q_ENUM(OutputMode)
+
     /// Returns a human-readable title shown in the pipeline editor.
     virtual QString objectTitle() const override { return tr("ML Structure Modifier"); }
 
@@ -79,17 +92,34 @@ public:
 private:
 
     /// Filesystem path to a TorchScript model file (.pt).
-    /// Set via the property field system so OVITO can serialize/deserialize it.
     DECLARE_MODIFIABLE_PROPERTY_FIELD(QString{}, modelPath, setModelPath);
 
+    /// Selects how the per-atom feature vector is constructed.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(MLStructureModifier::InputMode{MLStructureModifier::InputMode::NeighborDistances}, inputMode, setInputMode);
+
+    // --- NeighborDistances mode parameters ---
+
     /// Cutoff radius used to build the local environment descriptor (Angstrom).
-    /// Must match the value used when training the model (default: 5.0 Å).
     DECLARE_MODIFIABLE_PROPERTY_FIELD(FloatType{5.0}, cutoffRadius, setCutoffRadius);
 
     /// Maximum number of neighbors included in the descriptor vector.
-    /// Distances are sorted ascending; shorter vectors are padded with cutoffRadius.
-    /// Must match MAX_NEIGH in the Python training script (default: 16).
     DECLARE_MODIFIABLE_PROPERTY_FIELD(int{16}, numNeighbors, setNumNeighbors);
+
+    // --- ParticleProperties mode parameters ---
+
+    /// List of property columns to use as input features.
+    /// Each entry is a PropertyReference name string (e.g. "Voronoi Volume",
+    /// "Position.X", "Coordination").  Order matters — it must match the training data.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(QStringList{}, inputProperties, setInputProperties);
+
+    // --- Output parameters ---
+
+    /// Selects how the model output is interpreted.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(MLStructureModifier::OutputMode{MLStructureModifier::OutputMode::Classification}, outputMode, setOutputMode);
+
+    /// Name of the particle property written by this modifier.
+    /// Default "ML_Structure" for classification; the user should rename for regression.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(QString{"ML_Structure"}, outputPropertyName, setOutputPropertyName);
 };
 
 }  // namespace Ovito

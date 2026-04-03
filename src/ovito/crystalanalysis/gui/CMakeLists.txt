@@ -33,6 +33,7 @@ OVITO_STANDARD_PLUGIN(CrystalAnalysisGui
         modifier/GrainSegmentationModifierEditor.cpp
         util/DislocationInspectionApplet.cpp
     PLUGIN_DEPENDENCIES CrystalAnalysis Particles ParticlesGui
+    PRIVATE_LIB_DEPENDENCIES PolyhedralTemplateMatching
     GUI_PLUGIN
     HAS_NO_EXPORTS
 )
