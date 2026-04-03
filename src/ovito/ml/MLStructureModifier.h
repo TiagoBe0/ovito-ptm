@@ -120,6 +120,13 @@ private:
     /// Name of the particle property written by this modifier.
     /// Default "ML_Structure" for classification; the user should rename for regression.
     DECLARE_MODIFIABLE_PROPERTY_FIELD(QString{"ML_Structure"}, outputPropertyName, setOutputPropertyName);
+
+    // --- Classification-mode parameters ---
+
+    /// Optional list of class names, one per class index (0, 1, 2, …).
+    /// If fewer names than classes are provided, remaining classes are labelled
+    /// "Class N".  Only used in Classification output mode.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(QStringList{}, classNames, setClassNames);
 };
 
 }  // namespace Ovito
