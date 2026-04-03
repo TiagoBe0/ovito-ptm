@@ -29,6 +29,7 @@
 #include <ovito/gui/desktop/properties/FloatParameterUI.h>
 #include <ovito/gui/desktop/properties/IntegerParameterUI.h>
 #include <ovito/gui/desktop/properties/ObjectStatusDisplay.h>
+#include <ovito/core/app/undo/UndoableTransaction.h>
 #include <QRadioButton>
 #include <QButtonGroup>
 #include "MLStructureModifierEditor.h"
@@ -93,9 +94,10 @@ void MLStructureModifierEditor::createUI(const RolloutInsertionParameters& rollo
         // Sync radio buttons → modifier field.
         connect(btnGroup, &QButtonGroup::idClicked, this, [this](int id) {
             if(auto* mod = static_cast<MLStructureModifier*>(editObject())) {
-                undoableTransaction(tr("Change input mode"), [mod, id]() {
-                    mod->setInputMode(static_cast<MLStructureModifier::InputMode>(id));
-                });
+                UndoableTransaction transaction;
+                transaction.begin(ui(), tr("Change input mode"));
+                mod->setInputMode(static_cast<MLStructureModifier::InputMode>(id));
+                transaction.commit();
             }
         });
 
@@ -271,9 +273,10 @@ void MLStructureModifierEditor::onPropertyItemChanged(QListWidgetItem* /*item*/)
             newList << it->data(Qt::UserRole).toString();
     }
 
-    undoableTransaction(tr("Change input properties"), [mod, &newList]() {
-        mod->setInputProperties(newList);
-    });
+    UndoableTransaction transaction;
+    transaction.begin(ui(), tr("Change input properties"));
+    mod->setInputProperties(newList);
+    transaction.commit();
 }
 
 }  // namespace Ovito
