@@ -23,6 +23,8 @@
 #pragma once
 
 #include <ovito/gui/desktop/properties/PropertiesEditor.h>
+#include <QGroupBox>
+#include <QListWidget>
 
 namespace Ovito {
 
@@ -31,8 +33,10 @@ namespace Ovito {
  *
  * Displays:
  *   • A file browser button to load a TorchScript (.pt) model.
- *   • Spinner controls for cutoffRadius and numNeighbors.
- *   • An informational label listing the expected class-index mapping.
+ *   • Radio buttons to choose between NeighborDistances and ParticleProperties mode.
+ *   • In NeighborDistances mode: spinner controls for cutoffRadius and numNeighbors.
+ *   • In ParticleProperties mode: a checkable list of available particle property
+ *     columns populated from the upstream pipeline state.
  *   • A status display showing modifier errors / warnings.
  */
 class MLStructureModifierEditor : public PropertiesEditor
@@ -44,6 +48,29 @@ protected:
 
     /// Builds the rollout widget with all UI controls.
     virtual void createUI(const RolloutInsertionParameters& rolloutParams) override;
+
+private Q_SLOTS:
+
+    /// Switches which parameter group is visible based on the selected input mode.
+    void onInputModeChanged();
+
+    /// Repopulates the property list from the current upstream pipeline state.
+    void updatePropertyList();
+
+    /// Called when the user checks/unchecks an item in the property list.
+    void onPropertyItemChanged(QListWidgetItem* item);
+
+private:
+
+    /// Group box shown in NeighborDistances mode.
+    QGroupBox*   _descParamsBox   = nullptr;
+    /// Group box shown in ParticleProperties mode.
+    QGroupBox*   _propSelectBox   = nullptr;
+    /// Checkable list of available particle property columns.
+    QListWidget* _propListWidget  = nullptr;
+
+    /// Guards against re-entrant updates when syncing list ↔ modifier field.
+    bool _updatingPropertyList = false;
 };
 
 }  // namespace Ovito

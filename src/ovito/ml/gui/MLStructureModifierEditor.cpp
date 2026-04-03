@@ -22,10 +22,15 @@
 
 #include <ovito/particles/gui/ParticlesGui.h>
 #include <ovito/ml/MLStructureModifier.h>
+#include <ovito/stdobj/properties/PropertyReference.h>
+#include <ovito/particles/objects/Particles.h>
+#include <ovito/core/dataset/pipeline/PipelineFlowState.h>
 #include <ovito/gui/desktop/properties/FilenameParameterUI.h>
 #include <ovito/gui/desktop/properties/FloatParameterUI.h>
 #include <ovito/gui/desktop/properties/IntegerParameterUI.h>
 #include <ovito/gui/desktop/properties/ObjectStatusDisplay.h>
+#include <QRadioButton>
+#include <QButtonGroup>
 #include "MLStructureModifierEditor.h"
 
 namespace Ovito {
@@ -38,100 +43,237 @@ SET_OVITO_OBJECT_EDITOR(MLStructureModifier, MLStructureModifierEditor);
 ******************************************************************************/
 void MLStructureModifierEditor::createUI(const RolloutInsertionParameters& rolloutParams)
 {
-    // -----------------------------------------------------------------------
-    // Main rollout
-    // -----------------------------------------------------------------------
     QWidget* rollout = createRollout(tr("ML Structure Modifier"), rolloutParams);
-
     QVBoxLayout* mainLayout = new QVBoxLayout(rollout);
     mainLayout->setContentsMargins(4, 4, 4, 4);
     mainLayout->setSpacing(6);
 
     // -----------------------------------------------------------------------
-    // Section: Model file
+    // Model file
     // -----------------------------------------------------------------------
-    QGroupBox* modelBox = new QGroupBox(tr("Model"), rollout);
-    QVBoxLayout* modelLayout = new QVBoxLayout(modelBox);
-    modelLayout->setContentsMargins(4, 4, 4, 4);
-    modelLayout->setSpacing(4);
+    {
+        QGroupBox* box = new QGroupBox(tr("Model"), rollout);
+        QVBoxLayout* lay = new QVBoxLayout(box);
+        lay->setContentsMargins(4, 4, 4, 4);
+        lay->setSpacing(4);
 
-    QLabel* modelLabel = new QLabel(
-        tr("TorchScript model file (<tt>.pt</tt>):"), modelBox);
-    modelLayout->addWidget(modelLabel);
+        lay->addWidget(new QLabel(tr("TorchScript model file (<tt>.pt</tt>):"), box));
 
-    QStringList ptFilter = { tr("TorchScript models (*.pt)"),
-                             tr("All files (*)") };
-    FilenameParameterUI* modelPathUI = createParamUI<FilenameParameterUI>(
-        PROPERTY_FIELD(MLStructureModifier::modelPath), ptFilter, /*existingFile=*/true);
-    modelLayout->addWidget(modelPathUI->selectorWidget());
+        QStringList ptFilter = { tr("TorchScript models (*.pt)"), tr("All files (*)") };
+        FilenameParameterUI* modelPathUI = createParamUI<FilenameParameterUI>(
+            PROPERTY_FIELD(MLStructureModifier::modelPath), ptFilter, /*existingFile=*/true);
+        lay->addWidget(modelPathUI->selectorWidget());
 
-    QLabel* trainHint = new QLabel(
-        tr("<small>Train and export a model with:<br>"
-           "<tt>python scripts/train_structure_classifier.py</tt></small>"),
-        modelBox);
-    trainHint->setWordWrap(true);
-    trainHint->setOpenExternalLinks(false);
-    modelLayout->addWidget(trainHint);
-
-    mainLayout->addWidget(modelBox);
+        mainLayout->addWidget(box);
+    }
 
     // -----------------------------------------------------------------------
-    // Section: Descriptor parameters
+    // Input mode radio buttons
     // -----------------------------------------------------------------------
-    QGroupBox* descBox = new QGroupBox(tr("Descriptor parameters"), rollout);
-    QGridLayout* descGrid = new QGridLayout(descBox);
-    descGrid->setContentsMargins(4, 4, 4, 4);
-    descGrid->setColumnStretch(1, 1);
-    int row = 0;
+    {
+        QGroupBox* box = new QGroupBox(tr("Input features"), rollout);
+        QVBoxLayout* lay = new QVBoxLayout(box);
+        lay->setContentsMargins(4, 4, 4, 4);
+        lay->setSpacing(2);
 
-    // Cutoff radius
-    FloatParameterUI* cutoffUI = createParamUI<FloatParameterUI>(
-        PROPERTY_FIELD(MLStructureModifier::cutoffRadius));
-    descGrid->addWidget(cutoffUI->label(), row, 0);
-    descGrid->addLayout(cutoffUI->createFieldLayout(), row, 1);
-    ++row;
+        QButtonGroup* btnGroup = new QButtonGroup(box);
 
-    // Max neighbours
-    IntegerParameterUI* numNeighUI = createParamUI<IntegerParameterUI>(
-        PROPERTY_FIELD(MLStructureModifier::numNeighbors));
-    descGrid->addWidget(numNeighUI->label(), row, 0);
-    descGrid->addLayout(numNeighUI->createFieldLayout(), row, 1);
-    ++row;
+        QRadioButton* rbNeigh = new QRadioButton(
+            tr("Neighbour distances (sorted, normalised)"), box);
+        QRadioButton* rbProp  = new QRadioButton(
+            tr("Particle property columns"), box);
 
-    QLabel* descNote = new QLabel(
-        tr("<small>Must match the values used when training the model<br>"
-           "(defaults: cutoff = 5.0 Å, neighbours = 16).</small>"),
-        descBox);
-    descNote->setWordWrap(true);
-    descGrid->addWidget(descNote, row, 0, 1, 2);
+        btnGroup->addButton(rbNeigh, static_cast<int>(MLStructureModifier::InputMode::NeighborDistances));
+        btnGroup->addButton(rbProp,  static_cast<int>(MLStructureModifier::InputMode::ParticleProperties));
 
-    mainLayout->addWidget(descBox);
+        lay->addWidget(rbNeigh);
+        lay->addWidget(rbProp);
+        mainLayout->addWidget(box);
 
-    // -----------------------------------------------------------------------
-    // Section: Output key
-    // -----------------------------------------------------------------------
-    QGroupBox* outputBox = new QGroupBox(tr("Output property: ML_Structure"), rollout);
-    QVBoxLayout* outputLayout = new QVBoxLayout(outputBox);
-    outputLayout->setContentsMargins(4, 4, 4, 4);
+        // Sync radio buttons → modifier field.
+        connect(btnGroup, &QButtonGroup::idClicked, this, [this](int id) {
+            if(auto* mod = static_cast<MLStructureModifier*>(editObject())) {
+                undoableTransaction(tr("Change input mode"), [mod, id]() {
+                    mod->setInputMode(static_cast<MLStructureModifier::InputMode>(id));
+                });
+            }
+        });
 
-    QLabel* classKey = new QLabel(
-        tr("Integer class index written per particle:<br>"
-           "&nbsp;&nbsp;0 = FCC<br>"
-           "&nbsp;&nbsp;1 = HCP<br>"
-           "&nbsp;&nbsp;2 = BCC<br>"
-           "&nbsp;&nbsp;3 = Diamond<br>"
-           "&nbsp;&nbsp;4 = SC"),
-        outputBox);
-    classKey->setWordWrap(true);
-    outputLayout->addWidget(classKey);
-
-    mainLayout->addWidget(outputBox);
+        // Sync modifier field → radio buttons.
+        connect(this, &PropertiesEditor::contentsChanged, this, [btnGroup, this]() {
+            if(auto* mod = static_cast<MLStructureModifier*>(editObject()))
+                btnGroup->button(static_cast<int>(mod->inputMode()))->setChecked(true);
+            onInputModeChanged();
+        });
+    }
 
     // -----------------------------------------------------------------------
-    // Status display (errors / warnings from the modifier)
+    // NeighborDistances parameters
+    // -----------------------------------------------------------------------
+    {
+        _descParamsBox = new QGroupBox(tr("Descriptor parameters"), rollout);
+        QGridLayout* grid = new QGridLayout(_descParamsBox);
+        grid->setContentsMargins(4, 4, 4, 4);
+        grid->setColumnStretch(1, 1);
+        int row = 0;
+
+        FloatParameterUI* cutoffUI = createParamUI<FloatParameterUI>(
+            PROPERTY_FIELD(MLStructureModifier::cutoffRadius));
+        grid->addWidget(cutoffUI->label(), row, 0);
+        grid->addLayout(cutoffUI->createFieldLayout(), row, 1);
+        ++row;
+
+        IntegerParameterUI* numNeighUI = createParamUI<IntegerParameterUI>(
+            PROPERTY_FIELD(MLStructureModifier::numNeighbors));
+        grid->addWidget(numNeighUI->label(), row, 0);
+        grid->addLayout(numNeighUI->createFieldLayout(), row, 1);
+        ++row;
+
+        grid->addWidget(new QLabel(
+            tr("<small>Must match the values used when training the model.</small>"),
+            _descParamsBox), row, 0, 1, 2);
+
+        mainLayout->addWidget(_descParamsBox);
+    }
+
+    // -----------------------------------------------------------------------
+    // ParticleProperties selection
+    // -----------------------------------------------------------------------
+    {
+        _propSelectBox = new QGroupBox(tr("Property columns"), rollout);
+        QVBoxLayout* lay = new QVBoxLayout(_propSelectBox);
+        lay->setContentsMargins(4, 4, 4, 4);
+        lay->setSpacing(4);
+
+        lay->addWidget(new QLabel(
+            tr("Select the columns to use as input features.\n"
+               "Order matters — must match the training data."),
+            _propSelectBox));
+
+        _propListWidget = new QListWidget(_propSelectBox);
+        _propListWidget->setSelectionMode(QAbstractItemView::NoSelection);
+        _propListWidget->setMinimumHeight(120);
+        lay->addWidget(_propListWidget);
+
+        lay->addWidget(new QLabel(
+            tr("<small>Run an upstream modifier first (e.g. Voronoi Analysis) "
+               "to see its output columns here.</small>"),
+            _propSelectBox));
+
+        mainLayout->addWidget(_propSelectBox);
+
+        // Repopulate list when pipeline input changes.
+        connect(this, &PropertiesEditor::pipelineInputChanged,
+                this, &MLStructureModifierEditor::updatePropertyList);
+
+        // React to item check/uncheck.
+        connect(_propListWidget, &QListWidget::itemChanged,
+                this, &MLStructureModifierEditor::onPropertyItemChanged);
+    }
+
+    // -----------------------------------------------------------------------
+    // Status display
     // -----------------------------------------------------------------------
     mainLayout->addSpacing(4);
     mainLayout->addWidget(createParamUI<ObjectStatusDisplay>()->statusWidget());
+
+    // Initial visibility pass (will be repeated via contentsChanged signal).
+    onInputModeChanged();
+    updatePropertyList();
+}
+
+/******************************************************************************
+* Shows/hides the two parameter sections based on the active input mode.
+******************************************************************************/
+void MLStructureModifierEditor::onInputModeChanged()
+{
+    auto* mod = static_cast<MLStructureModifier*>(editObject());
+    bool useProps = mod &&
+        mod->inputMode() == MLStructureModifier::InputMode::ParticleProperties;
+
+    if(_descParamsBox)  _descParamsBox->setVisible(!useProps);
+    if(_propSelectBox)  _propSelectBox->setVisible(useProps);
+}
+
+/******************************************************************************
+* Repopulates the property list from the current upstream pipeline state.
+******************************************************************************/
+void MLStructureModifierEditor::updatePropertyList()
+{
+    if(!_propListWidget) return;
+
+    _updatingPropertyList = true;
+
+    // Collect the currently selected properties from the modifier.
+    QStringList selected;
+    if(auto* mod = static_cast<MLStructureModifier*>(editObject()))
+        selected = mod->inputProperties();
+
+    _propListWidget->clear();
+
+    // Walk all PipelineFlowState inputs and collect particle property columns.
+    for(const PipelineFlowState& state : getPipelineInputs()) {
+        const Particles* particles = state.getObject<Particles>();
+        if(!particles) continue;
+
+        for(const Property* prop : particles->properties()) {
+            // Skip properties whose data type is not numeric.
+            int dt = prop->dataType();
+            if(dt != QMetaType::Float   && dt != QMetaType::Double &&
+               dt != QMetaType::Int     && dt != QMetaType::LongLong)
+                continue;
+
+            const size_t nComp = prop->componentCount();
+            const QStringList& compNames = prop->componentNames();
+
+            if(nComp == 1) {
+                // Scalar property: single entry.
+                PropertyReference ref(prop, -1);
+                QString key = ref.nameWithComponent();
+                auto* item = new QListWidgetItem(prop->name(), _propListWidget);
+                item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+                item->setCheckState(selected.contains(key) ? Qt::Checked : Qt::Unchecked);
+                item->setData(Qt::UserRole, key);
+            } else {
+                // Vector property: one entry per component.
+                for(size_t c = 0; c < nComp; ++c) {
+                    PropertyReference ref(prop, static_cast<int>(c));
+                    QString key = ref.nameWithComponent();
+                    QString label = (c < (size_t)compNames.size())
+                        ? QStringLiteral("%1.%2").arg(prop->name(), compNames[c])
+                        : QStringLiteral("%1.%2").arg(prop->name()).arg(c);
+                    auto* item = new QListWidgetItem(label, _propListWidget);
+                    item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+                    item->setCheckState(selected.contains(key) ? Qt::Checked : Qt::Unchecked);
+                    item->setData(Qt::UserRole, key);
+                }
+            }
+        }
+        break; // use only the first (immediate upstream) state
+    }
+
+    _updatingPropertyList = false;
+}
+
+/******************************************************************************
+* Commits the current checkbox state to the modifier's inputProperties field.
+******************************************************************************/
+void MLStructureModifierEditor::onPropertyItemChanged(QListWidgetItem* /*item*/)
+{
+    if(_updatingPropertyList) return;
+    auto* mod = static_cast<MLStructureModifier*>(editObject());
+    if(!mod) return;
+
+    QStringList newList;
+    for(int i = 0; i < _propListWidget->count(); ++i) {
+        QListWidgetItem* it = _propListWidget->item(i);
+        if(it->checkState() == Qt::Checked)
+            newList << it->data(Qt::UserRole).toString();
+    }
+
+    undoableTransaction(tr("Change input properties"), [mod, &newList]() {
+        mod->setInputProperties(newList);
+    });
 }
 
 }  // namespace Ovito

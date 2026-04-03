@@ -23,9 +23,11 @@
 #include <ovito/core/dataset/DataSet.h>
 #include <ovito/core/dataset/pipeline/ModificationNode.h>
 #include <ovito/core/dataset/pipeline/ModifierEvaluationRequest.h>
+#include <ovito/core/dataset/data/BufferAccess.h>
 #include <ovito/core/utilities/units/UnitsManager.h>
 #include <ovito/stdobj/simcell/SimulationCell.h>
 #include <ovito/stdobj/properties/Property.h>
+#include <ovito/stdobj/properties/PropertyReference.h>
 #include <ovito/particles/objects/Particles.h>
 #include <ovito/particles/util/CutoffNeighborFinder.h>
 #include "MLStructureModifier.h"
@@ -33,6 +35,7 @@
 // Include LibTorch headers only when the library is available.
 #ifdef OVITO_ML_HAS_LIBTORCH
 #  include <torch/script.h>
+#  include <torch/csrc/autograd/grad_mode.h>
 #endif
 
 namespace Ovito {
@@ -46,12 +49,16 @@ OVITO_CLASSINFO(MLStructureModifier, "DisplayName",      "ML Structure Modifier"
 OVITO_CLASSINFO(MLStructureModifier, "ModifierCategory", "Analysis");
 
 DEFINE_PROPERTY_FIELD(MLStructureModifier, modelPath);
+DEFINE_PROPERTY_FIELD(MLStructureModifier, inputMode);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, cutoffRadius);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, numNeighbors);
+DEFINE_PROPERTY_FIELD(MLStructureModifier, inputProperties);
 
-SET_PROPERTY_FIELD_LABEL(MLStructureModifier, modelPath,    "Model path (.pt)");
-SET_PROPERTY_FIELD_LABEL(MLStructureModifier, cutoffRadius, "Cutoff radius (Å)");
-SET_PROPERTY_FIELD_LABEL(MLStructureModifier, numNeighbors, "Max neighbors in descriptor");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, modelPath,        "Model path (.pt)");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, inputMode,        "Input mode");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, cutoffRadius,     "Cutoff radius (Å)");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, numNeighbors,     "Max neighbors in descriptor");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, inputProperties,  "Input property columns");
 
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLStructureModifier, cutoffRadius, WorldParameterUnit, 0);
 SET_PROPERTY_FIELD_UNITS_AND_RANGE(MLStructureModifier, numNeighbors, IntegerParameterUnit, 1, 64);
@@ -75,67 +82,102 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
     const ModifierEvaluationRequest& request,
     PipelineFlowState&& input)
 {
-    // --- 1. Validate parameters -------------------------------------------
+    // --- 1. Extract particle data -------------------------------------------
 
-    const FloatType cutoff = cutoffRadius();
-    const int       maxK   = numNeighbors();
-
-    if(cutoff <= 0)
-        throw Exception(tr("MLStructureModifier: cutoff radius must be positive."));
-    if(maxK <= 0)
-        throw Exception(tr("MLStructureModifier: numNeighbors must be at least 1."));
-
-    // --- 2. Extract particle data -----------------------------------------
-
-    const SimulationCell* simCell  = input.getObject<SimulationCell>();
-    const Particles*  particlesObj = input.expectObject<Particles>();
-    const Property* posProp  =
+    const SimulationCell* simCell   = input.getObject<SimulationCell>();
+    const Particles* particlesObj   = input.expectObject<Particles>();
+    const Property*  posProp        =
         particlesObj->expectProperty(Particles::PositionProperty);
 
     const size_t N = posProp->size();
 
-    // --- 3. Build rotation-invariant descriptor [N, maxK] -----------------
-    //
-    // For each atom i:
-    //   • Collect all neighbour distances within cutoff using CutoffNeighborFinder.
-    //   • Sort ascending, pad with cutoff if fewer than maxK neighbours.
-    //   • Normalise by cutoff → values in [0, 1].
-    //
-    // This matches the Python descriptor in scripts/train_structure_classifier.py.
+    // --- 2. Build the per-atom input feature matrix -------------------------
 
-    // Preallocate the descriptor as a flat float32 buffer [N * maxK].
-    std::vector<float> descriptorBuf(N * maxK);
+    std::vector<float> descriptorBuf;
+    int numFeatures = 0;
 
-    {
-        CutoffNeighborFinder neighborFinder(cutoff,
-            posProp,          // positions property
-            simCell,          // SimulationCellData (implicit conversion)
-            nullptr);         // no selection filter
+    if(inputMode() == InputMode::NeighborDistances) {
 
+        // ----- 2a. Sorted normalised neighbour distances --------------------
+
+        const FloatType cutoff = cutoffRadius();
+        const int       maxK   = numNeighbors();
+
+        if(cutoff <= 0)
+            throw Exception(tr("MLStructureModifier: cutoff radius must be positive."));
+        if(maxK <= 0)
+            throw Exception(tr("MLStructureModifier: numNeighbors must be at least 1."));
+
+        numFeatures = maxK;
+        descriptorBuf.resize(N * maxK);
+
+        CutoffNeighborFinder neighborFinder(cutoff, posProp, simCell, nullptr);
         const float invCutoff = 1.0f / static_cast<float>(cutoff);
 
         for(size_t i = 0; i < N; ++i) {
-            // Collect neighbour distances for atom i.
             std::vector<FloatType> dists;
             dists.reserve(32);
             for(CutoffNeighborFinder::Query q(neighborFinder, i); !q.atEnd(); q.next())
                 dists.push_back(q.distance());
 
-            // Sort ascending.
             std::sort(dists.begin(), dists.end());
 
-            // Fill descriptor row: first min(|dists|, maxK) values, rest = 1.0
             float* row = descriptorBuf.data() + i * maxK;
             const int k = static_cast<int>(std::min(dists.size(),
                                                      static_cast<size_t>(maxK)));
             for(int j = 0; j < k; ++j)
                 row[j] = static_cast<float>(dists[j]) * invCutoff;
             for(int j = k; j < maxK; ++j)
-                row[j] = 1.0f;   // pad with normalised cutoff distance
+                row[j] = 1.0f;
+        }
+
+    } else {
+
+        // ----- 2b. User-selected particle property columns ------------------
+
+        const QStringList& propRefs = inputProperties();
+        if(propRefs.isEmpty())
+            throw Exception(tr("MLStructureModifier: no input properties selected. "
+                               "Please select at least one property column."));
+
+        // Resolve each "Name.Component" string to (Property*, componentIndex).
+        struct Column {
+            const Property* prop;
+            int             comp;   // resolved component index (>= 0)
+        };
+        std::vector<Column> columns;
+        columns.reserve(propRefs.size());
+
+        for(const QString& refStr : propRefs) {
+            PropertyReference ref(refStr);
+            QString errMsg;
+            auto [prop, comp] = ref.findInContainerWithComponent(
+                particlesObj, errMsg, /*requireComponent=*/false);
+            if(!prop)
+                throw Exception(tr("MLStructureModifier: %1").arg(errMsg));
+            // If no component was specified (scalar property), default to 0.
+            columns.push_back({prop, comp < 0 ? 0 : comp});
+        }
+
+        numFeatures = static_cast<int>(columns.size());
+        descriptorBuf.resize(N * numFeatures);
+
+        // Fill descriptor buffer: one row per atom, one column per selected feature.
+        // BufferAccessConvertedTo<FloatType> handles int/float/double properties
+        // transparently, converting to FloatType on the fly.
+        for(int j = 0; j < numFeatures; ++j) {
+            const Property* prop  = columns[j].prop;
+            const int       comp  = columns[j].comp;
+            const size_t    nComp = prop->componentCount();
+
+            BufferAccessConvertedTo<FloatType> acc(prop);
+            for(size_t i = 0; i < N; ++i)
+                descriptorBuf[i * numFeatures + j] =
+                    static_cast<float>(acc[i * nComp + comp]);
         }
     }
 
-    // --- 4. Allocate output property "ML_Structure" -----------------------
+    // --- 3. Allocate output property "ML_Structure" -------------------------
 
     Particles* outputParticles = input.expectMutableObject<Particles>();
     Property* structProp = outputParticles->createProperty(
@@ -145,7 +187,7 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
         1);
     BufferWriteAccess<int32_t, access_mode::read_write> outputData{structProp};
 
-    // --- 5. Run ML inference ----------------------------------------------
+    // --- 4. Run ML inference ------------------------------------------------
 
 #ifdef OVITO_ML_HAS_LIBTORCH
 
@@ -153,8 +195,6 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
         throw Exception(tr("MLStructureModifier: no model path specified."));
 
     // Load TorchScript model.
-    // TODO: cache the loaded module as a member variable and reload only when
-    //       modelPath() or a model version stamp changes.
     torch::jit::script::Module model;
     try {
         model = torch::jit::load(modelPath().toStdString());
@@ -168,14 +208,14 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
 
     // Wrap the descriptor buffer in a LibTorch tensor (zero-copy via from_blob).
     // Use int64_t for dimensions — required by LibTorch >= 1.5.
-    // descriptorBuf must outlive the tensor – it is alive for the rest of this scope.
+    // descriptorBuf must outlive the tensor — it is alive for the rest of this scope.
     auto inputTensor = torch::from_blob(
         descriptorBuf.data(),
-        {static_cast<int64_t>(N), static_cast<int64_t>(maxK)},
+        {static_cast<int64_t>(N), static_cast<int64_t>(numFeatures)},
         torch::kFloat32);
 
     // Forward pass → logits [N, num_classes].
-    // torch::NoGradGuard disables autograd, reducing memory usage (required in LibTorch >= 1.9+).
+    // torch::NoGradGuard disables autograd (best practice since LibTorch 1.9+).
     at::Tensor logits;
     try {
         torch::NoGradGuard no_grad;
@@ -191,7 +231,6 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
                           "got [%2, ...].").arg(N).arg(logits.size(0)));
 
     // Argmax over class dimension → [N] int32 predictions.
-    // Use int32_t (explicit) — avoids ambiguity in newer LibTorch where int may differ.
     at::Tensor predictions = logits.argmax(/*dim=*/1).to(torch::kInt32).contiguous();
     const int32_t* predData = predictions.data_ptr<int32_t>();
     for(size_t i = 0; i < N; ++i)
@@ -200,12 +239,11 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
 #else
 
     // LibTorch not available — zero-fill (placeholder / integration test).
-    // The descriptor was already computed; it's just not fed to the model.
     Q_UNUSED(outputData);
 
 #endif  // OVITO_ML_HAS_LIBTORCH
 
-    // --- 6. Return modified state -----------------------------------------
+    // --- 5. Return modified state -------------------------------------------
 
     return Future<PipelineFlowState>::createImmediate(std::move(input));
 }
