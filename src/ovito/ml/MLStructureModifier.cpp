@@ -279,15 +279,15 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
         //
         // Output shape [N, 1]  → scalar Float property  (1 component).
         // Output shape [N, K>1] → vector Float property (K components).
-        // OVITO FloatType is double; convert tensor to float64 before copy.
+        // Convert tensor to float32 then cast to OVITO's FloatType (float or double).
 
         Property* outProp = outputParticles->createProperty(
-            DataBuffer::Initialized, outPropName, Property::Float,
+            DataBuffer::Initialized, outPropName, Property::FloatDefault,
             static_cast<size_t>(K));
         BufferWriteAccess<FloatType, access_mode::read_write> outAccess{outProp};
 
-        at::Tensor vals = rawOutput.to(torch::kDouble).contiguous();
-        const double* valData = vals.data_ptr<double>();
+        at::Tensor vals = rawOutput.to(torch::kFloat32).contiguous();
+        const float* valData = vals.data_ptr<float>();
         const size_t total = N * static_cast<size_t>(K);
         for(size_t idx = 0; idx < total; ++idx)
             outAccess[idx] = static_cast<FloatType>(valData[idx]);
@@ -302,7 +302,7 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
             DataBuffer::Initialized, outPropName, Property::Int32, 1);
     } else {
         outputParticles->createProperty(
-            DataBuffer::Initialized, outPropName, Property::Float, 1);
+            DataBuffer::Initialized, outPropName, Property::FloatDefault, 1);
     }
 
 #endif  // OVITO_ML_HAS_LIBTORCH
