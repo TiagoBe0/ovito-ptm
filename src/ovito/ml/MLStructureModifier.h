@@ -82,7 +82,7 @@ public:
     Q_ENUM(OutputMode)
 
     /// Returns a human-readable title shown in the pipeline editor.
-    virtual QString objectTitle() const override { return tr("ML Structure Modifier"); }
+    virtual QString objectTitle() const override { return tr("NN Modifier"); }
 
     /// Main evaluation entry point called by the pipeline engine.
     virtual Future<PipelineFlowState> evaluateModifier(
@@ -120,6 +120,9 @@ private:
     /// Name of the particle property written by this modifier.
     /// Default "ML_Structure" for classification; the user should rename for regression.
     DECLARE_MODIFIABLE_PROPERTY_FIELD(QString{"ML_Structure"}, outputPropertyName, setOutputPropertyName);
+
+    /// Controls whether inference should run only on selected particles.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(bool{false}, onlySelectedParticles, setOnlySelectedParticles);
 };
 
 }  // namespace Ovito

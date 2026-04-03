@@ -26,6 +26,7 @@
 #include <ovito/particles/objects/Particles.h>
 #include <ovito/core/dataset/pipeline/PipelineFlowState.h>
 #include <ovito/core/app/undo/UndoableTransaction.h>
+#include <ovito/gui/desktop/properties/BooleanParameterUI.h>
 #include <ovito/gui/desktop/properties/FilenameParameterUI.h>
 #include <ovito/gui/desktop/properties/FloatParameterUI.h>
 #include <ovito/gui/desktop/properties/IntegerParameterUI.h>
@@ -44,7 +45,7 @@ SET_OVITO_OBJECT_EDITOR(MLStructureModifier, MLStructureModifierEditor);
 ******************************************************************************/
 void MLStructureModifierEditor::createUI(const RolloutInsertionParameters& rolloutParams)
 {
-    QWidget* rollout = createRollout(tr("ML Structure Modifier"), rolloutParams);
+    QWidget* rollout = createRollout(tr("NN Modifier"), rolloutParams);
     QVBoxLayout* mainLayout = new QVBoxLayout(rollout);
     mainLayout->setContentsMargins(4, 4, 4, 4);
     mainLayout->setSpacing(6);
@@ -236,6 +237,15 @@ void MLStructureModifierEditor::createUI(const RolloutInsertionParameters& rollo
             _classInfoBox));
 
         mainLayout->addWidget(_classInfoBox);
+    }
+
+    // -----------------------------------------------------------------------
+    // Only selected particles
+    // -----------------------------------------------------------------------
+    {
+        BooleanParameterUI* onlySelectedUI = createParamUI<BooleanParameterUI>(
+            PROPERTY_FIELD(MLStructureModifier::onlySelectedParticles));
+        mainLayout->addWidget(onlySelectedUI->checkBox());
     }
 
     // -----------------------------------------------------------------------

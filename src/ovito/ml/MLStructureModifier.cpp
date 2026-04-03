@@ -47,7 +47,7 @@ namespace Ovito {
 // ---------------------------------------------------------------------------
 
 IMPLEMENT_CREATABLE_OVITO_CLASS(MLStructureModifier);
-OVITO_CLASSINFO(MLStructureModifier, "DisplayName",      "ML Structure Modifier");
+OVITO_CLASSINFO(MLStructureModifier, "DisplayName",      "NN Modifier");
 OVITO_CLASSINFO(MLStructureModifier, "ModifierCategory", "Structure identification");
 
 DEFINE_PROPERTY_FIELD(MLStructureModifier, modelPath);
@@ -57,14 +57,16 @@ DEFINE_PROPERTY_FIELD(MLStructureModifier, numNeighbors);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, inputProperties);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, outputMode);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, outputPropertyName);
+DEFINE_PROPERTY_FIELD(MLStructureModifier, onlySelectedParticles);
 
-SET_PROPERTY_FIELD_LABEL(MLStructureModifier, modelPath,           "Model path (.pt)");
-SET_PROPERTY_FIELD_LABEL(MLStructureModifier, inputMode,           "Input mode");
-SET_PROPERTY_FIELD_LABEL(MLStructureModifier, cutoffRadius,        "Cutoff radius (Å)");
-SET_PROPERTY_FIELD_LABEL(MLStructureModifier, numNeighbors,        "Max neighbors in descriptor");
-SET_PROPERTY_FIELD_LABEL(MLStructureModifier, inputProperties,     "Input property columns");
-SET_PROPERTY_FIELD_LABEL(MLStructureModifier, outputMode,          "Output mode");
-SET_PROPERTY_FIELD_LABEL(MLStructureModifier, outputPropertyName,  "Output property name");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, modelPath,              "Model path (.pt)");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, inputMode,              "Input mode");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, cutoffRadius,           "Cutoff radius (Å)");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, numNeighbors,           "Max neighbors in descriptor");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, inputProperties,        "Input property columns");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, outputMode,             "Output mode");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, outputPropertyName,     "Output property name");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, onlySelectedParticles,  "Use only selected particles");
 
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLStructureModifier, cutoffRadius, WorldParameterUnit, 0);
 SET_PROPERTY_FIELD_UNITS_AND_RANGE(MLStructureModifier, numNeighbors, IntegerParameterUnit, 1, 64);
@@ -107,6 +109,21 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
                                         ? QStringLiteral("ML_Structure")
                                         : outputPropertyName();
 
+    // Selection support: collect indices of selected particles on the calling
+    // thread (where the PropertyContainer is accessible).
+    const Property* selection = onlySelectedParticles()
+        ? particlesObj->expectProperty(Particles::SelectionProperty)
+        : nullptr;
+    std::vector<size_t> selectedIndices;
+    if(selection) {
+        BufferReadAccess<SelectionIntType> selData(selection);
+        selectedIndices.reserve(N);
+        for(size_t i = 0; i < N; ++i)
+            if(selData[i]) selectedIndices.push_back(i);
+    }
+    // M = number of particles that will actually be processed.
+    const size_t M = selection ? selectedIndices.size() : N;
+
     // Validate early (on calling thread) to give fast feedback.
     if(iMode == InputMode::NeighborDistances) {
         if(cutoff <= 0)
@@ -146,12 +163,14 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
     return asyncLaunch([
             state       = std::move(input),
             simCell, particlesObj, posProp,
-            N, iMode, oMode,
+            N, M, iMode, oMode,
             cutoff, maxK,
             columns     = std::move(columns),
             propRefs,           // kept for error messages
             modelFile,
-            outPropName
+            outPropName,
+            selection,
+            selectedIndices = std::move(selectedIndices)
             ]() mutable -> PipelineFlowState
     {
         TaskProgress progress(this_task::ui());
@@ -164,9 +183,11 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
         if(iMode == InputMode::NeighborDistances) {
 
             // ----- 3a. Sorted normalised neighbour distances ----------------
+            // When onlySelectedParticles is active, M <= N and selectedIndices
+            // maps row mi → global atom index i.
 
             numFeatures = maxK;
-            descriptorBuf.resize(N * maxK);
+            descriptorBuf.resize(M * maxK);
 
             progress.setText(tr("ML: computing neighbor descriptors"));
 
@@ -176,19 +197,20 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
             // parallelForInnerOuter: the outer lambda runs once per thread
             // chunk; it allocates 'dists' once and reuses it for every atom in
             // that chunk, avoiding per-atom heap allocations.
-            parallelForInnerOuter(N, /*chunkSize=*/256, progress,
+            parallelForInnerOuter(M, /*chunkSize=*/256, progress,
                 [&](auto&& iterate)
             {
                 std::vector<FloatType> dists;
                 dists.reserve(64);
-                iterate([&](size_t i) {
+                iterate([&](size_t mi) {
+                    const size_t i = selection ? selectedIndices[mi] : mi;
                     dists.clear();
                     for(CutoffNeighborFinder::Query q(neighborFinder, i);
                             !q.atEnd(); q.next())
                         dists.push_back(q.distance());
                     std::sort(dists.begin(), dists.end());
 
-                    float* row = descriptorBuf.data() + i * maxK;
+                    float* row = descriptorBuf.data() + mi * maxK;
                     const int k = static_cast<int>(
                         std::min(dists.size(), static_cast<size_t>(maxK)));
                     for(int j = 0; j < k; ++j)
@@ -203,7 +225,7 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
             // ----- 3b. User-selected particle property columns --------------
 
             numFeatures = static_cast<int>(columns.size());
-            descriptorBuf.resize(N * numFeatures);
+            descriptorBuf.resize(M * numFeatures);
 
             // Build read accessors once (before parallel section).
             // BufferAccessConvertedTo converts int/float/double → FloatType.
@@ -215,9 +237,10 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
             progress.setText(tr("ML: building feature matrix"));
 
             // Each atom writes to its own disjoint row; no data races.
-            parallelFor(N, /*chunkSize=*/512, progress, [&](size_t i) {
+            parallelFor(M, /*chunkSize=*/512, progress, [&](size_t mi) {
+                const size_t i = selection ? selectedIndices[mi] : mi;
                 for(int j = 0; j < numFeatures; ++j)
-                    descriptorBuf[i * numFeatures + j] = static_cast<float>(
+                    descriptorBuf[mi * numFeatures + j] = static_cast<float>(
                         accs[j][i * columns[j].nComp + columns[j].comp]);
             });
         }
@@ -248,9 +271,10 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
         }
 
         // Wrap descriptor buffer in a LibTorch tensor (zero-copy via from_blob).
+        // Only M rows: selected particles (or all N when onlySelectedParticles is off).
         auto inputTensor = torch::from_blob(
             descriptorBuf.data(),
-            {static_cast<int64_t>(N), static_cast<int64_t>(numFeatures)},
+            {static_cast<int64_t>(M), static_cast<int64_t>(numFeatures)},
             torch::kFloat32);
 
         // Forward pass.  NoGradGuard disables autograd (best practice since 1.9+).
@@ -264,38 +288,40 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
             throw Exception(
                 tr("MLStructureModifier: model forward() failed "
                    "(input [%1 atoms × %2 features]): %3")
-                .arg(N).arg(numFeatures).arg(QString::fromStdString(e.what())));
+                .arg(M).arg(numFeatures).arg(QString::fromStdString(e.what())));
         }
         catch(const std::exception& e) {
             throw Exception(
                 tr("MLStructureModifier: model forward() failed "
                    "(input [%1 atoms × %2 features]): %3")
-                .arg(N).arg(numFeatures).arg(QString::fromStdString(e.what())));
+                .arg(M).arg(numFeatures).arg(QString::fromStdString(e.what())));
         }
         catch(...) {
             throw Exception(
                 tr("MLStructureModifier: model forward() failed (unknown exception). "
                    "Input tensor: [%1 atoms × %2 features]. "
                    "Verify that the model's first layer accepts %2 features.")
-                .arg(N).arg(numFeatures));
+                .arg(M).arg(numFeatures));
         }
 
-        // Normalise output shape to 2-D: [N, K].
-        // Models may return [N] for single-output regression; reshape to [N,1].
+        // Normalise output shape to 2-D: [M, K].
+        // Models may return [M] for single-output regression; reshape to [M,1].
         if(rawOutput.dim() == 1)
             rawOutput = rawOutput.unsqueeze(1);
 
-        if(rawOutput.dim() != 2 || static_cast<size_t>(rawOutput.size(0)) != N)
+        if(rawOutput.dim() != 2 || static_cast<size_t>(rawOutput.size(0)) != M)
             throw Exception(
                 tr("MLStructureModifier: unexpected output shape from model "
                    "(expected [%1, K], got tensor with %2 dimensions / %3 rows).")
-                .arg(N).arg(rawOutput.dim()).arg(rawOutput.size(0)));
+                .arg(M).arg(rawOutput.dim()).arg(rawOutput.size(0)));
 
         const int64_t K = rawOutput.size(1);   // output values per atom
 
         if(oMode == OutputMode::Classification) {
 
             // ---- 4a. Classification: argmax → Int32 property ---------------
+            // Output is initialized to 0; only selected (or all) particles are
+            // overwritten with their predicted class index.
 
             if(K < 2)
                 throw Exception(
@@ -309,16 +335,19 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
 
             at::Tensor preds = rawOutput.argmax(/*dim=*/1).to(torch::kInt32).contiguous();
             const int32_t* predData = preds.data_ptr<int32_t>();
-            for(size_t i = 0; i < N; ++i)
-                outAccess[i] = predData[i];
+            for(size_t mi = 0; mi < M; ++mi) {
+                const size_t i = selection ? selectedIndices[mi] : mi;
+                outAccess[i] = predData[mi];
+            }
 
         } else {
 
             // ---- 4b. Regression: raw floats → FloatDefault property --------
             //
-            // Output [N,1] → scalar property (1 component).
-            // Output [N,K>1] → vector property (K components).
+            // Output [M,1] → scalar property (1 component).
+            // Output [M,K>1] → vector property (K components).
             // Always convert to float32 before writing (avoids kDouble mismatch).
+            // Non-selected particles stay at their initialized value (0.0).
 
             Property* outProp = particlesObj->createProperty(
                 DataBuffer::Initialized, outPropName, Property::FloatDefault,
@@ -327,9 +356,12 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
 
             at::Tensor vals = rawOutput.to(torch::kFloat32).contiguous();
             const float* valData = vals.data_ptr<float>();
-            const size_t total = N * static_cast<size_t>(K);
-            for(size_t idx = 0; idx < total; ++idx)
-                outAccess[idx] = static_cast<FloatType>(valData[idx]);
+            for(size_t mi = 0; mi < M; ++mi) {
+                const size_t i = selection ? selectedIndices[mi] : mi;
+                for(int64_t k = 0; k < K; ++k)
+                    outAccess[i * static_cast<size_t>(K) + k] =
+                        static_cast<FloatType>(valData[mi * static_cast<size_t>(K) + k]);
+            }
         }
 
 #else
