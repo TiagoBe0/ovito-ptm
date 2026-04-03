@@ -27,7 +27,6 @@
 #include <ovito/particles/Particles.h>
 #include <ovito/stdobj/simcell/SimulationCell.h>
 #include <ovito/stdobj/properties/Property.h>
-#include <ovito/particles/objects/Particles.h>
 
 namespace Ovito {
 
