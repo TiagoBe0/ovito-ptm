@@ -333,7 +333,7 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
 
             BufferWriteAccess<int32_t, access_mode::read_write> outAccess{outProp};
             at::Tensor preds = rawOutput.argmax(/*dim=*/1).to(torch::kInt32).contiguous();
-            const int32_t* predData = preds.data_ptr<int32_t>();
+            const int32_t* predData = static_cast<const int32_t*>(preds.data_ptr());
             for(size_t i = 0; i < N; ++i)
                 outAccess[i] = predData[i];
 
@@ -351,7 +351,7 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
             BufferWriteAccess<FloatType, access_mode::read_write> outAccess{outProp};
 
             at::Tensor vals = rawOutput.to(torch::kFloat32).contiguous();
-            const float* valData = vals.data_ptr<float>();
+            const float* valData = static_cast<const float*>(vals.data_ptr());
             const size_t total = N * static_cast<size_t>(K);
             for(size_t idx = 0; idx < total; ++idx)
                 outAccess[idx] = static_cast<FloatType>(valData[idx]);
