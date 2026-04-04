@@ -20,7 +20,6 @@
 //
 ////////////////////////////////////////////////////////////////////////////////////////
 
-#include <ovito/core/dataset/pipeline/ModifierEvaluationRequest.h>
 #include <ovito/core/utilities/units/UnitsManager.h>
 #include <ovito/particles/objects/Particles.h>
 #include "MLTrainingModifier.h"
