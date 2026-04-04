@@ -234,8 +234,8 @@ void MLStructureModifierEditor::createUI(const RolloutInsertionParameters& rollo
 
         // Class labels text area — one label per line, order = class index.
         lay->addWidget(new QLabel(
-            tr("Class labels (one per line, order = class index 0, 1, 2 …):\n"
-               "Leave empty to auto-name classes as "Class 0", "Class 1", …"),
+            tr("Class labels (one per line, order = class index 0, 1, 2 ...):\n"
+               "Leave empty to auto-name classes as 'Class 0', 'Class 1', ..."),
             _classificationBox));
 
         _classLabelsEdit = new QPlainTextEdit(_classificationBox);
