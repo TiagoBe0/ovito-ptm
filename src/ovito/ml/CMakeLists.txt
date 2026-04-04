@@ -42,8 +42,15 @@ IF(OVITO_USE_LIBTORCH)
         FIND_PACKAGE(Torch QUIET CONFIG)
     ENDIF()
     IF(NOT Torch_FOUND)
+        SET(_torch_hint "")
+        IF(Torch_DIR)
+            SET(_torch_hint "Torch_DIR was set to: ${Torch_DIR}\n")
+        ELSEIF(OVITO_LIBTORCH_ROOT)
+            SET(_torch_hint "OVITO_LIBTORCH_ROOT was set to: ${OVITO_LIBTORCH_ROOT}\n")
+        ENDIF()
         MESSAGE(FATAL_ERROR
             "LibTorch requested, but TorchConfig.cmake was not found.\n"
+            "${_torch_hint}"
             "Set one of:\n"
             "  -DOVITO_LIBTORCH_ROOT=/path/to/libtorch\n"
             "  -DTorch_DIR=/path/to/libtorch/share/cmake/Torch\n"
