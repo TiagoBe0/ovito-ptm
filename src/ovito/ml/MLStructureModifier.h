@@ -22,6 +22,9 @@
 
 #pragma once
 
+#include <memory>
+#include <mutex>
+
 #include <ovito/core/dataset/pipeline/Modifier.h>
 #include <ovito/core/dataset/pipeline/PipelineFlowState.h>
 #include <ovito/particles/Particles.h>
@@ -123,6 +126,12 @@ private:
 
     /// Controls whether inference should run only on selected particles.
     DECLARE_MODIFIABLE_PROPERTY_FIELD(bool{false}, onlySelectedParticles, setOnlySelectedParticles);
+
+    // Model cache — persisted across pipeline evaluations so the TorchScript
+    // file is not reloaded on every frame.  Type-erased (shared_ptr<void>) to
+    // keep LibTorch types out of this public header.  Thread-safe: the pointee
+    // carries its own mutex and is shared with background evaluation tasks.
+    std::shared_ptr<void> _modelCacheSlot;
 };
 
 }  // namespace Ovito
