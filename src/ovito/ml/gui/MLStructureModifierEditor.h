@@ -26,6 +26,7 @@
 #include <QGroupBox>
 #include <QListWidget>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 
 namespace Ovito {
 
@@ -52,14 +53,17 @@ private Q_SLOTS:
     void onOutputModeChanged();
     void updatePropertyList();
     void onPropertyItemChanged(QListWidgetItem* item);
+    void onClassLabelsEdited();
 
 private:
-    QGroupBox*   _descParamsBox       = nullptr;
-    QGroupBox*   _propSelectBox       = nullptr;
-    QListWidget* _propListWidget      = nullptr;
-    QGroupBox*   _classInfoBox        = nullptr;
-    QLineEdit*   _outPropNameEdit     = nullptr;
-    bool         _updatingPropertyList = false;
+    QGroupBox*    _descParamsBox        = nullptr;
+    QGroupBox*    _propSelectBox        = nullptr;
+    QListWidget*  _propListWidget       = nullptr;
+    QGroupBox*    _classificationBox    = nullptr;  ///< Replaces old _classInfoBox.
+    QPlainTextEdit* _classLabelsEdit    = nullptr;
+    QLineEdit*    _outPropNameEdit      = nullptr;
+    bool          _updatingPropertyList = false;
+    bool          _updatingClassLabels  = false;
 };
 
 }  // namespace Ovito

@@ -224,19 +224,48 @@ void MLStructureModifierEditor::createUI(const RolloutInsertionParameters& rollo
     }
 
     // -----------------------------------------------------------------------
-    // Classification key (shown only in Classification mode)
+    // Classification settings (shown only in Classification mode)
     // -----------------------------------------------------------------------
     {
-        _classInfoBox = new QGroupBox(tr("Class index key"), rollout);
-        QVBoxLayout* lay = new QVBoxLayout(_classInfoBox);
+        _classificationBox = new QGroupBox(tr("Classification settings"), rollout);
+        QVBoxLayout* lay = new QVBoxLayout(_classificationBox);
         lay->setContentsMargins(4, 4, 4, 4);
+        lay->setSpacing(4);
 
+        // Class labels text area — one label per line, order = class index.
         lay->addWidget(new QLabel(
-            tr("Integer written per particle (depends on your training labels):\n"
-               "  0, 1, 2, … → class indices as defined in your dataset"),
-            _classInfoBox));
+            tr("Class labels (one per line, order = class index 0, 1, 2 …):\n"
+               "Leave empty to auto-name classes as "Class 0", "Class 1", …"),
+            _classificationBox));
 
-        mainLayout->addWidget(_classInfoBox);
+        _classLabelsEdit = new QPlainTextEdit(_classificationBox);
+        _classLabelsEdit->setPlaceholderText(
+            tr("FCC\nHCP\nBCC\n…  (optional)"));
+        _classLabelsEdit->setMinimumHeight(80);
+        _classLabelsEdit->setMaximumHeight(140);
+        lay->addWidget(_classLabelsEdit);
+
+        // Probability output checkbox.
+        BooleanParameterUI* probUI = createParamUI<BooleanParameterUI>(
+            PROPERTY_FIELD(MLStructureModifier::outputProbabilities));
+        probUI->checkBox()->setText(
+            tr("Also output per-class softmax probabilities"));
+        lay->addWidget(probUI->checkBox());
+
+        mainLayout->addWidget(_classificationBox);
+
+        // --- sync: modifier → text edit ---
+        connect(this, &PropertiesEditor::contentsChanged, this, [this]() {
+            auto* mod = static_cast<MLStructureModifier*>(editObject());
+            if(!mod || !_classLabelsEdit) return;
+            _updatingClassLabels = true;
+            _classLabelsEdit->setPlainText(mod->classLabels().join(QLatin1Char('\n')));
+            _updatingClassLabels = false;
+        });
+
+        // --- sync: text edit → modifier (commit on focus-out / Enter) ---
+        connect(_classLabelsEdit, &QPlainTextEdit::textChanged,
+                this, &MLStructureModifierEditor::onClassLabelsEdited);
     }
 
     // -----------------------------------------------------------------------
@@ -278,10 +307,10 @@ void MLStructureModifierEditor::onInputModeChanged()
 void MLStructureModifierEditor::onOutputModeChanged()
 {
     auto* mod = static_cast<MLStructureModifier*>(editObject());
-    bool isRegression = mod &&
+    const bool isRegression = mod &&
         mod->outputMode() == MLStructureModifier::OutputMode::Regression;
 
-    if(_classInfoBox) _classInfoBox->setVisible(!isRegression);
+    if(_classificationBox) _classificationBox->setVisible(!isRegression);
 }
 
 /******************************************************************************
@@ -358,6 +387,31 @@ void MLStructureModifierEditor::onPropertyItemChanged(QListWidgetItem*)
     UndoableTransaction t;
     t.begin(ui(), tr("Change input properties"));
     mod->setInputProperties(newList);
+    t.commit();
+}
+
+/******************************************************************************
+* Commits class labels from the QPlainTextEdit to the modifier.
+* Called on every text change; guards against re-entrant updates.
+******************************************************************************/
+void MLStructureModifierEditor::onClassLabelsEdited()
+{
+    if(_updatingClassLabels) return;
+    auto* mod = static_cast<MLStructureModifier*>(editObject());
+    if(!mod || !_classLabelsEdit) return;
+
+    // Split by newline, keep all entries (including empty lines) so that the
+    // cursor position is preserved while typing; trailing empty lines are
+    // stripped on the way out to keep the stored list clean.
+    QStringList lines = _classLabelsEdit->toPlainText().split(QLatin1Char('\n'));
+    while(!lines.isEmpty() && lines.last().trimmed().isEmpty())
+        lines.removeLast();
+
+    if(lines == mod->classLabels()) return;   // no real change
+
+    UndoableTransaction t;
+    t.begin(ui(), tr("Change class labels"));
+    mod->setClassLabels(lines);
     t.commit();
 }
 

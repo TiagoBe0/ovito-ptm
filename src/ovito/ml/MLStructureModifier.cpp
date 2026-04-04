@@ -67,6 +67,8 @@ DEFINE_PROPERTY_FIELD(MLStructureModifier, inputProperties);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, outputMode);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, outputPropertyName);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, onlySelectedParticles);
+DEFINE_PROPERTY_FIELD(MLStructureModifier, classLabels);
+DEFINE_PROPERTY_FIELD(MLStructureModifier, outputProbabilities);
 
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, modelPath,              "Model path (.pt)");
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, inputMode,              "Input mode");
@@ -76,6 +78,8 @@ SET_PROPERTY_FIELD_LABEL(MLStructureModifier, inputProperties,        "Input pro
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, outputMode,             "Output mode");
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, outputPropertyName,     "Output property name");
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, onlySelectedParticles,  "Use only selected particles");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, classLabels,            "Class labels");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, outputProbabilities,    "Output class probabilities");
 
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLStructureModifier, cutoffRadius, WorldParameterUnit, 0);
 SET_PROPERTY_FIELD_UNITS_AND_RANGE(MLStructureModifier, numNeighbors, IntegerParameterUnit, 1, 64);
@@ -108,15 +112,17 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
 
     // Capture modifier parameters by value so the background thread can use
     // them safely without touching 'this'.
-    const InputMode   iMode       = inputMode();
-    const OutputMode  oMode       = outputMode();
-    const FloatType   cutoff      = cutoffRadius();
-    const int         maxK        = numNeighbors();
-    const QStringList propRefs    = inputProperties();
-    const QString     modelFile   = modelPath();
-    const QString     outPropName = outputPropertyName().isEmpty()
-                                        ? QStringLiteral("ML_Structure")
-                                        : outputPropertyName();
+    const InputMode   iMode         = inputMode();
+    const OutputMode  oMode         = outputMode();
+    const FloatType   cutoff        = cutoffRadius();
+    const int         maxK          = numNeighbors();
+    const QStringList propRefs      = inputProperties();
+    const QString     modelFile     = modelPath();
+    const QString     outPropName   = outputPropertyName().isEmpty()
+                                          ? QStringLiteral("ML_Structure")
+                                          : outputPropertyName();
+    const QStringList lbls          = classLabels();          // classification only
+    const bool        outProbs      = outputProbabilities();  // classification only
 
     // Selection support: collect indices of selected particles on the calling
     // thread (where the PropertyContainer is accessible).
@@ -190,7 +196,8 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
             outPropName,
             selection,
             selectedIndices = std::move(selectedIndices),
-            cacheSlotVoid
+            cacheSlotVoid,
+            lbls, outProbs
             ]() mutable -> PipelineFlowState
     {
         TaskProgress progress(this_task::ui());
@@ -370,9 +377,15 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
 
         if(oMode == OutputMode::Classification) {
 
-            // ---- 4a. Classification: argmax → Int32 property ---------------
-            // Output is initialized to 0; only selected (or all) particles are
-            // overwritten with their predicted class index.
+            // ---- 4a. Classification: argmax → typed Int32 property ---------
+            //
+            // The output property is a "typed" Int32 property: each integer
+            // value maps to a named ParticleType (visible in OVITO's particle
+            // type table with colors).  Class names come from `lbls`; any class
+            // index beyond that list is auto-named "Class N".
+            //
+            // Output is initialized to 0 so unselected (or skipped) particles
+            // get class 0 by default.
 
             if(K < 2)
                 throw Exception(
@@ -380,15 +393,60 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
                        "%1 column(s); need at least 2 class logits. "
                        "For single-value output use Regression mode.").arg(K));
 
+            // Helper: resolve a label for class index k.
+            auto labelFor = [&](int64_t k) -> QString {
+                return (k < (int64_t)lbls.size() && !lbls[k].trimmed().isEmpty())
+                    ? lbls[k].trimmed()
+                    : QStringLiteral("Class %1").arg(k);
+            };
+
+            // Create the typed Int32 property and register one ParticleType
+            // per class so OVITO shows named, colored categories.
             Property* outProp = particlesObj->createProperty(
                 DataBuffer::Initialized, outPropName, Property::Int32, 1);
-            BufferWriteAccess<int32_t, access_mode::read_write> outAccess{outProp};
+            for(int64_t k = 0; k < K; ++k)
+                outProp->addNumericType(Particles::OOClass(),
+                                       static_cast<int>(k), labelFor(k));
 
-            at::Tensor preds = rawOutput.argmax(/*dim=*/1).to(torch::kInt32).contiguous();
-            const int32_t* predData = preds.data_ptr<int32_t>();
-            for(size_t mi = 0; mi < M; ++mi) {
-                const size_t i = selection ? selectedIndices[mi] : mi;
-                outAccess[i] = predData[mi];
+            // Write argmax class indices.
+            {
+                BufferWriteAccess<int32_t, access_mode::read_write> outAccess{outProp};
+                at::Tensor preds = rawOutput.argmax(/*dim=*/1).to(torch::kInt32).contiguous();
+                const int32_t* predData = preds.data_ptr<int32_t>();
+                for(size_t mi = 0; mi < M; ++mi) {
+                    const size_t i = selection ? selectedIndices[mi] : mi;
+                    outAccess[i] = predData[mi];
+                }
+            }
+
+            // ---- 4a-2. Optional: per-class softmax probabilities -----------
+            //
+            // Creates a second Float property "<name> Probabilities" with K
+            // components (one per class).  Component names match the class labels
+            // so OVITO shows e.g. "ML_Structure Probabilities.FCC".
+            if(outProbs) {
+                QStringList compNames;
+                compNames.reserve(static_cast<int>(K));
+                for(int64_t k = 0; k < K; ++k)
+                    compNames << labelFor(k);
+
+                const QString probPropName =
+                    outPropName + QStringLiteral(" Probabilities");
+                Property* probProp = particlesObj->createProperty(
+                    DataBuffer::Initialized, probPropName,
+                    Property::FloatDefault, static_cast<size_t>(K), compNames);
+
+                at::Tensor probs =
+                    torch::softmax(rawOutput, /*dim=*/1).to(torch::kFloat32).contiguous();
+                const float* probData = probs.data_ptr<float>();
+
+                BufferWriteAccess<FloatType, access_mode::read_write> probAccess{probProp};
+                for(size_t mi = 0; mi < M; ++mi) {
+                    const size_t i = selection ? selectedIndices[mi] : mi;
+                    for(int64_t k = 0; k < K; ++k)
+                        probAccess[i * static_cast<size_t>(K) + k] =
+                            static_cast<FloatType>(probData[mi * static_cast<size_t>(K) + k]);
+                }
             }
 
         } else {

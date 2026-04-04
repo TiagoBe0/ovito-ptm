@@ -127,6 +127,17 @@ private:
     /// Controls whether inference should run only on selected particles.
     DECLARE_MODIFIABLE_PROPERTY_FIELD(bool{false}, onlySelectedParticles, setOnlySelectedParticles);
 
+    // --- Classification-only parameters ---
+
+    /// User-defined names for each output class (one entry per class index).
+    /// Empty list → auto-names "Class 0", "Class 1", … are used.
+    /// If fewer labels than model outputs are provided the remainder are auto-named.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(QStringList{}, classLabels, setClassLabels);
+
+    /// When true an additional Float property with per-class softmax probabilities
+    /// is written alongside the argmax class-index property.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(bool{false}, outputProbabilities, setOutputProbabilities);
+
     // Model cache — persisted across pipeline evaluations so the TorchScript
     // file is not reloaded on every frame.  Type-erased (shared_ptr<void>) to
     // keep LibTorch types out of this public header.  Thread-safe: the pointee
