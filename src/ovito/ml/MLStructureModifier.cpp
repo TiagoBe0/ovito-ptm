@@ -38,6 +38,15 @@
 #ifdef OVITO_ML_HAS_LIBTORCH
 #  include <torch/script.h>
 #  include <torch/csrc/autograd/grad_mode.h>
+
+// Cache slot shared between the calling thread (initialises/reads) and
+// background evaluation tasks (reads on hit, writes on miss).
+// The internal mutex makes concurrent access safe.
+struct ModelCacheSlot {
+    std::mutex                 mutex;
+    std::string                loadedPath; // empty = no model cached yet
+    torch::jit::script::Module model;
+};
 #endif
 
 namespace Ovito {
@@ -160,6 +169,16 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
     // --- 2. Launch background task ------------------------------------------
     // All heavy computation runs in a worker thread so the UI stays responsive.
 
+    // Lazily create the model cache slot (once per modifier instance) and
+    // capture a shared reference for the background task.
+    // The slot is type-erased here; the background task casts it back inside
+    // the #ifdef OVITO_ML_HAS_LIBTORCH block where the full type is visible.
+#ifdef OVITO_ML_HAS_LIBTORCH
+    if(!_modelCacheSlot)
+        _modelCacheSlot = std::make_shared<ModelCacheSlot>();
+#endif
+    std::shared_ptr<void> cacheSlotVoid = _modelCacheSlot;
+
     return asyncLaunch([
             state       = std::move(input),
             simCell, particlesObj, posProp,
@@ -170,7 +189,8 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
             modelFile,
             outPropName,
             selection,
-            selectedIndices = std::move(selectedIndices)
+            selectedIndices = std::move(selectedIndices),
+            cacheSlotVoid
             ]() mutable -> PipelineFlowState
     {
         TaskProgress progress(this_task::ui());
@@ -249,25 +269,56 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
 
 #ifdef OVITO_ML_HAS_LIBTORCH
 
-        // Load TorchScript model.
-        progress.setText(tr("ML: loading model"));
+        // Acquire model — reuse the cached module when the path has not
+        // changed, otherwise load from disk and populate the cache for
+        // subsequent evaluations (e.g. scrubbing through animation frames).
         torch::jit::script::Module model;
-        try {
-            model = torch::jit::load(modelFile.toStdString());
-            model.eval();
-        }
-        catch(const c10::Error& e) {
-            throw Exception(tr("MLStructureModifier: failed to load model '%1': %2")
-                .arg(modelFile).arg(QString::fromStdString(e.what())));
-        }
-        catch(const std::exception& e) {
-            throw Exception(tr("MLStructureModifier: failed to load model '%1': %2")
-                .arg(modelFile).arg(QString::fromStdString(e.what())));
-        }
-        catch(...) {
-            throw Exception(
-                tr("MLStructureModifier: failed to load model '%1' (unknown exception).")
-                .arg(modelFile));
+        {
+            auto* slot = static_cast<ModelCacheSlot*>(cacheSlotVoid.get());
+            const std::string pathStr = modelFile.toStdString();
+
+            // --- cache lookup (fast path) ---
+            bool needLoad = false;
+            {
+                std::lock_guard<std::mutex> lk(slot->mutex);
+                if(slot->loadedPath == pathStr && !slot->loadedPath.empty()) {
+                    model = slot->model;   // Module is ref-counted: cheap copy
+                } else {
+                    needLoad = true;
+                }
+            }
+
+            // --- cache miss: load outside the lock so the mutex is not held
+            //     during a potentially slow disk read ---
+            if(needLoad) {
+                progress.setText(tr("ML: loading model"));
+                torch::jit::script::Module loaded;
+                try {
+                    loaded = torch::jit::load(pathStr);
+                    loaded.eval();
+                }
+                catch(const c10::Error& e) {
+                    throw Exception(tr("MLStructureModifier: failed to load model '%1': %2")
+                        .arg(modelFile).arg(QString::fromStdString(e.what())));
+                }
+                catch(const std::exception& e) {
+                    throw Exception(tr("MLStructureModifier: failed to load model '%1': %2")
+                        .arg(modelFile).arg(QString::fromStdString(e.what())));
+                }
+                catch(...) {
+                    throw Exception(
+                        tr("MLStructureModifier: failed to load model '%1' (unknown exception).")
+                        .arg(modelFile));
+                }
+
+                // Store in cache for future evaluations.
+                {
+                    std::lock_guard<std::mutex> lk(slot->mutex);
+                    slot->model      = loaded;
+                    slot->loadedPath = pathStr;
+                }
+                model = std::move(loaded);
+            }
         }
 
         // Wrap descriptor buffer in a LibTorch tensor (zero-copy via from_blob).
