@@ -226,3 +226,57 @@ Add the LibTorch `lib/` directory to `LD_LIBRARY_PATH` as shown in Step 7.
 ### Wrong Python version
 Make sure the conda environment is activated **before** running CMake so that
 `python -c "import torch..."` resolves to the correct installation.
+
+### Compile error: `expected primary-expression before '>' token` on `data_ptr<T>()`
+
+```
+error: expected primary-expression before '>' token
+  337 |   const int32_t* predData = preds.data_ptr<int32_t>();
+```
+
+**Cause:** CMake picked up a **different, older LibTorch** from another path on
+your system (e.g. `~/libtorch/`) instead of the one you intended.  A stale
+`CMakeCache.txt` makes this worse because old values persist across runs.
+You can confirm this by checking which `TorchConfig.cmake` is listed in the
+CMake output:
+
+```
+Call Stack: /home/santi/libtorch/share/cmake/Torch/TorchConfig.cmake
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^
+                            wrong path — this is the old install
+```
+
+**Fix:** Always wipe the build directory first, then pass `Torch_DIR` explicitly
+so CMake cannot accidentally pick up another installation:
+
+```bash
+# 1. Remove stale cache
+rm -rf build && mkdir build && cd build
+
+# 2. Get the correct path from the active conda env
+export LIBTORCH_ROOT=$(python -c "import torch, os; print(os.path.dirname(torch.__file__))")
+
+# 3. Configure with Torch_DIR pinned — prevents mixing installations
+cmake .. \
+  -GNinja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DOVITO_USE_LIBTORCH=ON \
+  -DOVITO_LIBTORCH_ROOT="${LIBTORCH_ROOT}" \
+  -DTorch_DIR="${LIBTORCH_ROOT}/share/cmake/Torch" \
+  -DOVITO_BUILD_PLUGIN_ML=ON
+```
+
+Using `-DTorch_DIR` together with `-DOVITO_LIBTORCH_ROOT` forces CMake to use
+`NO_DEFAULT_PATH` when searching for Torch, which prevents it from finding any
+other LibTorch installation on the system.
+
+After reconfiguring, the CMake output should show a non-empty version and the
+correct path:
+
+```
+-- LibTorch found: 2.x.x
+```
+
+If the version line is empty (`-- LibTorch found: `) it means the wrong
+LibTorch was still picked up — repeat Step 1 (wipe the build dir) and verify
+that the conda environment is activated.
