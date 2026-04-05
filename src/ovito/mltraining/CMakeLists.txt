@@ -33,7 +33,10 @@ OVITO_STANDARD_PLUGIN(MLTrainingPlugin
 )
 
 # Link and configure LibTorch when available.
-IF(OVITO_USE_LIBTORCH AND Torch_FOUND)
+# Note: Torch may be discovered in a sibling directory (src/ovito/ml),
+# where directory-scope variables such as Torch_FOUND are not visible here.
+# The imported target Torch::Torch, however, is global and can be tested safely.
+IF(OVITO_USE_LIBTORCH AND (TARGET Torch::Torch OR TORCH_LIBRARIES))
     SEPARATE_ARGUMENTS(TORCH_CXX_FLAGS_LIST NATIVE_COMMAND "${TORCH_CXX_FLAGS}")
     TARGET_COMPILE_OPTIONS(MLTrainingPlugin PRIVATE ${TORCH_CXX_FLAGS_LIST})
 
