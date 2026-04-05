@@ -46,6 +46,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QMessageBox>
+#include <QPointer>
 #include "MLTrainingModifierEditor.h"
 
 // Include LibTorch headers only when the library is available.
@@ -565,41 +566,42 @@ void MLTrainingModifierEditor::onTrainClicked()
     // continuation in the GUI thread once all frames have been evaluated.
     // -----------------------------------------------------------------------
     auto evalFuture = node->evaluateInputMultiple(
-        PipelineEvaluationRequest(AnimationTime::fromFrame(firstFrame),
+        PipelineEvaluationRequest(anim->currentTime(),
                                   /*throwOnError=*/false,
                                   /*interactiveMode=*/false),
         std::move(times));
 
+    // Guard against the editor being deleted while the pipeline evaluation is running.
+    QPointer<MLTrainingModifierEditor> self(this);
+
     scheduleOperationAfter(std::move(evalFuture),
-        [this,
+        [self,
          cutoff, maxNeigh, labelProp,
          h1, h2, epochs, lr, batchSz, outPath]
         (std::vector<PipelineFlowState> states) mutable
     {
+        if(!self) return;
+
         if(states.empty()) {
-            if(_statusLabel)
-                _statusLabel->setText(tr("Error: pipeline returned no frames."));
+            if(self->_statusLabel)
+                self->_statusLabel->setText(tr("Error: pipeline returned no frames."));
             return;
         }
 
-        if(_statusLabel)
-            _statusLabel->setText(tr("Training MLP..."));
+        if(self->_statusLabel)
+            self->_statusLabel->setText(tr("Training MLP..."));
 
         // -----------------------------------------------------------------------
-        // Step 2: feature extraction + training in a background thread.
+        // Step 2: run training in a worker task.
         //
-        // asyncLaunch() runs on a thread-pool worker and returns
-        // Future<TrainingResult>.
+        // trainMLP() uses this_task::ui() for progress reporting and therefore
+        // must execute inside a task context.
         // -----------------------------------------------------------------------
         auto trainFuture = asyncLaunch(
             [states = std::move(states),
              cutoff, maxNeigh, labelProp,
              h1, h2, epochs, lr, batchSz, outPath]() mutable -> TrainingResult
             {
-                // Catch any non-OVITO exception (e.g. c10::Error from LibTorch) and
-                // convert it to an OVITO Exception so it is handled gracefully by
-                // handleExceptions() — which is noexcept and only catches Exception.
-                // Without this, std::terminate would be called and the app would close.
                 try {
                     return trainMLP(std::move(states),
                                     cutoff, maxNeigh, labelProp,
@@ -615,11 +617,7 @@ void MLTrainingModifierEditor::onTrainClicked()
                 }
             });
 
-        // Wrap self in a QPointer so the continuation is safe even if the
-        // editor gets destroyed before training finishes.
-        QPointer<MLTrainingModifierEditor> self(this);
-
-        scheduleOperationAfter(std::move(trainFuture),
+        self->scheduleOperationAfter(std::move(trainFuture),
             [self](TrainingResult result) {
                 if(!self) return;
                 const QString msg = QStringLiteral(
