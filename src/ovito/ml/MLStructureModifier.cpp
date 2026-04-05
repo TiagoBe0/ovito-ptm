@@ -205,7 +205,8 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
             lbls, outProbs
             ]() mutable -> PipelineFlowState
     {
-        TaskProgress progress(this_task::ui());
+        try {
+            TaskProgress progress(this_task::ui());
 
         // --- 3. Build per-atom feature matrix (parallel) --------------------
 
@@ -533,7 +534,18 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
 
 #endif  // OVITO_ML_HAS_LIBTORCH
 
-        return std::move(state);
+            return std::move(state);
+        }
+        catch(const Exception&) {
+            throw;
+        }
+        catch(const std::exception& e) {
+            throw Exception(QStringLiteral("MLStructureModifier: %1")
+                .arg(QString::fromStdString(e.what())));
+        }
+        catch(...) {
+            throw Exception(QStringLiteral("MLStructureModifier: unknown error during model analysis."));
+        }
     });
 }
 
