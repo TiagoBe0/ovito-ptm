@@ -565,7 +565,7 @@ void MLTrainingModifierEditor::onTrainClicked()
     // continuation in the GUI thread once all frames have been evaluated.
     // -----------------------------------------------------------------------
     auto evalFuture = node->evaluateInputMultiple(
-        PipelineEvaluationRequest(AnimationTime::fromFrame(firstFrame),
+        PipelineEvaluationRequest(anim->currentTime(),
                                   /*throwOnError=*/false,
                                   /*interactiveMode=*/false),
         std::move(times));
