@@ -36,6 +36,7 @@
 
 // Include LibTorch headers only when the library is available.
 #ifdef OVITO_ML_HAS_LIBTORCH
+#  include <torch/torch.h>
 #  include <torch/script.h>
 #  include <torch/csrc/autograd/grad_mode.h>
 
