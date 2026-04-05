@@ -157,7 +157,7 @@ static TrainingResult trainMLP(
         }
 
         const size_t N = posProp->size();
-        if(N == 0) {
+        if(N == 0 || labelPropObj->size() != N) {
             progress.incrementValue();
             continue;
         }
