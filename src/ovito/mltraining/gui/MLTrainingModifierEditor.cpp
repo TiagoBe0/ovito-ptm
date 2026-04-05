@@ -46,6 +46,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QMessageBox>
+#include <QPointer>
 #include "MLTrainingModifierEditor.h"
 
 // Include LibTorch headers only when the library is available.
@@ -570,20 +571,25 @@ void MLTrainingModifierEditor::onTrainClicked()
                                   /*interactiveMode=*/false),
         std::move(times));
 
+    // Guard against the editor being deleted while the pipeline evaluation is running.
+    QPointer<MLTrainingModifierEditor> self(this);
+
     scheduleOperationAfter(std::move(evalFuture),
-        [this,
+        [self,
          cutoff, maxNeigh, labelProp,
          h1, h2, epochs, lr, batchSz, outPath]
         (std::vector<PipelineFlowState> states) mutable
     {
+        if(!self) return;
+
         if(states.empty()) {
-            if(_statusLabel)
-                _statusLabel->setText(tr("Error: pipeline returned no frames."));
+            if(self->_statusLabel)
+                self->_statusLabel->setText(tr("Error: pipeline returned no frames."));
             return;
         }
 
-        if(_statusLabel)
-            _statusLabel->setText(tr("Training MLP..."));
+        if(self->_statusLabel)
+            self->_statusLabel->setText(tr("Training MLP..."));
 
         // -----------------------------------------------------------------------
         // Step 2: feature extraction + training in a background thread.
@@ -617,7 +623,7 @@ void MLTrainingModifierEditor::onTrainClicked()
 
         // Wrap self in a QPointer so the continuation is safe even if the
         // editor gets destroyed before training finishes.
-        QPointer<MLTrainingModifierEditor> self(this);
+        // Reuse the guarded pointer for the training completion callback as well.
 
         scheduleOperationAfter(std::move(trainFuture),
             [self](TrainingResult result) {
