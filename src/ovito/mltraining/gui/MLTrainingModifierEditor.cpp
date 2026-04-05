@@ -625,7 +625,7 @@ void MLTrainingModifierEditor::onTrainClicked()
         // editor gets destroyed before training finishes.
         // Reuse the guarded pointer for the training completion callback as well.
 
-        scheduleOperationAfter(std::move(trainFuture),
+        self->scheduleOperationAfter(std::move(trainFuture),
             [self](TrainingResult result) {
                 if(!self) return;
                 const QString msg = QStringLiteral(
