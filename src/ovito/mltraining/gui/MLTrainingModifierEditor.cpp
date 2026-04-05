@@ -292,9 +292,15 @@ static TrainingResult trainMLP(
     std::vector<torch::jit::IValue> exampleInputs;
     exampleInputs.push_back(torch::zeros({1, static_cast<int64_t>(numFeatures)}, torch::kFloat32));
 
-    torch::jit::Module traced = torch::jit::trace(model.ptr(), exampleInputs);
     try {
+#if defined(TORCH_VERSION_MAJOR) && ((TORCH_VERSION_MAJOR > 2) || (TORCH_VERSION_MAJOR == 2 && TORCH_VERSION_MINOR >= 6))
+        throw Exception(QStringLiteral(
+            "MLTraining: this LibTorch version does not expose torch::jit::trace() in the C++ API.\n"
+            "Please use a LibTorch version with C++ tracing support to export a TorchScript .pt model."));
+#else
+        torch::jit::Module traced = torch::jit::trace(model.ptr(), exampleInputs);
         traced.save(outPath.toStdString());
+#endif
     }
     catch(const c10::Error& e) {
         throw Exception(QStringLiteral("MLTraining: failed to save model to '%1': %2")
@@ -519,7 +525,7 @@ void MLTrainingModifierEditor::onTrainClicked()
     // -----------------------------------------------------------------------
     // Collect animation frame times
     // -----------------------------------------------------------------------
-    AnimationSettings* anim = ui()->dataset()->animationSettings();
+    AnimationSettings* anim = dataset() ? dataset()->animationSettings() : nullptr;
     if(!anim) return;
 
     const int firstFrame = anim->firstFrame();
