@@ -510,6 +510,17 @@ void MLTrainingModifierEditor::onTrainClicked()
     auto* mod = static_cast<MLTrainingModifier*>(editObject());
     if(!mod) return;
 
+    const bool exportSupported = false;
+    if(!exportSupported) {
+        // This build can compile against LibTorch, but TorchScript export from
+        // C++ is currently unavailable in the API version we target.
+        QMessageBox::critical(parentWindow(),
+            tr("Training export unavailable"),
+            tr("This OVITO build cannot export TorchScript models from C++ training code.\n"
+               "Please train/export the model with a Python PyTorch workflow."));
+        return;
+    }
+
     ModificationNode* node = modificationNode();
     if(!node) return;
 
