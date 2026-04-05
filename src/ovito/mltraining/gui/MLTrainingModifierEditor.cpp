@@ -288,15 +288,22 @@ static TrainingResult trainMLP(
 
     model->eval();
 
-    // Trace the trained module with a dummy input.
-    // The resulting TorchScript module is compatible with MLStructureModifier.
-    std::vector<torch::jit::IValue> exampleInputs;
-    exampleInputs.push_back(torch::zeros({1, static_cast<int64_t>(numFeatures)}, torch::kFloat32));
-
-    Q_UNUSED(exampleInputs);
-    throw Exception(QStringLiteral(
-        "MLTraining: TorchScript export from C++ is not available with this LibTorch API.\n"
-        "Please export the trained model using a Python PyTorch workflow."));
+    // Save a lightweight checkpoint (state tensors) instead of TorchScript.
+    // MLStructureModifier supports this fallback format.
+    try {
+        torch::serialize::OutputArchive archive;
+        archive.write("fc1.weight", model->fc1->weight);
+        archive.write("fc1.bias",   model->fc1->bias);
+        archive.write("fc2.weight", model->fc2->weight);
+        archive.write("fc2.bias",   model->fc2->bias);
+        archive.write("fc3.weight", model->fc3->weight);
+        archive.write("fc3.bias",   model->fc3->bias);
+        archive.save_to(outPath.toStdString());
+    }
+    catch(const c10::Error& e) {
+        throw Exception(QStringLiteral("MLTraining: failed to save model to '%1': %2")
+            .arg(outPath).arg(QString::fromStdString(e.what())));
+    }
 
     TrainingResult result;
     result.numSamples  = static_cast<int>(totalSamples);
@@ -509,17 +516,6 @@ void MLTrainingModifierEditor::onTrainClicked()
 #else
     auto* mod = static_cast<MLTrainingModifier*>(editObject());
     if(!mod) return;
-
-    const bool exportSupported = false;
-    if(!exportSupported) {
-        // This build can compile against LibTorch, but TorchScript export from
-        // C++ is currently unavailable in the API version we target.
-        QMessageBox::critical(parentWindow(),
-            tr("Training export unavailable"),
-            tr("This OVITO build cannot export TorchScript models from C++ training code.\n"
-               "Please train/export the model with a Python PyTorch workflow."));
-        return;
-    }
 
     ModificationNode* node = modificationNode();
     if(!node) return;

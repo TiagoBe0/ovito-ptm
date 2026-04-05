@@ -46,6 +46,10 @@ struct ModelCacheSlot {
     std::mutex                 mutex;
     std::string                loadedPath; // empty = no model cached yet
     torch::jit::script::Module model;
+    bool                       useCheckpoint = false;
+    torch::Tensor              fc1Weight, fc1Bias;
+    torch::Tensor              fc2Weight, fc2Bias;
+    torch::Tensor              fc3Weight, fc3Bias;
 };
 #endif
 
@@ -280,6 +284,8 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
         // changed, otherwise load from disk and populate the cache for
         // subsequent evaluations (e.g. scrubbing through animation frames).
         torch::jit::script::Module model;
+        bool useCheckpoint = false;
+        torch::Tensor fc1Weight, fc1Bias, fc2Weight, fc2Bias, fc3Weight, fc3Bias;
         {
             auto* slot = static_cast<ModelCacheSlot*>(cacheSlotVoid.get());
             const std::string pathStr = modelFile.toStdString();
@@ -290,6 +296,13 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
                 std::lock_guard<std::mutex> lk(slot->mutex);
                 if(slot->loadedPath == pathStr && !slot->loadedPath.empty()) {
                     model = slot->model;   // Module is ref-counted: cheap copy
+                    useCheckpoint = slot->useCheckpoint;
+                    fc1Weight = slot->fc1Weight;
+                    fc1Bias   = slot->fc1Bias;
+                    fc2Weight = slot->fc2Weight;
+                    fc2Bias   = slot->fc2Bias;
+                    fc3Weight = slot->fc3Weight;
+                    fc3Bias   = slot->fc3Bias;
                 } else {
                     needLoad = true;
                 }
@@ -303,19 +316,29 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
                 try {
                     loaded = torch::jit::load(pathStr);
                     loaded.eval();
-                }
-                catch(const c10::Error& e) {
-                    throw Exception(tr("MLStructureModifier: failed to load model '%1': %2")
-                        .arg(modelFile).arg(QString::fromStdString(e.what())));
-                }
-                catch(const std::exception& e) {
-                    throw Exception(tr("MLStructureModifier: failed to load model '%1': %2")
-                        .arg(modelFile).arg(QString::fromStdString(e.what())));
+                    useCheckpoint = false;
                 }
                 catch(...) {
-                    throw Exception(
-                        tr("MLStructureModifier: failed to load model '%1' (unknown exception).")
-                        .arg(modelFile));
+                    // Fallback: load checkpoint produced by MLTrainingModifierEditor.
+                    try {
+                        torch::serialize::InputArchive archive;
+                        archive.load_from(pathStr);
+                        archive.read("fc1.weight", fc1Weight);
+                        archive.read("fc1.bias",   fc1Bias);
+                        archive.read("fc2.weight", fc2Weight);
+                        archive.read("fc2.bias",   fc2Bias);
+                        archive.read("fc3.weight", fc3Weight);
+                        archive.read("fc3.bias",   fc3Bias);
+                        useCheckpoint = true;
+                    }
+                    catch(const c10::Error& e) {
+                        throw Exception(tr("MLStructureModifier: failed to load model '%1': %2")
+                            .arg(modelFile).arg(QString::fromStdString(e.what())));
+                    }
+                    catch(const std::exception& e) {
+                        throw Exception(tr("MLStructureModifier: failed to load model '%1': %2")
+                            .arg(modelFile).arg(QString::fromStdString(e.what())));
+                    }
                 }
 
                 // Store in cache for future evaluations.
@@ -323,6 +346,13 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
                     std::lock_guard<std::mutex> lk(slot->mutex);
                     slot->model      = loaded;
                     slot->loadedPath = pathStr;
+                    slot->useCheckpoint = useCheckpoint;
+                    slot->fc1Weight = fc1Weight;
+                    slot->fc1Bias   = fc1Bias;
+                    slot->fc2Weight = fc2Weight;
+                    slot->fc2Bias   = fc2Bias;
+                    slot->fc3Weight = fc3Weight;
+                    slot->fc3Bias   = fc3Bias;
                 }
                 model = std::move(loaded);
             }
@@ -340,7 +370,23 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
         at::Tensor rawOutput;
         try {
             torch::NoGradGuard no_grad;
-            rawOutput = model.forward({inputTensor}).toTensor();
+            if(!useCheckpoint) {
+                rawOutput = model.forward({inputTensor}).toTensor();
+            }
+            else {
+                if(fc1Weight.dim() != 2 || fc2Weight.dim() != 2 || fc3Weight.dim() != 2)
+                    throw Exception(tr("MLStructureModifier: invalid checkpoint format (weight tensors)."));
+                if(fc1Bias.dim() != 1 || fc2Bias.dim() != 1 || fc3Bias.dim() != 1)
+                    throw Exception(tr("MLStructureModifier: invalid checkpoint format (bias tensors)."));
+                if(fc1Weight.size(1) != numFeatures)
+                    throw Exception(tr("MLStructureModifier: model expects %1 input features but got %2.")
+                        .arg(fc1Weight.size(1)).arg(numFeatures));
+
+                auto x  = inputTensor.to(torch::kFloat32);
+                auto h1 = torch::relu(torch::addmm(fc1Bias, x, fc1Weight.transpose(0, 1)));
+                auto h2 = torch::relu(torch::addmm(fc2Bias, h1, fc2Weight.transpose(0, 1)));
+                rawOutput = torch::addmm(fc3Bias, h2, fc3Weight.transpose(0, 1));
+            }
         }
         catch(const c10::Error& e) {
             throw Exception(
