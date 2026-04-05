@@ -609,9 +609,23 @@ void MLTrainingModifierEditor::onTrainClicked()
              cutoff, maxNeigh, labelProp,
              h1, h2, epochs, lr, batchSz, outPath]() mutable -> TrainingResult
             {
-                return trainMLP(std::move(states),
-                                cutoff, maxNeigh, labelProp,
-                                h1, h2, epochs, lr, batchSz, outPath);
+                // Catch any non-OVITO exception (e.g. c10::Error from LibTorch) and
+                // convert it to an OVITO Exception so it is handled gracefully by
+                // handleExceptions() — which is noexcept and only catches Exception.
+                // Without this, std::terminate would be called and the app would close.
+                try {
+                    return trainMLP(std::move(states),
+                                    cutoff, maxNeigh, labelProp,
+                                    h1, h2, epochs, lr, batchSz, outPath);
+                }
+                catch(const Exception&) { throw; }
+                catch(const std::exception& e) {
+                    throw Exception(QStringLiteral("MLTraining: %1")
+                        .arg(QString::fromStdString(e.what())));
+                }
+                catch(...) {
+                    throw Exception(QStringLiteral("MLTraining: unknown error during training."));
+                }
             });
 
         // Wrap self in a QPointer so the continuation is safe even if the
