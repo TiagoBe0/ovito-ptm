@@ -481,12 +481,19 @@ void MLTrainingModifierEditor::updateTrainButtonState()
 {
     if(!_trainButton) return;
 #ifdef OVITO_ML_HAS_LIBTORCH
+    _trainButton->setText(tr("Collect from All Frames && Train"));
     _trainButton->setEnabled(true);
     _trainButton->setToolTip(_trainButton->toolTip()); // keep existing tooltip
 #else
-    _trainButton->setEnabled(false);
+    // Keep the button clickable so users get an explicit explanation dialog.
+    _trainButton->setText(tr("Collect from All Frames && Train (Unavailable)"));
+    _trainButton->setEnabled(true);
     _trainButton->setToolTip(tr("LibTorch is not available in this build.\n"
-        "Rebuild OVITO with -DOVITO_USE_LIBTORCH=ON to enable training."));
+        "Click for details on how to enable training support."));
+    if(_statusLabel) {
+        _statusLabel->setText(tr("Training unavailable in this build: LibTorch support is disabled. "
+                                 "Rebuild OVITO with -DOVITO_USE_LIBTORCH=ON."));
+    }
 #endif
 }
 
