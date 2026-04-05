@@ -31,6 +31,7 @@
 #include <ovito/core/dataset/DataSet.h>
 #include <ovito/core/dataset/scene/Scene.h>
 #include <ovito/core/dataset/data/BufferAccess.h>
+#include <ovito/core/utilities/concurrent/Launch.h>
 #include <ovito/core/utilities/concurrent/TaskProgress.h>
 #include <ovito/core/utilities/concurrent/ParallelFor.h>
 #include <ovito/core/app/undo/UndoableTransaction.h>
@@ -591,52 +592,50 @@ void MLTrainingModifierEditor::onTrainClicked()
             self->_statusLabel->setText(tr("Training MLP..."));
 
         // -----------------------------------------------------------------------
-        // Step 2: basic/safe mode — run training directly in this continuation.
+        // Step 2: run training in a worker task.
         //
-        // This keeps the control flow simple while we stabilize the feature.
+        // trainMLP() uses this_task::ui() for progress reporting and therefore
+        // must execute inside a task context.
         // -----------------------------------------------------------------------
-        try {
-            TrainingResult result = trainMLP(std::move(states),
-                                             cutoff, maxNeigh, labelProp,
-                                             h1, h2, epochs, lr, batchSz, outPath);
+        auto trainFuture = asyncLaunch(
+            [states = std::move(states),
+             cutoff, maxNeigh, labelProp,
+             h1, h2, epochs, lr, batchSz, outPath]() mutable -> TrainingResult
+            {
+                try {
+                    return trainMLP(std::move(states),
+                                    cutoff, maxNeigh, labelProp,
+                                    h1, h2, epochs, lr, batchSz, outPath);
+                }
+                catch(const Exception&) { throw; }
+                catch(const std::exception& e) {
+                    throw Exception(QStringLiteral("MLTraining: %1")
+                        .arg(QString::fromStdString(e.what())));
+                }
+                catch(...) {
+                    throw Exception(QStringLiteral("MLTraining: unknown error during training."));
+                }
+            });
 
-            const QString msg = QStringLiteral(
-                "Training complete!\n"
-                "  Samples : %1\n"
-                "  Classes : %2\n"
-                "  Features: %3\n"
-                "  Final loss: %4\n"
-                "  Saved to: %5")
-                .arg(result.numSamples)
-                .arg(result.numClasses)
-                .arg(result.numFeatures)
-                .arg(static_cast<double>(result.finalLoss), 0, 'f', 6)
-                .arg(result.savedPath);
+        self->scheduleOperationAfter(std::move(trainFuture),
+            [self](TrainingResult result) {
+                if(!self) return;
+                const QString msg = QStringLiteral(
+                    "Training complete!\n"
+                    "  Samples : %1\n"
+                    "  Classes : %2\n"
+                    "  Features: %3\n"
+                    "  Final loss: %4\n"
+                    "  Saved to: %5")
+                    .arg(result.numSamples)
+                    .arg(result.numClasses)
+                    .arg(result.numFeatures)
+                    .arg(static_cast<double>(result.finalLoss), 0, 'f', 6)
+                    .arg(result.savedPath);
 
-            if(self->_statusLabel)
-                self->_statusLabel->setText(msg);
-        }
-        catch(const Exception& e) {
-            if(self->_statusLabel)
-                self->_statusLabel->setText(e.message());
-            QMessageBox::critical(self->parentWindow(),
-                tr("Training failed"), e.message());
-        }
-        catch(const std::exception& e) {
-            const QString msg = QStringLiteral("MLTraining: %1")
-                .arg(QString::fromStdString(e.what()));
-            if(self->_statusLabel)
-                self->_statusLabel->setText(msg);
-            QMessageBox::critical(self->parentWindow(),
-                tr("Training failed"), msg);
-        }
-        catch(...) {
-            const QString msg = QStringLiteral("MLTraining: unknown error during training.");
-            if(self->_statusLabel)
-                self->_statusLabel->setText(msg);
-            QMessageBox::critical(self->parentWindow(),
-                tr("Training failed"), msg);
-        }
+                if(self->_statusLabel)
+                    self->_statusLabel->setText(msg);
+            });
     });
 #endif // OVITO_ML_HAS_LIBTORCH
 }
