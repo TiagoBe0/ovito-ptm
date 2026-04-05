@@ -29,6 +29,7 @@
 #include <ovito/core/dataset/animation/AnimationSettings.h>
 #include <ovito/core/dataset/animation/TimeInterval.h>
 #include <ovito/core/dataset/DataSet.h>
+#include <ovito/core/dataset/scene/Scene.h>
 #include <ovito/core/dataset/data/BufferAccess.h>
 #include <ovito/core/utilities/concurrent/Launch.h>
 #include <ovito/core/utilities/concurrent/TaskProgress.h>
@@ -287,14 +288,17 @@ static TrainingResult trainMLP(
 
     model->eval();
 
-    // Trace the trained module with a dummy input.
-    // The resulting TorchScript module is compatible with MLStructureModifier.
-    std::vector<torch::jit::IValue> exampleInputs;
-    exampleInputs.push_back(torch::zeros({1, static_cast<int64_t>(numFeatures)}, torch::kFloat32));
-
-    torch::jit::Module traced = torch::jit::trace(model.ptr(), exampleInputs);
+    // Save a lightweight checkpoint (state tensors) instead of TorchScript.
+    // MLStructureModifier supports this fallback format.
     try {
-        traced.save(outPath.toStdString());
+        torch::serialize::OutputArchive archive;
+        archive.write("fc1.weight", model->fc1->weight);
+        archive.write("fc1.bias",   model->fc1->bias);
+        archive.write("fc2.weight", model->fc2->weight);
+        archive.write("fc2.bias",   model->fc2->bias);
+        archive.write("fc3.weight", model->fc3->weight);
+        archive.write("fc3.bias",   model->fc3->bias);
+        archive.save_to(outPath.toStdString());
     }
     catch(const c10::Error& e) {
         throw Exception(QStringLiteral("MLTraining: failed to save model to '%1': %2")
@@ -481,12 +485,19 @@ void MLTrainingModifierEditor::updateTrainButtonState()
 {
     if(!_trainButton) return;
 #ifdef OVITO_ML_HAS_LIBTORCH
+    _trainButton->setText(tr("Collect from All Frames && Train"));
     _trainButton->setEnabled(true);
     _trainButton->setToolTip(_trainButton->toolTip()); // keep existing tooltip
 #else
-    _trainButton->setEnabled(false);
+    // Keep the button clickable so users get an explicit explanation dialog.
+    _trainButton->setText(tr("Collect from All Frames && Train (Unavailable)"));
+    _trainButton->setEnabled(true);
     _trainButton->setToolTip(tr("LibTorch is not available in this build.\n"
-        "Rebuild OVITO with -DOVITO_USE_LIBTORCH=ON to enable training."));
+        "Click for details on how to enable training support."));
+    if(_statusLabel) {
+        _statusLabel->setText(tr("Training unavailable in this build: LibTorch support is disabled. "
+                                 "Rebuild OVITO with -DOVITO_USE_LIBTORCH=ON."));
+    }
 #endif
 }
 
@@ -512,7 +523,9 @@ void MLTrainingModifierEditor::onTrainClicked()
     // -----------------------------------------------------------------------
     // Collect animation frame times
     // -----------------------------------------------------------------------
-    AnimationSettings* anim = ui()->dataset()->animationSettings();
+    AnimationSettings* anim = nullptr;
+    if(Scene* scene = datasetContainer().activeScene())
+        anim = scene->animationSettings();
     if(!anim) return;
 
     const int firstFrame = anim->firstFrame();

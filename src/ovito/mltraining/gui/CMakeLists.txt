@@ -30,7 +30,9 @@ OVITO_STANDARD_PLUGIN(MLTrainingPluginGui
 )
 
 # The GUI plugin also needs LibTorch for the inline training code.
-IF(OVITO_USE_LIBTORCH AND Torch_FOUND)
+# Torch may be discovered in a sibling directory (src/ovito/ml), so rely on
+# globally available imported targets/libraries instead of directory-local flags.
+IF(OVITO_USE_LIBTORCH AND (TARGET Torch::Torch OR TORCH_LIBRARIES))
     SEPARATE_ARGUMENTS(TORCH_CXX_FLAGS_LIST NATIVE_COMMAND "${TORCH_CXX_FLAGS}")
     TARGET_COMPILE_OPTIONS(MLTrainingPluginGui PRIVATE ${TORCH_CXX_FLAGS_LIST})
 
