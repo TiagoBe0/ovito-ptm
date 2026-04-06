@@ -24,17 +24,9 @@
 #include <ovito/mltraining/MLTrainingModifier.h>
 #include <ovito/particles/objects/Particles.h>
 #include <ovito/stdobj/simcell/SimulationCell.h>
-#include <ovito/core/dataset/pipeline/ModificationNode.h>
-#include <ovito/core/dataset/pipeline/PipelineEvaluationRequest.h>
-#include <ovito/core/dataset/animation/AnimationSettings.h>
-#include <ovito/core/dataset/animation/TimeInterval.h>
-#include <ovito/core/dataset/DataSet.h>
-#include <ovito/core/dataset/scene/Scene.h>
 #include <ovito/core/dataset/data/BufferAccess.h>
 #include <ovito/core/utilities/concurrent/Launch.h>
 #include <ovito/core/utilities/concurrent/TaskProgress.h>
-#include <ovito/core/utilities/concurrent/ParallelFor.h>
-#include <ovito/core/app/undo/UndoableTransaction.h>
 #include <ovito/gui/desktop/properties/FilenameParameterUI.h>
 #include <ovito/gui/desktop/properties/FloatParameterUI.h>
 #include <ovito/gui/desktop/properties/IntegerParameterUI.h>
@@ -118,13 +110,26 @@ static TrainingResult trainMLP(
     int        batchSizeArg,
     QString    outPath)
 {
-    TaskProgress progress(this_task::ui());
+    // Use the task progress indicator if a UserInterface is available;
+    // fall back to the static no-op TaskProgress::Ignore otherwise.
+    // The UserInterface may be absent when asyncLaunch is called from
+    // the GUI thread (no parent task to inherit the UI from).
+    const bool hasTaskUi = this_task::get()
+                        && this_task::get()->userInterface();
+    TaskProgress& progress = hasTaskUi
+        ? *new TaskProgress(this_task::get()->userInterface().get())
+        : TaskProgress::Ignore;
+    // Clean up the heap-allocated TaskProgress when we leave the function.
+    struct ProgressGuard {
+        TaskProgress& ref; bool owned;
+        ~ProgressGuard() { if(owned) delete &ref; }
+    } progressGuard{progress, hasTaskUi};
 
     // -----------------------------------------------------------------------
-    // Phase 1: extract per-atom descriptors and labels from all frames
+    // Phase 1: extract per-atom descriptors and labels from the frame
     // -----------------------------------------------------------------------
 
-    progress.setText(QStringLiteral("MLTraining: extracting features from %1 frames...")
+    progress.setText(QStringLiteral("MLTraining: extracting features from %1 frame(s)...")
         .arg(states.size()));
     progress.setMaximum(static_cast<qlonglong>(states.size()));
 
@@ -135,14 +140,15 @@ static TrainingResult trainMLP(
     const float invCutoff   = 1.0f / cutoff;
 
     for(size_t fi = 0; fi < states.size(); ++fi) {
-        this_task::throwIfCanceled();
+        if(this_task::get())
+            this_task::throwIfCanceled();
 
         const auto& state = states[fi];
 
         const Particles*   particles = state.getObject<Particles>();
         const SimulationCell* simCell = state.getObject<SimulationCell>();
         if(!particles || !simCell) {
-            progress.incrementValue();
+            progress.incrementValueNoCancel();
             continue;
         }
 
@@ -152,13 +158,13 @@ static TrainingResult trainMLP(
             particles->getProperty(labelPropName);
 
         if(!posProp || !labelPropObj) {
-            progress.incrementValue();
+            progress.incrementValueNoCancel();
             continue;
         }
 
         const size_t N = posProp->size();
         if(N == 0) {
-            progress.incrementValue();
+            progress.incrementValueNoCancel();
             continue;
         }
 
@@ -170,8 +176,7 @@ static TrainingResult trainMLP(
         }
 
         // Build sorted normalised neighbour-distance descriptors.
-        // The CutoffNeighborFinder is constructed from the captured property data;
-        // the PipelineFlowState in `states` keeps that data alive.
+        // The PipelineFlowState in `states` keeps the property data alive.
         CutoffNeighborFinder nf(static_cast<FloatType>(cutoff), posProp, simCell, nullptr);
 
         const size_t base = features.size();
@@ -193,7 +198,7 @@ static TrainingResult trainMLP(
             // Remaining slots keep the 1.0f default (already set by resize).
         }
 
-        progress.incrementValue();
+        progress.incrementValueNoCancel();
     }
 
     const int64_t totalSamples = static_cast<int64_t>(labels.size());
@@ -252,7 +257,8 @@ static TrainingResult trainMLP(
     float finalLoss = 0.f;
 
     for(int epoch = 0; epoch < numEpochsArg; ++epoch) {
-        this_task::throwIfCanceled();
+        if(this_task::get())
+            this_task::throwIfCanceled();
 
         // Shuffle indices for mini-batch sampling.
         auto indices = torch::randperm(totalSamples, torch::kInt64);
@@ -277,7 +283,7 @@ static TrainingResult trainMLP(
         }
 
         finalLoss = epochLoss / static_cast<float>(numSteps);
-        progress.setValue(static_cast<qlonglong>(epoch + 1));
+        progress.setValueNoCancel(static_cast<qlonglong>(epoch + 1));
     }
 
     // -----------------------------------------------------------------------
@@ -450,16 +456,16 @@ void MLTrainingModifierEditor::createUI(const RolloutInsertionParameters& rollou
         lay->setSpacing(6);
 
         lay->addWidget(new QLabel(
-            tr("<small>Evaluates the upstream pipeline at every animation frame,\n"
+            tr("<small>Evaluates the upstream pipeline at the current frame,\n"
                "collects per-atom descriptors and labels, trains a 3-layer MLP,\n"
-               "and saves the model as a TorchScript .pt file.</small>"),
+               "and saves the model as a .pt file.</small>"),
             box));
 
-        _trainButton = new QPushButton(tr("Collect from All Frames && Train"), box);
+        _trainButton = new QPushButton(tr("Collect from Current Frame && Train"), box);
         _trainButton->setToolTip(tr(
-            "Iterate over all animation frames, extract neighbour-distance\n"
+            "Evaluate the current animation frame, extract neighbour-distance\n"
             "descriptors and integer class labels, train the MLP, and save\n"
-            "the TorchScript model to the specified output path."));
+            "the model to the specified output path."));
         lay->addWidget(_trainButton);
         connect(_trainButton, &QPushButton::clicked, this, &MLTrainingModifierEditor::onTrainClicked);
 
@@ -485,12 +491,12 @@ void MLTrainingModifierEditor::updateTrainButtonState()
 {
     if(!_trainButton) return;
 #ifdef OVITO_ML_HAS_LIBTORCH
-    _trainButton->setText(tr("Collect from All Frames && Train"));
+    _trainButton->setText(tr("Collect from Current Frame && Train"));
     _trainButton->setEnabled(true);
     _trainButton->setToolTip(_trainButton->toolTip()); // keep existing tooltip
 #else
     // Keep the button clickable so users get an explicit explanation dialog.
-    _trainButton->setText(tr("Collect from All Frames && Train (Unavailable)"));
+    _trainButton->setText(tr("Collect from Current Frame && Train (Unavailable)"));
     _trainButton->setEnabled(true);
     _trainButton->setToolTip(tr("LibTorch is not available in this build.\n"
         "Click for details on how to enable training support."));
@@ -517,32 +523,6 @@ void MLTrainingModifierEditor::onTrainClicked()
     auto* mod = static_cast<MLTrainingModifier*>(editObject());
     if(!mod) return;
 
-    ModificationNode* node = modificationNode();
-    if(!node) return;
-
-    // -----------------------------------------------------------------------
-    // Collect animation frame times
-    // -----------------------------------------------------------------------
-    AnimationSettings* anim = nullptr;
-    if(Scene* scene = datasetContainer().activeScene())
-        anim = scene->animationSettings();
-    if(!anim) return;
-
-    const int firstFrame = anim->firstFrame();
-    const int lastFrame  = anim->lastFrame();
-
-    if(firstFrame > lastFrame) {
-        QMessageBox::warning(parentWindow(),
-            tr("No frames"),
-            tr("The animation interval is empty. Load at least one .dump file first."));
-        return;
-    }
-
-    std::vector<AnimationTime> times;
-    times.reserve(static_cast<size_t>(lastFrame - firstFrame + 1));
-    for(int f = firstFrame; f <= lastFrame; ++f)
-        times.push_back(AnimationTime::fromFrame(f));
-
     // Capture parameters by value — the modifier might change or be deleted
     // while the async operations are in flight.
     const float   cutoff     = static_cast<float>(mod->cutoffRadius());
@@ -568,76 +548,65 @@ void MLTrainingModifierEditor::onTrainClicked()
     }
 
     if(_statusLabel)
-        _statusLabel->setText(tr("Collecting data from %1 frames...").arg(times.size()));
+        _statusLabel->setText(tr("Collecting data from the current frame..."));
 
     // -----------------------------------------------------------------------
-    // Step 1: evaluate the upstream pipeline at every frame.
+    // Get the cached upstream pipeline data for the current frame.
     //
-    // evaluateInputMultiple() returns Future<vector<PipelineFlowState>>.
-    // scheduleOperationAfter() shows a progress dialog and calls our
-    // continuation in the GUI thread once all frames have been evaluated.
+    // getPipelineInput() returns the already-evaluated PipelineFlowState
+    // synchronously, avoiding the problematic async evaluation patterns.
     // -----------------------------------------------------------------------
-    auto evalFuture = node->evaluateInputMultiple(
-        PipelineEvaluationRequest(AnimationTime::fromFrame(firstFrame),
-                                  /*throwOnError=*/false,
-                                  /*interactiveMode=*/false),
-        std::move(times));
+    PipelineFlowState state = getPipelineInput();
 
-    scheduleOperationAfter(std::move(evalFuture),
-        [this,
-         cutoff, maxNeigh, labelProp,
-         h1, h2, epochs, lr, batchSz, outPath]
-        (std::vector<PipelineFlowState> states) mutable
-    {
-        if(states.empty()) {
-            if(_statusLabel)
-                _statusLabel->setText(tr("Error: pipeline returned no frames."));
-            return;
-        }
-
+    if(state.status().type() == PipelineStatus::Error || !state) {
         if(_statusLabel)
-            _statusLabel->setText(tr("Training MLP on %1 frames...").arg(states.size()));
+            _statusLabel->setText(tr("Error: no valid pipeline data for the current frame.\n"
+                                     "Make sure at least one file is loaded and a modifier producing '%1' is upstream.")
+                                     .arg(labelProp));
+        return;
+    }
 
-        // -----------------------------------------------------------------------
-        // Step 2: feature extraction + training in a background thread.
-        //
-        // asyncLaunch() runs on a thread-pool worker and returns
-        // Future<TrainingResult>.
-        // -----------------------------------------------------------------------
-        auto trainFuture = asyncLaunch(
-            [states = std::move(states),
-             cutoff, maxNeigh, labelProp,
-             h1, h2, epochs, lr, batchSz, outPath]() mutable -> TrainingResult
-            {
-                return trainMLP(std::move(states),
-                                cutoff, maxNeigh, labelProp,
-                                h1, h2, epochs, lr, batchSz, outPath);
-            });
+    if(_statusLabel)
+        _statusLabel->setText(tr("Training MLP on current frame..."));
 
-        // Wrap self in a QPointer so the continuation is safe even if the
-        // editor gets destroyed before training finishes.
-        QPointer<MLTrainingModifierEditor> self(this);
+    // Build single-element states vector and launch training in a
+    // background thread via asyncLaunch so that this_task::ui() and
+    // TaskProgress work correctly.
+    std::vector<PipelineFlowState> states;
+    states.push_back(std::move(state));
 
-        scheduleOperationAfter(std::move(trainFuture),
-            [self](TrainingResult result) {
-                if(!self) return;
-                const QString msg = QStringLiteral(
-                    "Training complete!\n"
-                    "  Samples : %1\n"
-                    "  Classes : %2\n"
-                    "  Features: %3\n"
-                    "  Final loss: %4\n"
-                    "  Saved to: %5")
-                    .arg(result.numSamples)
-                    .arg(result.numClasses)
-                    .arg(result.numFeatures)
-                    .arg(static_cast<double>(result.finalLoss), 0, 'f', 6)
-                    .arg(result.savedPath);
+    QPointer<MLTrainingModifierEditor> self(this);
 
-                if(self->_statusLabel)
-                    self->_statusLabel->setText(msg);
-            });
-    });
+    auto trainFuture = asyncLaunch(
+        [states = std::move(states),
+         cutoff, maxNeigh, labelProp,
+         h1, h2, epochs, lr, batchSz, outPath]() mutable -> TrainingResult
+        {
+            return trainMLP(
+                std::move(states),
+                cutoff, maxNeigh, labelProp,
+                h1, h2, epochs, lr, batchSz, outPath);
+        });
+
+    scheduleOperationAfter(std::move(trainFuture),
+        [self](TrainingResult result) {
+            if(!self) return;
+            const QString msg = QStringLiteral(
+                "Training complete!\n"
+                "  Samples : %1\n"
+                "  Classes : %2\n"
+                "  Features: %3\n"
+                "  Final loss: %4\n"
+                "  Saved to: %5")
+                .arg(result.numSamples)
+                .arg(result.numClasses)
+                .arg(result.numFeatures)
+                .arg(static_cast<double>(result.finalLoss), 0, 'f', 6)
+                .arg(result.savedPath);
+
+            if(self->_statusLabel)
+                self->_statusLabel->setText(msg);
+        });
 #endif // OVITO_ML_HAS_LIBTORCH
 }
 
