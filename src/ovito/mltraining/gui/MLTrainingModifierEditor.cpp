@@ -107,6 +107,7 @@ static TrainingResult trainMLP(
     QStringList                       inputProperties,
     float                             cutoff,
     int                               maxNeighbors,
+    int                               rdfBinsArg,
     QString                           labelPropName,
     int        h1,
     int        h2,
@@ -142,12 +143,13 @@ static TrainingResult trainMLP(
     std::vector<int64_t> labels;     // class index per atom
 
     const bool useNeighDist = (inputMode == MLTrainingModifier::InputMode::NeighborDistances);
-    const int  numFeatures  = useNeighDist
-                                ? maxNeighbors
-                                : static_cast<int>(inputProperties.size());
+    const bool useRDF       = (inputMode == MLTrainingModifier::InputMode::RadialDistribution);
+    const int  numFeatures  = useNeighDist ? maxNeighbors
+                            : useRDF       ? rdfBinsArg
+                                           : static_cast<int>(inputProperties.size());
     const float invCutoff   = 1.0f / cutoff;
 
-    if(!useNeighDist && numFeatures == 0)
+    if(!useNeighDist && !useRDF && numFeatures == 0)
         throw Exception(QStringLiteral(
             "MLTraining: no input property columns selected.\n"
             "Please select at least one property column in the modifier panel."));
@@ -223,6 +225,54 @@ static TrainingResult trainMLP(
                 for(int j = 0; j < k; ++j)
                     row[j] = static_cast<float>(dists[j]) * invCutoff;
                 // Remaining slots keep the 1.0f default (already set by resize).
+            }
+        } else if(useRDF) {
+            // ------------------------------------------------------------------
+            // RadialDistribution mode: local g(r) histogram descriptor.
+            // Divides [0, cutoff) into rdfBinsArg bins of width dr = cutoff/rdfBinsArg.
+            // Each bin is normalised by the ideal-gas count per shell so that the
+            // descriptor matches the g(r) convention from CoordinationAnalysis.
+            // ------------------------------------------------------------------
+            if(!simCell) {
+                labels.resize(labels.size() - N);
+                progress.incrementValueNoCancel();
+                continue;
+            }
+
+            features.resize(base + N * static_cast<size_t>(numFeatures), 0.0f);
+
+            // Density ρ = N / V for ideal-gas normalisation.
+            float rho = 0.0f;
+            if(simCell->volume3D() > 0.0)
+                rho = static_cast<float>(N) / static_cast<float>(simCell->volume3D());
+
+            const float dr    = cutoff / static_cast<float>(rdfBinsArg);
+            const float invDr = 1.0f / dr;
+
+            // Pre-compute per-bin normalisation factors.
+            std::vector<float> ideal(static_cast<size_t>(rdfBinsArg), 1.0f);
+            if(rho > 0.0f) {
+                const float factor = rho * (4.0f / 3.0f)
+                                   * static_cast<float>(M_PI) * dr * dr * dr;
+                for(int k = 0; k < rdfBinsArg; ++k) {
+                    const float k1 = static_cast<float>(k + 1);
+                    const float k0 = static_cast<float>(k);
+                    ideal[static_cast<size_t>(k)] = factor * (k1*k1*k1 - k0*k0*k0);
+                }
+            }
+
+            CutoffNeighborFinder nf(static_cast<FloatType>(cutoff), posProp, simCell, nullptr);
+
+            for(size_t i = 0; i < N; ++i) {
+                float* row = features.data() + base + i * static_cast<size_t>(numFeatures);
+                for(CutoffNeighborFinder::Query q(nf, i); !q.atEnd(); q.next()) {
+                    const int bin = static_cast<int>(
+                        static_cast<float>(q.distance()) * invDr);
+                    if(bin >= 0 && bin < rdfBinsArg)
+                        row[static_cast<size_t>(bin)] += 1.0f;
+                }
+                for(int k = 0; k < rdfBinsArg; ++k)
+                    row[static_cast<size_t>(k)] /= ideal[static_cast<size_t>(k)];
             }
         } else {
             // ------------------------------------------------------------------
@@ -422,10 +472,13 @@ void MLTrainingModifierEditor::createUI(const RolloutInsertionParameters& rollou
 
         QButtonGroup* btnGroup = new QButtonGroup(box);
         QRadioButton* rbNeigh  = new QRadioButton(tr("Neighbour distances (sorted, normalised)"), box);
+        QRadioButton* rbRDF    = new QRadioButton(tr("Radial distribution function g(r)"), box);
         QRadioButton* rbProp   = new QRadioButton(tr("Particle property columns"), box);
         btnGroup->addButton(rbNeigh, static_cast<int>(MLTrainingModifier::InputMode::NeighborDistances));
+        btnGroup->addButton(rbRDF,   static_cast<int>(MLTrainingModifier::InputMode::RadialDistribution));
         btnGroup->addButton(rbProp,  static_cast<int>(MLTrainingModifier::InputMode::ParticleProperties));
         lay->addWidget(rbNeigh);
+        lay->addWidget(rbRDF);
         lay->addWidget(rbProp);
         mainLayout->addWidget(box);
 
@@ -470,6 +523,37 @@ void MLTrainingModifierEditor::createUI(const RolloutInsertionParameters& rollou
         grid->addLayout(numNeighUI->createFieldLayout(), row, 1);
 
         mainLayout->addWidget(_descParamsBox);
+    }
+
+    // -----------------------------------------------------------------------
+    // RadialDistribution parameters (shown only in that mode)
+    // -----------------------------------------------------------------------
+    {
+        _rdfParamsBox = new QGroupBox(tr("g(r) descriptor parameters"), rollout);
+        QGridLayout* grid = new QGridLayout(_rdfParamsBox);
+        grid->setContentsMargins(4, 4, 4, 4);
+        grid->setColumnStretch(1, 1);
+        int row = 0;
+
+        FloatParameterUI* cutoffUI2 = createParamUI<FloatParameterUI>(
+            PROPERTY_FIELD(MLTrainingModifier::cutoffRadius));
+        grid->addWidget(cutoffUI2->label(), row, 0);
+        grid->addLayout(cutoffUI2->createFieldLayout(), row, 1);
+        ++row;
+
+        IntegerParameterUI* rdfBinsUI = createParamUI<IntegerParameterUI>(
+            PROPERTY_FIELD(MLTrainingModifier::rdfBins));
+        grid->addWidget(rdfBinsUI->label(), row, 0);
+        grid->addLayout(rdfBinsUI->createFieldLayout(), row, 1);
+        ++row;
+
+        grid->addWidget(new QLabel(
+            tr("<small>The feature vector length equals the number of bins.\n"
+               "Each bin is normalised by the ideal-gas shell count,\n"
+               "matching the g(r) convention of CoordinationAnalysis.</small>"),
+            _rdfParamsBox), row, 0, 1, 2);
+
+        mainLayout->addWidget(_rdfParamsBox);
     }
 
     // -----------------------------------------------------------------------
@@ -711,6 +795,7 @@ void MLTrainingModifierEditor::onTrainClicked()
     const QStringList inputProps = mod->inputProperties();
     const float   cutoff     = static_cast<float>(mod->cutoffRadius());
     const int     maxNeigh   = mod->numNeighbors();
+    const int     rdfBinsVal = mod->rdfBins();
     const QString labelProp  = mod->labelProperty();
     const int     h1         = mod->hiddenSize1();
     const int     h2         = mod->hiddenSize2();
@@ -720,7 +805,8 @@ void MLTrainingModifierEditor::onTrainClicked()
     const QString outPath    = mod->outputModelPath();
 
     // Validate early
-    if(iMode == MLTrainingModifier::InputMode::NeighborDistances && cutoff <= 0.f) {
+    if((iMode == MLTrainingModifier::InputMode::NeighborDistances ||
+        iMode == MLTrainingModifier::InputMode::RadialDistribution) && cutoff <= 0.f) {
         QMessageBox::warning(parentWindow(), tr("Invalid parameter"),
             tr("Cutoff radius must be positive."));
         return;
@@ -773,13 +859,13 @@ void MLTrainingModifierEditor::onTrainClicked()
 
     auto trainFuture = asyncLaunch(
         [states = std::move(states),
-         iMode, inputProps, cutoff, maxNeigh, labelProp,
+         iMode, inputProps, cutoff, maxNeigh, rdfBinsVal, labelProp,
          h1, h2, epochs, lr, batchSz, outPath]() mutable -> TrainingResult
         {
             return trainMLP(
                 std::move(states),
                 iMode, inputProps,
-                cutoff, maxNeigh, labelProp,
+                cutoff, maxNeigh, rdfBinsVal, labelProp,
                 h1, h2, epochs, lr, batchSz, outPath);
         });
 
@@ -812,11 +898,16 @@ void MLTrainingModifierEditor::onTrainClicked()
 void MLTrainingModifierEditor::onInputModeChanged()
 {
     auto* mod = static_cast<MLTrainingModifier*>(editObject());
-    const bool useProps = mod &&
-        mod->inputMode() == MLTrainingModifier::InputMode::ParticleProperties;
+    const MLTrainingModifier::InputMode mode = mod
+        ? mod->inputMode()
+        : MLTrainingModifier::InputMode::NeighborDistances;
 
-    if(_descParamsBox) _descParamsBox->setVisible(!useProps);
-    if(_propSelectBox) _propSelectBox->setVisible(useProps);
+    if(_descParamsBox)
+        _descParamsBox->setVisible(mode == MLTrainingModifier::InputMode::NeighborDistances);
+    if(_rdfParamsBox)
+        _rdfParamsBox->setVisible(mode == MLTrainingModifier::InputMode::RadialDistribution);
+    if(_propSelectBox)
+        _propSelectBox->setVisible(mode == MLTrainingModifier::InputMode::ParticleProperties);
 }
 
 // ---------------------------------------------------------------------------

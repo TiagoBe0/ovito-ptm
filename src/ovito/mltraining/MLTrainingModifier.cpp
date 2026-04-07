@@ -38,6 +38,7 @@ OVITO_CLASSINFO(MLTrainingModifier, "ModifierCategory", "Structure identificatio
 DEFINE_PROPERTY_FIELD(MLTrainingModifier, inputMode);
 DEFINE_PROPERTY_FIELD(MLTrainingModifier, cutoffRadius);
 DEFINE_PROPERTY_FIELD(MLTrainingModifier, numNeighbors);
+DEFINE_PROPERTY_FIELD(MLTrainingModifier, rdfBins);
 DEFINE_PROPERTY_FIELD(MLTrainingModifier, inputProperties);
 DEFINE_PROPERTY_FIELD(MLTrainingModifier, labelProperty);
 
@@ -57,6 +58,7 @@ DEFINE_PROPERTY_FIELD(MLTrainingModifier, outputModelPath);
 SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, inputMode,        "Input mode");
 SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, cutoffRadius,     "Cutoff radius (A)");
 SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, numNeighbors,     "Max neighbors in descriptor");
+SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, rdfBins,          "RDF histogram bins");
 SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, inputProperties,  "Input property columns");
 SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, labelProperty,    "Label property");
 SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, hiddenSize1,      "Hidden layer 1 size");
@@ -69,6 +71,7 @@ SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, outputModelPath,  "Output model pat
 // Numeric constraints
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLTrainingModifier, cutoffRadius, WorldParameterUnit, 0);
 SET_PROPERTY_FIELD_UNITS_AND_RANGE(MLTrainingModifier, numNeighbors, IntegerParameterUnit, 1, 64);
+SET_PROPERTY_FIELD_UNITS_AND_RANGE(MLTrainingModifier, rdfBins,      IntegerParameterUnit, 4, 500);
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLTrainingModifier, hiddenSize1, IntegerParameterUnit, 1);
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLTrainingModifier, hiddenSize2, IntegerParameterUnit, 1);
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLTrainingModifier, numEpochs,   IntegerParameterUnit, 1);

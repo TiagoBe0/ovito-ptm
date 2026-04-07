@@ -78,7 +78,8 @@ public:
     /// How the per-atom input feature vector is constructed.
     enum class InputMode {
         NeighborDistances  = 0,  ///< Sorted normalised neighbour distances (original).
-        ParticleProperties = 1   ///< User-selected particle property columns.
+        ParticleProperties = 1,  ///< User-selected particle property columns.
+        RadialDistribution = 2   ///< Local g(r) histogram (as computed by CoordinationAnalysis).
     };
     Q_ENUM(InputMode)
 
@@ -103,6 +104,10 @@ public:
 
     /// Maximum number of neighbours included in the descriptor (= input size of the MLP).
     DECLARE_MODIFIABLE_PROPERTY_FIELD(int{16}, numNeighbors, setNumNeighbors);
+
+    /// Number of histogram bins for the local g(r) descriptor (RadialDistribution mode).
+    /// The feature vector length equals rdfBins; cutoffRadius defines the histogram range.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(int{50}, rdfBins, setRdfBins);
 
     /// List of particle property columns to use as input features (ParticleProperties mode).
     /// Each entry is a PropertyReference name string (e.g. "Voronoi Volume", "Position.X").

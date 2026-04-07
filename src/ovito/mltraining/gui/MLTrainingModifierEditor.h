@@ -72,6 +72,9 @@ private:
     /// Input-features section: shown only in NeighborDistances mode.
     QGroupBox*   _descParamsBox        = nullptr;
 
+    /// Input-features section: shown only in RadialDistribution mode.
+    QGroupBox*   _rdfParamsBox         = nullptr;
+
     /// Input-features section: shown only in ParticleProperties mode.
     QGroupBox*   _propSelectBox        = nullptr;
 

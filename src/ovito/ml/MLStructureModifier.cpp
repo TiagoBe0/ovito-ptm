@@ -68,6 +68,7 @@ DEFINE_PROPERTY_FIELD(MLStructureModifier, modelPath);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, inputMode);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, cutoffRadius);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, numNeighbors);
+DEFINE_PROPERTY_FIELD(MLStructureModifier, rdfBins);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, inputProperties);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, outputMode);
 DEFINE_PROPERTY_FIELD(MLStructureModifier, outputPropertyName);
@@ -79,6 +80,7 @@ SET_PROPERTY_FIELD_LABEL(MLStructureModifier, modelPath,              "Model pat
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, inputMode,              "Input mode");
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, cutoffRadius,           "Cutoff radius (Å)");
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, numNeighbors,           "Max neighbors in descriptor");
+SET_PROPERTY_FIELD_LABEL(MLStructureModifier, rdfBins,                "RDF histogram bins");
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, inputProperties,        "Input property columns");
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, outputMode,             "Output mode");
 SET_PROPERTY_FIELD_LABEL(MLStructureModifier, outputPropertyName,     "Output property name");
@@ -88,6 +90,7 @@ SET_PROPERTY_FIELD_LABEL(MLStructureModifier, outputProbabilities,    "Output cl
 
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLStructureModifier, cutoffRadius, WorldParameterUnit, 0);
 SET_PROPERTY_FIELD_UNITS_AND_RANGE(MLStructureModifier, numNeighbors, IntegerParameterUnit, 1, 64);
+SET_PROPERTY_FIELD_UNITS_AND_RANGE(MLStructureModifier, rdfBins,      IntegerParameterUnit, 4, 500);
 
 // ---------------------------------------------------------------------------
 // OOMetaClass::isApplicableTo
@@ -121,6 +124,7 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
     const OutputMode  oMode         = outputMode();
     const FloatType   cutoff        = cutoffRadius();
     const int         maxK          = numNeighbors();
+    const int         nRdfBins      = rdfBins();
     const QStringList propRefs      = inputProperties();
     const QString     modelFile     = modelPath();
     const QString     outPropName   = outputPropertyName().isEmpty()
@@ -150,6 +154,11 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
             throw Exception(tr("MLStructureModifier: cutoff radius must be positive."));
         if(maxK <= 0)
             throw Exception(tr("MLStructureModifier: numNeighbors must be at least 1."));
+    } else if(iMode == InputMode::RadialDistribution) {
+        if(cutoff <= 0)
+            throw Exception(tr("MLStructureModifier: cutoff radius must be positive."));
+        if(nRdfBins < 4)
+            throw Exception(tr("MLStructureModifier: rdfBins must be at least 4."));
     } else {
         if(propRefs.isEmpty())
             throw Exception(tr("MLStructureModifier: no input properties selected. "
@@ -194,7 +203,7 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
             state       = std::move(input),
             simCell, particlesObj, posProp,
             N, M, iMode, oMode,
-            cutoff, maxK,
+            cutoff, maxK, nRdfBins,
             columns     = std::move(columns),
             propRefs,           // kept for error messages
             modelFile,
@@ -252,9 +261,64 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
                 });
             });
 
+        } else if(iMode == InputMode::RadialDistribution) {
+
+            // ----- 3b. Local g(r) histogram descriptor ----------------------
+            // For each atom i, build a histogram of neighbour distances over
+            // [0, cutoff) divided into nRdfBins bins of width dr = cutoff/nRdfBins.
+            // Normalize each bin by the expected ideal-gas count so the values
+            // match the g(r) convention from CoordinationAnalysisModifier.
+            // If no SimulationCell is available, raw counts (not normalized) are
+            // stored instead.
+
+            numFeatures = nRdfBins;
+            descriptorBuf.assign(M * static_cast<size_t>(nRdfBins), 0.0f);
+
+            progress.setText(tr("ML: computing local g(r) descriptors"));
+
+            // Density ρ = N / V (particles per unit volume), used for normalization.
+            float rho = 0.0f;
+            if(simCell && simCell->volume3D() > 0.0)
+                rho = static_cast<float>(N) / static_cast<float>(simCell->volume3D());
+
+            CutoffNeighborFinder neighborFinder(cutoff, posProp, simCell, nullptr);
+            const float dr      = static_cast<float>(cutoff) / static_cast<float>(nRdfBins);
+            const float invDr   = 1.0f / dr;
+
+            // Pre-compute ideal-gas shell normalisation factors:
+            //   ideal[k] = ρ * (4π/3) * ((k+1)³ - k³) * dr³
+            std::vector<float> ideal(static_cast<size_t>(nRdfBins), 1.0f);
+            if(rho > 0.0f) {
+                const float factor = rho * (4.0f / 3.0f) * static_cast<float>(M_PI) * dr * dr * dr;
+                for(int k = 0; k < nRdfBins; ++k) {
+                    const float k1 = static_cast<float>(k + 1);
+                    const float k0 = static_cast<float>(k);
+                    ideal[static_cast<size_t>(k)] = factor * (k1*k1*k1 - k0*k0*k0);
+                }
+            }
+
+            parallelForInnerOuter(M, /*chunkSize=*/256, progress,
+                [&](auto&& iterate)
+            {
+                iterate([&](size_t mi) {
+                    const size_t i = selection ? selectedIndices[mi] : mi;
+                    float* row = descriptorBuf.data() + mi * static_cast<size_t>(nRdfBins);
+                    for(CutoffNeighborFinder::Query q(neighborFinder, i);
+                            !q.atEnd(); q.next()) {
+                        const int bin = static_cast<int>(
+                            static_cast<float>(q.distance()) * invDr);
+                        if(bin >= 0 && bin < nRdfBins)
+                            row[static_cast<size_t>(bin)] += 1.0f;
+                    }
+                    // Normalize by ideal-gas count per shell.
+                    for(int k = 0; k < nRdfBins; ++k)
+                        row[static_cast<size_t>(k)] /= ideal[static_cast<size_t>(k)];
+                });
+            });
+
         } else {
 
-            // ----- 3b. User-selected particle property columns --------------
+            // ----- 3c. User-selected particle property columns --------------
 
             numFeatures = static_cast<int>(columns.size());
             descriptorBuf.resize(M * numFeatures);
