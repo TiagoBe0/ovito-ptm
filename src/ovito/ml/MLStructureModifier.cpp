@@ -317,6 +317,18 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
                 try {
                     loaded = torch::jit::load(pathStr);
                     loaded.eval();
+
+                    // Verify that 'forward' is actually defined. torch::jit::load
+                    // can succeed on a raw checkpoint archive (produced by
+                    // OutputArchive) without defining any methods — in that case
+                    // calling forward() would throw "Method 'forward' is not defined".
+                    bool hasForward = false;
+                    for(const auto& m : loaded.get_methods()) {
+                        if(m.name() == "forward") { hasForward = true; break; }
+                    }
+                    if(!hasForward)
+                        throw std::runtime_error("no forward() method — treat as checkpoint");
+
                     useCheckpoint = false;
                 }
                 catch(...) {

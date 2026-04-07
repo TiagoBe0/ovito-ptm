@@ -362,20 +362,18 @@ static TrainingResult trainMLP(
 
     model->eval();
 
-    // Save a lightweight checkpoint (state tensors) instead of TorchScript.
-    // MLStructureModifier supports this fallback format.
+    // Trace the model to a proper TorchScript module so that
+    // MLStructureModifier can load it with torch::jit::load and call forward().
+    // torch::jit::trace captures the computation graph by running one example
+    // forward pass; the resulting module has a valid 'forward' method.
     try {
-        torch::serialize::OutputArchive archive;
-        archive.write("fc1.weight", model->fc1->weight);
-        archive.write("fc1.bias",   model->fc1->bias);
-        archive.write("fc2.weight", model->fc2->weight);
-        archive.write("fc2.bias",   model->fc2->bias);
-        archive.write("fc3.weight", model->fc3->weight);
-        archive.write("fc3.bias",   model->fc3->bias);
-        archive.save_to(outPath.toStdString());
+        auto exampleInput = torch::zeros(
+            {1, static_cast<int64_t>(numFeatures)}, torch::kFloat32);
+        auto traced = torch::jit::trace(model, {exampleInput});
+        traced.save(outPath.toStdString());
     }
     catch(const c10::Error& e) {
-        throw Exception(QStringLiteral("MLTraining: failed to save model to '%1': %2")
+        throw Exception(QStringLiteral("MLTraining: failed to save TorchScript model to '%1': %2")
             .arg(outPath).arg(QString::fromStdString(e.what())));
     }
 
