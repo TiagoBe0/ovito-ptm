@@ -23,7 +23,10 @@
 #pragma once
 
 #include <ovito/gui/desktop/properties/PropertiesEditor.h>
+#include <QComboBox>
+#include <QGroupBox>
 #include <QLabel>
+#include <QListWidget>
 #include <QPushButton>
 
 namespace Ovito {
@@ -32,11 +35,13 @@ namespace Ovito {
  * \brief Properties editor panel for MLTrainingModifier.
  *
  * Layout:
- *   [Input descriptor]   Cutoff radius, max neighbours, label property
+ *   [Input features]     Mode selector (neighbour distances / property columns)
+ *                        Descriptor params  OR  checkable column list
+ *   [Target (label)]     Combo box populated from integer pipeline properties
  *   [Architecture]       Hidden layer sizes
  *   [Training]           Epochs, learning rate, batch size
  *   [Output]             Model output path (.pt)
- *   [Train button]       "Collect from All Frames & Train"
+ *   [Train button]       "Collect from Current Frame & Train"
  *   [Status label]       Shows last training result
  */
 class MLTrainingModifierEditor : public PropertiesEditor
@@ -51,12 +56,42 @@ private Q_SLOTS:
     /// Triggered when the user clicks the "Collect & Train" button.
     void onTrainClicked();
 
-private:
-    /// Displays the training status (last result or "Not trained yet").
-    QLabel*      _statusLabel  = nullptr;
+    /// Shows/hides descriptor params vs. column list depending on input mode.
+    void onInputModeChanged();
 
-    /// The "Collect from All Frames & Train" button.
-    QPushButton* _trainButton  = nullptr;
+    /// Repopulates the feature-column list from the upstream pipeline state.
+    void updatePropertyList();
+
+    /// Commits checked items to the modifier's inputProperties field.
+    void onPropertyItemChanged(QListWidgetItem* item);
+
+    /// Repopulates the label-property combo from the upstream pipeline state.
+    void updateLabelCombo();
+
+private:
+    /// Input-features section: shown only in NeighborDistances mode.
+    QGroupBox*   _descParamsBox        = nullptr;
+
+    /// Input-features section: shown only in ParticleProperties mode.
+    QGroupBox*   _propSelectBox        = nullptr;
+
+    /// Checkable list of numeric particle properties (feature columns).
+    QListWidget* _propListWidget       = nullptr;
+
+    /// Combo box for selecting the target (label) property.
+    QComboBox*   _labelCombo           = nullptr;
+
+    /// Guard flag to prevent re-entrant list updates.
+    bool         _updatingPropertyList = false;
+
+    /// Guard flag to prevent re-entrant label-combo updates.
+    bool         _updatingLabelCombo   = false;
+
+    /// Displays the training status (last result or "Not trained yet").
+    QLabel*      _statusLabel          = nullptr;
+
+    /// The "Collect from Current Frame & Train" button.
+    QPushButton* _trainButton          = nullptr;
 
     /// Enables/disables the train button based on whether LibTorch is available.
     void updateTrainButtonState();

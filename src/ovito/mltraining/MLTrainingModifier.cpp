@@ -35,8 +35,10 @@ OVITO_CLASSINFO(MLTrainingModifier, "DisplayName",      "NN Training Modifier");
 OVITO_CLASSINFO(MLTrainingModifier, "ModifierCategory", "Structure identification");
 
 // Descriptor / input
+DEFINE_PROPERTY_FIELD(MLTrainingModifier, inputMode);
 DEFINE_PROPERTY_FIELD(MLTrainingModifier, cutoffRadius);
 DEFINE_PROPERTY_FIELD(MLTrainingModifier, numNeighbors);
+DEFINE_PROPERTY_FIELD(MLTrainingModifier, inputProperties);
 DEFINE_PROPERTY_FIELD(MLTrainingModifier, labelProperty);
 
 // Architecture
@@ -52,8 +54,10 @@ DEFINE_PROPERTY_FIELD(MLTrainingModifier, batchSize);
 DEFINE_PROPERTY_FIELD(MLTrainingModifier, outputModelPath);
 
 // UI labels
+SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, inputMode,        "Input mode");
 SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, cutoffRadius,     "Cutoff radius (A)");
 SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, numNeighbors,     "Max neighbors in descriptor");
+SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, inputProperties,  "Input property columns");
 SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, labelProperty,    "Label property");
 SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, hiddenSize1,      "Hidden layer 1 size");
 SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, hiddenSize2,      "Hidden layer 2 size");

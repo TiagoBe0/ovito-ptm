@@ -75,6 +75,13 @@ class OVITO_MLTRAININGPLUGIN_EXPORT MLTrainingModifier : public Modifier
 
 public:
 
+    /// How the per-atom input feature vector is constructed.
+    enum class InputMode {
+        NeighborDistances  = 0,  ///< Sorted normalised neighbour distances (original).
+        ParticleProperties = 1   ///< User-selected particle property columns.
+    };
+    Q_ENUM(InputMode)
+
     /// Human-readable title shown in the pipeline panel.
     virtual QString objectTitle() const override { return tr("NN Training Modifier"); }
 
@@ -88,11 +95,19 @@ public:
     // Descriptor / input parameters
     // -----------------------------------------------------------------------
 
+    /// Selects how the per-atom feature vector is constructed for training.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(MLTrainingModifier::InputMode{MLTrainingModifier::InputMode::NeighborDistances}, inputMode, setInputMode);
+
     /// Cutoff radius used to build sorted normalised neighbour-distance descriptors.
     DECLARE_MODIFIABLE_PROPERTY_FIELD(FloatType{5.0}, cutoffRadius, setCutoffRadius);
 
     /// Maximum number of neighbours included in the descriptor (= input size of the MLP).
     DECLARE_MODIFIABLE_PROPERTY_FIELD(int{16}, numNeighbors, setNumNeighbors);
+
+    /// List of particle property columns to use as input features (ParticleProperties mode).
+    /// Each entry is a PropertyReference name string (e.g. "Voronoi Volume", "Position.X").
+    /// Order matters — the trained model will expect features in the same order.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(QStringList{}, inputProperties, setInputProperties);
 
     /// Name of the upstream particle property used as class labels.
     /// Must be an integer property (e.g. "Structure Type" from PTM).

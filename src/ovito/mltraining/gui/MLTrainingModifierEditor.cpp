@@ -24,20 +24,23 @@
 #include <ovito/mltraining/MLTrainingModifier.h>
 #include <ovito/particles/objects/Particles.h>
 #include <ovito/stdobj/simcell/SimulationCell.h>
+#include <ovito/stdobj/properties/PropertyReference.h>
 #include <ovito/core/dataset/data/BufferAccess.h>
 #include <ovito/core/utilities/concurrent/Launch.h>
 #include <ovito/core/utilities/concurrent/TaskProgress.h>
+#include <ovito/core/app/undo/UndoableTransaction.h>
 #include <ovito/gui/desktop/properties/FilenameParameterUI.h>
 #include <ovito/gui/desktop/properties/FloatParameterUI.h>
 #include <ovito/gui/desktop/properties/IntegerParameterUI.h>
-#include <ovito/gui/desktop/properties/StringParameterUI.h>
 #include <ovito/gui/desktop/properties/ObjectStatusDisplay.h>
 #include <ovito/particles/util/CutoffNeighborFinder.h>
+#include <QButtonGroup>
 #include <QGroupBox>
 #include <QGridLayout>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QMessageBox>
+#include <QRadioButton>
 #include "MLTrainingModifierEditor.h"
 
 // Include LibTorch headers only when the library is available.
@@ -99,10 +102,12 @@ struct TrainingResult
 // ---------------------------------------------------------------------------
 
 static TrainingResult trainMLP(
-    std::vector<PipelineFlowState> states,
-    float      cutoff,
-    int        maxNeighbors,
-    QString    labelPropName,
+    std::vector<PipelineFlowState>    states,
+    MLTrainingModifier::InputMode     inputMode,
+    QStringList                       inputProperties,
+    float                             cutoff,
+    int                               maxNeighbors,
+    QString                           labelPropName,
     int        h1,
     int        h2,
     int        numEpochsArg,
@@ -133,11 +138,22 @@ static TrainingResult trainMLP(
         .arg(states.size()));
     progress.setMaximum(static_cast<qlonglong>(states.size()));
 
-    std::vector<float>   features;   // flattened [totalAtoms, maxNeighbors]
+    std::vector<float>   features;   // flattened [totalAtoms, numFeatures]
     std::vector<int64_t> labels;     // class index per atom
 
-    const int  numFeatures  = maxNeighbors;
+    const bool useNeighDist = (inputMode == MLTrainingModifier::InputMode::NeighborDistances);
+    const int  numFeatures  = useNeighDist
+                                ? maxNeighbors
+                                : static_cast<int>(inputProperties.size());
     const float invCutoff   = 1.0f / cutoff;
+
+    if(!useNeighDist && numFeatures == 0)
+        throw Exception(QStringLiteral(
+            "MLTraining: no input property columns selected.\n"
+            "Please select at least one property column in the modifier panel."));
+
+    // Column descriptor used when resolving property references per frame.
+    struct Column { const Property* prop; int comp; size_t nComp; };
 
     for(size_t fi = 0; fi < states.size(); ++fi) {
         if(this_task::get())
@@ -145,9 +161,9 @@ static TrainingResult trainMLP(
 
         const auto& state = states[fi];
 
-        const Particles*   particles = state.getObject<Particles>();
-        const SimulationCell* simCell = state.getObject<SimulationCell>();
-        if(!particles || !simCell) {
+        const Particles*      particles = state.getObject<Particles>();
+        const SimulationCell* simCell   = state.getObject<SimulationCell>();
+        if(!particles) {
             progress.incrementValueNoCancel();
             continue;
         }
@@ -175,27 +191,79 @@ static TrainingResult trainMLP(
                 labels.push_back(static_cast<int64_t>(labelAccess[i]));
         }
 
-        // Build sorted normalised neighbour-distance descriptors.
-        // The PipelineFlowState in `states` keeps the property data alive.
-        CutoffNeighborFinder nf(static_cast<FloatType>(cutoff), posProp, simCell, nullptr);
-
         const size_t base = features.size();
-        features.resize(base + N * static_cast<size_t>(numFeatures), 1.0f); // default = 1.0 (max dist)
 
-        std::vector<FloatType> dists;
-        dists.reserve(64);
-        for(size_t i = 0; i < N; ++i) {
-            dists.clear();
-            for(CutoffNeighborFinder::Query q(nf, i); !q.atEnd(); q.next())
-                dists.push_back(q.distance());
-            std::sort(dists.begin(), dists.end());
+        if(useNeighDist) {
+            // ------------------------------------------------------------------
+            // NeighborDistances mode: sorted normalised neighbour distances.
+            // Requires a SimulationCell for PBC.
+            // ------------------------------------------------------------------
+            if(!simCell) {
+                // Remove the labels we just added for this frame.
+                labels.resize(labels.size() - N);
+                progress.incrementValueNoCancel();
+                continue;
+            }
 
-            float* row = features.data() + base + i * static_cast<size_t>(numFeatures);
-            const int k = static_cast<int>(
-                std::min(dists.size(), static_cast<size_t>(numFeatures)));
-            for(int j = 0; j < k; ++j)
-                row[j] = static_cast<float>(dists[j]) * invCutoff;
-            // Remaining slots keep the 1.0f default (already set by resize).
+            features.resize(base + N * static_cast<size_t>(numFeatures), 1.0f);
+
+            CutoffNeighborFinder nf(static_cast<FloatType>(cutoff), posProp, simCell, nullptr);
+
+            std::vector<FloatType> dists;
+            dists.reserve(64);
+            for(size_t i = 0; i < N; ++i) {
+                dists.clear();
+                for(CutoffNeighborFinder::Query q(nf, i); !q.atEnd(); q.next())
+                    dists.push_back(q.distance());
+                std::sort(dists.begin(), dists.end());
+
+                float* row = features.data() + base + i * static_cast<size_t>(numFeatures);
+                const int k = static_cast<int>(
+                    std::min(dists.size(), static_cast<size_t>(numFeatures)));
+                for(int j = 0; j < k; ++j)
+                    row[j] = static_cast<float>(dists[j]) * invCutoff;
+                // Remaining slots keep the 1.0f default (already set by resize).
+            }
+        } else {
+            // ------------------------------------------------------------------
+            // ParticleProperties mode: user-selected property columns.
+            // Resolve column references for this frame.
+            // ------------------------------------------------------------------
+            std::vector<Column> cols;
+            cols.reserve(static_cast<size_t>(numFeatures));
+            bool allFound = true;
+            for(const QString& refStr : inputProperties) {
+                PropertyReference ref(refStr);
+                QString errMsg;
+                auto [prop, comp] = ref.findInContainerWithComponent(
+                    particles, errMsg, /*requireComponent=*/false);
+                if(!prop) {
+                    allFound = false;
+                    break;
+                }
+                cols.push_back({prop, comp < 0 ? 0 : comp, prop->componentCount()});
+            }
+
+            if(!allFound) {
+                // Column missing in this frame; skip it.
+                labels.resize(labels.size() - N);
+                progress.incrementValueNoCancel();
+                continue;
+            }
+
+            features.resize(base + N * static_cast<size_t>(numFeatures));
+
+            // Build read accessors (FloatType conversion).
+            std::vector<BufferAccessConvertedTo<float>> accs;
+            accs.reserve(cols.size());
+            for(const auto& col : cols)
+                accs.emplace_back(col.prop);
+
+            for(size_t i = 0; i < N; ++i) {
+                for(int j = 0; j < numFeatures; ++j)
+                    features[base + i * numFeatures + j] = static_cast<float>(
+                        accs[j][i * cols[j].nComp + cols[j].comp]);
+            }
         }
 
         progress.incrementValueNoCancel();
@@ -341,36 +409,144 @@ void MLTrainingModifierEditor::createUI(const RolloutInsertionParameters& rollou
     mainLayout->setSpacing(6);
 
     // -----------------------------------------------------------------------
-    // Input descriptor section
+    // Input features — mode selector
     // -----------------------------------------------------------------------
     {
-        QGroupBox* box = new QGroupBox(tr("Input descriptor"), rollout);
-        QGridLayout* grid = new QGridLayout(box);
+        QGroupBox* box = new QGroupBox(tr("Input features"), rollout);
+        QVBoxLayout* lay = new QVBoxLayout(box);
+        lay->setContentsMargins(4, 4, 4, 4);
+        lay->setSpacing(2);
+
+        QButtonGroup* btnGroup = new QButtonGroup(box);
+        QRadioButton* rbNeigh  = new QRadioButton(tr("Neighbour distances (sorted, normalised)"), box);
+        QRadioButton* rbProp   = new QRadioButton(tr("Particle property columns"), box);
+        btnGroup->addButton(rbNeigh, static_cast<int>(MLTrainingModifier::InputMode::NeighborDistances));
+        btnGroup->addButton(rbProp,  static_cast<int>(MLTrainingModifier::InputMode::ParticleProperties));
+        lay->addWidget(rbNeigh);
+        lay->addWidget(rbProp);
+        mainLayout->addWidget(box);
+
+        connect(btnGroup, &QButtonGroup::idClicked, this, [this](int id) {
+            if(auto* mod = static_cast<MLTrainingModifier*>(editObject())) {
+                UndoableTransaction t;
+                t.begin(ui(), tr("Change input mode"));
+                mod->setInputMode(static_cast<MLTrainingModifier::InputMode>(id));
+                t.commit();
+            }
+            onInputModeChanged();
+        });
+
+        connect(this, &PropertiesEditor::contentsChanged, this, [btnGroup, this]() {
+            if(auto* mod = static_cast<MLTrainingModifier*>(editObject())) {
+                if(auto* btn = btnGroup->button(static_cast<int>(mod->inputMode())))
+                    btn->setChecked(true);
+            }
+            onInputModeChanged();
+        });
+    }
+
+    // -----------------------------------------------------------------------
+    // NeighborDistances parameters (shown only in that mode)
+    // -----------------------------------------------------------------------
+    {
+        _descParamsBox = new QGroupBox(tr("Descriptor parameters"), rollout);
+        QGridLayout* grid = new QGridLayout(_descParamsBox);
         grid->setContentsMargins(4, 4, 4, 4);
         grid->setColumnStretch(1, 1);
         int row = 0;
 
-        // Cutoff radius
         FloatParameterUI* cutoffUI = createParamUI<FloatParameterUI>(
             PROPERTY_FIELD(MLTrainingModifier::cutoffRadius));
         grid->addWidget(cutoffUI->label(), row, 0);
         grid->addLayout(cutoffUI->createFieldLayout(), row, 1);
         ++row;
 
-        // Max neighbours
         IntegerParameterUI* numNeighUI = createParamUI<IntegerParameterUI>(
             PROPERTY_FIELD(MLTrainingModifier::numNeighbors));
         grid->addWidget(numNeighUI->label(), row, 0);
         grid->addLayout(numNeighUI->createFieldLayout(), row, 1);
-        ++row;
 
-        // Label property name
-        StringParameterUI* labelUI = createParamUI<StringParameterUI>(
-            PROPERTY_FIELD(MLTrainingModifier::labelProperty));
-        grid->addWidget(new QLabel(tr("Label property:"), box), row, 0);
-        grid->addWidget(labelUI->textBox(), row, 1);
+        mainLayout->addWidget(_descParamsBox);
+    }
+
+    // -----------------------------------------------------------------------
+    // ParticleProperties column selection (shown only in that mode)
+    // -----------------------------------------------------------------------
+    {
+        _propSelectBox = new QGroupBox(tr("Property columns (features)"), rollout);
+        QVBoxLayout* lay = new QVBoxLayout(_propSelectBox);
+        lay->setContentsMargins(4, 4, 4, 4);
+        lay->setSpacing(4);
+
+        lay->addWidget(new QLabel(
+            tr("Select columns to use as input features.\n"
+               "Order matters — must match when loading the model."), _propSelectBox));
+
+        _propListWidget = new QListWidget(_propSelectBox);
+        _propListWidget->setSelectionMode(QAbstractItemView::NoSelection);
+        _propListWidget->setMinimumHeight(120);
+        lay->addWidget(_propListWidget);
+
+        lay->addWidget(new QLabel(
+            tr("<small>Apply upstream modifiers (e.g. Voronoi Analysis) first "
+               "to see their output columns here.</small>"), _propSelectBox));
+
+        mainLayout->addWidget(_propSelectBox);
+
+        connect(this, &PropertiesEditor::pipelineInputChanged,
+                this, &MLTrainingModifierEditor::updatePropertyList);
+        connect(_propListWidget, &QListWidget::itemChanged,
+                this, &MLTrainingModifierEditor::onPropertyItemChanged);
+    }
+
+    // -----------------------------------------------------------------------
+    // Target (label) property section
+    // -----------------------------------------------------------------------
+    {
+        QGroupBox* box = new QGroupBox(tr("Target (label) property"), rollout);
+        QGridLayout* grid = new QGridLayout(box);
+        grid->setContentsMargins(4, 4, 4, 4);
+        grid->setColumnStretch(1, 1);
+
+        grid->addWidget(new QLabel(tr("Label property:"), box), 0, 0);
+
+        _labelCombo = new QComboBox(box);
+        _labelCombo->setEditable(true);
+        _labelCombo->setInsertPolicy(QComboBox::NoInsert);
+        _labelCombo->setToolTip(tr(
+            "Name of the integer particle property used as class labels.\n"
+            "This list is populated from the upstream pipeline (integer/enum properties)."));
+        grid->addWidget(_labelCombo, 0, 1);
 
         mainLayout->addWidget(box);
+
+        // Repopulate when the pipeline changes.
+        connect(this, &PropertiesEditor::pipelineInputChanged,
+                this, &MLTrainingModifierEditor::updateLabelCombo);
+
+        // Sync combo → modifier when the user changes the selection.
+        connect(_labelCombo, &QComboBox::currentTextChanged, this, [this](const QString& text) {
+            if(_updatingLabelCombo) return;
+            auto* mod = static_cast<MLTrainingModifier*>(editObject());
+            if(!mod || text == mod->labelProperty()) return;
+            UndoableTransaction t;
+            t.begin(ui(), tr("Change label property"));
+            mod->setLabelProperty(text);
+            t.commit();
+        });
+
+        // Sync modifier → combo when contentsChanged fires.
+        connect(this, &PropertiesEditor::contentsChanged, this, [this]() {
+            auto* mod = static_cast<MLTrainingModifier*>(editObject());
+            if(!mod || !_labelCombo) return;
+            _updatingLabelCombo = true;
+            const int idx = _labelCombo->findText(mod->labelProperty());
+            if(idx >= 0)
+                _labelCombo->setCurrentIndex(idx);
+            else
+                _labelCombo->setCurrentText(mod->labelProperty());
+            _updatingLabelCombo = false;
+        });
     }
 
     // -----------------------------------------------------------------------
@@ -481,6 +657,9 @@ void MLTrainingModifierEditor::createUI(const RolloutInsertionParameters& rollou
     mainLayout->addWidget(createParamUI<ObjectStatusDisplay>()->statusWidget());
 
     updateTrainButtonState();
+    onInputModeChanged();
+    updatePropertyList();
+    updateLabelCombo();
 }
 
 // ---------------------------------------------------------------------------
@@ -525,6 +704,8 @@ void MLTrainingModifierEditor::onTrainClicked()
 
     // Capture parameters by value — the modifier might change or be deleted
     // while the async operations are in flight.
+    const MLTrainingModifier::InputMode iMode = mod->inputMode();
+    const QStringList inputProps = mod->inputProperties();
     const float   cutoff     = static_cast<float>(mod->cutoffRadius());
     const int     maxNeigh   = mod->numNeighbors();
     const QString labelProp  = mod->labelProperty();
@@ -536,9 +717,19 @@ void MLTrainingModifierEditor::onTrainClicked()
     const QString outPath    = mod->outputModelPath();
 
     // Validate early
-    if(cutoff <= 0.f) {
+    if(iMode == MLTrainingModifier::InputMode::NeighborDistances && cutoff <= 0.f) {
         QMessageBox::warning(parentWindow(), tr("Invalid parameter"),
             tr("Cutoff radius must be positive."));
+        return;
+    }
+    if(iMode == MLTrainingModifier::InputMode::ParticleProperties && inputProps.isEmpty()) {
+        QMessageBox::warning(parentWindow(), tr("Invalid parameter"),
+            tr("Please select at least one property column as input features."));
+        return;
+    }
+    if(labelProp.trimmed().isEmpty()) {
+        QMessageBox::warning(parentWindow(), tr("Invalid parameter"),
+            tr("Please specify a label property."));
         return;
     }
     if(outPath.isEmpty()) {
@@ -579,11 +770,12 @@ void MLTrainingModifierEditor::onTrainClicked()
 
     auto trainFuture = asyncLaunch(
         [states = std::move(states),
-         cutoff, maxNeigh, labelProp,
+         iMode, inputProps, cutoff, maxNeigh, labelProp,
          h1, h2, epochs, lr, batchSz, outPath]() mutable -> TrainingResult
         {
             return trainMLP(
                 std::move(states),
+                iMode, inputProps,
                 cutoff, maxNeigh, labelProp,
                 h1, h2, epochs, lr, batchSz, outPath);
         });
@@ -608,6 +800,139 @@ void MLTrainingModifierEditor::onTrainClicked()
                 self->_statusLabel->setText(msg);
         });
 #endif // OVITO_ML_HAS_LIBTORCH
+}
+
+// ---------------------------------------------------------------------------
+// onInputModeChanged — show/hide descriptor params vs. column list
+// ---------------------------------------------------------------------------
+
+void MLTrainingModifierEditor::onInputModeChanged()
+{
+    auto* mod = static_cast<MLTrainingModifier*>(editObject());
+    const bool useProps = mod &&
+        mod->inputMode() == MLTrainingModifier::InputMode::ParticleProperties;
+
+    if(_descParamsBox) _descParamsBox->setVisible(!useProps);
+    if(_propSelectBox) _propSelectBox->setVisible(useProps);
+}
+
+// ---------------------------------------------------------------------------
+// updatePropertyList — repopulate feature-column list from first pipeline frame
+// ---------------------------------------------------------------------------
+
+void MLTrainingModifierEditor::updatePropertyList()
+{
+    if(!_propListWidget) return;
+
+    _updatingPropertyList = true;
+
+    QStringList selected;
+    if(auto* mod = static_cast<MLTrainingModifier*>(editObject()))
+        selected = mod->inputProperties();
+
+    _propListWidget->clear();
+
+    for(const PipelineFlowState& state : getPipelineInputs()) {
+        const Particles* particles = state.getObject<Particles>();
+        if(!particles) continue;
+
+        for(const Property* prop : particles->properties()) {
+            int dt = prop->dataType();
+            if(dt != QMetaType::Float   && dt != QMetaType::Double &&
+               dt != QMetaType::Int     && dt != QMetaType::LongLong)
+                continue;
+
+            const size_t nComp = prop->componentCount();
+            const QStringList& compNames = prop->componentNames();
+
+            if(nComp == 1) {
+                PropertyReference ref(prop, -1);
+                QString key = ref.nameWithComponent();
+                auto* item = new QListWidgetItem(prop->name(), _propListWidget);
+                item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+                item->setCheckState(selected.contains(key) ? Qt::Checked : Qt::Unchecked);
+                item->setData(Qt::UserRole, key);
+            } else {
+                for(size_t c = 0; c < nComp; ++c) {
+                    PropertyReference ref(prop, static_cast<int>(c));
+                    QString key = ref.nameWithComponent();
+                    QString label = (c < (size_t)compNames.size())
+                        ? QStringLiteral("%1.%2").arg(prop->name(), compNames[c])
+                        : QStringLiteral("%1.%2").arg(prop->name()).arg(c);
+                    auto* item = new QListWidgetItem(label, _propListWidget);
+                    item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+                    item->setCheckState(selected.contains(key) ? Qt::Checked : Qt::Unchecked);
+                    item->setData(Qt::UserRole, key);
+                }
+            }
+        }
+        break; // Only use the first frame to infer available columns.
+    }
+
+    _updatingPropertyList = false;
+}
+
+// ---------------------------------------------------------------------------
+// onPropertyItemChanged — commit checked columns to inputProperties
+// ---------------------------------------------------------------------------
+
+void MLTrainingModifierEditor::onPropertyItemChanged(QListWidgetItem*)
+{
+    if(_updatingPropertyList) return;
+    auto* mod = static_cast<MLTrainingModifier*>(editObject());
+    if(!mod) return;
+
+    QStringList newList;
+    for(int i = 0; i < _propListWidget->count(); ++i) {
+        QListWidgetItem* it = _propListWidget->item(i);
+        if(it->checkState() == Qt::Checked)
+            newList << it->data(Qt::UserRole).toString();
+    }
+
+    UndoableTransaction t;
+    t.begin(ui(), tr("Change input properties"));
+    mod->setInputProperties(newList);
+    t.commit();
+}
+
+// ---------------------------------------------------------------------------
+// updateLabelCombo — repopulate integer/enum properties for the target
+// ---------------------------------------------------------------------------
+
+void MLTrainingModifierEditor::updateLabelCombo()
+{
+    if(!_labelCombo) return;
+
+    _updatingLabelCombo = true;
+
+    const QString current = _labelCombo->currentText();
+    _labelCombo->clear();
+
+    for(const PipelineFlowState& state : getPipelineInputs()) {
+        const Particles* particles = state.getObject<Particles>();
+        if(!particles) continue;
+
+        for(const Property* prop : particles->properties()) {
+            int dt = prop->dataType();
+            // Show only integer/enum properties — typical for class labels.
+            if(dt == QMetaType::Int || dt == QMetaType::LongLong ||
+               dt == QMetaType::UInt || dt == QMetaType::ULongLong)
+            {
+                if(prop->componentCount() == 1)
+                    _labelCombo->addItem(prop->name());
+            }
+        }
+        break; // Only use first frame.
+    }
+
+    // Restore the previously stored label or the modifier's current value.
+    const int idx = _labelCombo->findText(current);
+    if(idx >= 0)
+        _labelCombo->setCurrentIndex(idx);
+    else
+        _labelCombo->setCurrentText(current);
+
+    _updatingLabelCombo = false;
 }
 
 }  // namespace Ovito
