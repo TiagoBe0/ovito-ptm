@@ -1011,8 +1011,8 @@ void MLTrainingModifierEditor::onTrainClicked()
         _statusLabel->setText(tr("Collecting data from %1 frame(s) (%2 – %3)...")
             .arg(endFr - startFr + 1).arg(startFr).arg(endFr));
 
-    // Capture the modification nodes (obtained on the GUI thread) so the
-    // background task can call evaluateInput() on them.
+    // Use the first modification node.  All nodes share the same upstream pipeline;
+    // if the modifier lives in multiple pipelines the user should train separately.
     QVector<ModificationNode*> nodeList = modificationNodes();
     if(nodeList.isEmpty()) {
         if(_statusLabel)
@@ -1021,52 +1021,33 @@ void MLTrainingModifierEditor::onTrainClicked()
         return;
     }
 
+    // Build the list of animation times to request.
+    std::vector<AnimationTime> times;
+    times.reserve(static_cast<size_t>(endFr - startFr + 1));
+    for(int frame = startFr; frame <= endFr; ++frame)
+        times.push_back(AnimationTime::fromFrame(frame));
+
+    // -----------------------------------------------------------------------
+    // evaluateInputMultiple() is called from the GUI (main) thread — the only
+    // correct way to initiate pipeline evaluation in OVITO.  It returns a
+    // Future<vector<PipelineFlowState>> that OVITO's task system will fulfil
+    // asynchronously.
+    //
+    // We then chain the training step via .then(ThreadPoolExecutor, ...) so
+    // that trainMLP() runs on the thread pool *only after* all frames have
+    // been evaluated.  This avoids calling evaluateInput() from a worker
+    // thread, which is the root cause of the previous crash.
+    // -----------------------------------------------------------------------
+    auto statesFuture = nodeList.first()->evaluateInputMultiple(
+        PipelineEvaluationRequest(AnimationTime::fromFrame(startFr), false, false),
+        std::move(times));
+
     QPointer<MLTrainingModifierEditor> self(this);
-    auto trainFuture = asyncLaunch(
-        [nodeList, startFr, endFr,
-         iMode, inputProps, cutoff, maxNeigh, rdfBinsVal, labelProp,
-         h1, h2, epochs, lr, batchSz, outPath]() mutable -> TrainingResult
-        {
-            // ------------------------------------------------------------------
-            // Phase 0: collect pipeline states for every requested frame.
-            // evaluateInput() / blockForResult() is the same pattern used by
-            // ColorCodingModifier::adjustRangeGlobal() in a background task.
-            // ------------------------------------------------------------------
-            std::vector<PipelineFlowState> allStates;
-            const int numFrames = endFr - startFr + 1;
-
-            const bool hasTaskUi0 = this_task::get()
-                                 && this_task::get()->userInterface();
-            TaskProgress& collectProg = hasTaskUi0
-                ? *new TaskProgress(this_task::get()->userInterface().get())
-                : TaskProgress::Ignore;
-            struct PGuard0 { TaskProgress& r; bool o; ~PGuard0(){ if(o) delete &r; } }
-                g0{collectProg, hasTaskUi0};
-
-            collectProg.setMaximum(static_cast<qlonglong>(numFrames));
-
-            for(int frame = startFr; frame <= endFr; ++frame) {
-                if(this_task::get()) this_task::throwIfCanceled();
-
-                collectProg.setText(QStringLiteral(
-                    "MLTraining: collecting frame %1 / %2...")
-                    .arg(frame - startFr + 1).arg(numFrames));
-
-                for(ModificationNode* node : nodeList) {
-                    PipelineEvaluationResult evalResult =
-                        node->evaluateInput(PipelineEvaluationRequest(
-                            AnimationTime::fromFrame(frame)));
-                    allStates.push_back(evalResult.blockForResult());
-                }
-
-                collectProg.incrementValueNoCancel();
-            }
-
-            // ------------------------------------------------------------------
-            // Phase 1–4: train MLP on all collected states (delegates to
-            // the same trainMLP function used for single-frame training).
-            // ------------------------------------------------------------------
-            return trainMLP(std::move(allStates),
+    auto trainFuture = std::move(statesFuture).then(
+        ThreadPoolExecutor(false),
+        [iMode, inputProps, cutoff, maxNeigh, rdfBinsVal, labelProp,
+         h1, h2, epochs, lr, batchSz, outPath](std::vector<PipelineFlowState> states) -> TrainingResult {
+            return trainMLP(std::move(states),
                 iMode, inputProps, cutoff, maxNeigh, rdfBinsVal, labelProp,
                 h1, h2, epochs, lr, batchSz, outPath);
         });
