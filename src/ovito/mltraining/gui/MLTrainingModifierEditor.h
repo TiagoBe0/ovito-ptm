@@ -28,6 +28,7 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
+#include <QSpinBox>
 
 namespace Ovito {
 
@@ -68,6 +69,9 @@ private Q_SLOTS:
     /// Repopulates the label-property combo from the upstream pipeline state.
     void updateLabelCombo();
 
+    /// Shows/hides the frame-range spinboxes and updates their values from the modifier.
+    void updateFrameCollectionUI();
+
 private:
     /// Input-features section: shown only in NeighborDistances mode.
     QGroupBox*   _descParamsBox        = nullptr;
@@ -90,10 +94,25 @@ private:
     /// Guard flag to prevent re-entrant label-combo updates.
     bool         _updatingLabelCombo   = false;
 
+    /// Guard flag to prevent re-entrant frame-collection UI updates.
+    bool         _updatingFrameUI      = false;
+
+    /// Group box containing the frame-collection mode controls.
+    QGroupBox*   _frameCollectionBox   = nullptr;
+
+    /// Widget that holds the "From / To" spinboxes (shown only in FrameRange mode).
+    QWidget*     _frameRangeWidget     = nullptr;
+
+    /// Spinbox for the first frame of the training range.
+    QSpinBox*    _firstFrameSpin       = nullptr;
+
+    /// Spinbox for the last frame of the training range.
+    QSpinBox*    _lastFrameSpin        = nullptr;
+
     /// Displays the training status (last result or "Not trained yet").
     QLabel*      _statusLabel          = nullptr;
 
-    /// The "Collect from Current Frame & Train" button.
+    /// The "Collect & Train" button.
     QPushButton* _trainButton          = nullptr;
 
     /// Enables/disables the train button based on whether LibTorch is available.

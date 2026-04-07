@@ -54,6 +54,11 @@ DEFINE_PROPERTY_FIELD(MLTrainingModifier, batchSize);
 // Output
 DEFINE_PROPERTY_FIELD(MLTrainingModifier, outputModelPath);
 
+// Frame collection
+DEFINE_PROPERTY_FIELD(MLTrainingModifier, frameCollectionMode);
+DEFINE_PROPERTY_FIELD(MLTrainingModifier, firstTrainingFrame);
+DEFINE_PROPERTY_FIELD(MLTrainingModifier, lastTrainingFrame);
+
 // UI labels
 SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, inputMode,        "Input mode");
 SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, cutoffRadius,     "Cutoff radius (A)");
@@ -67,6 +72,9 @@ SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, numEpochs,        "Training epochs"
 SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, learningRate,     "Learning rate");
 SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, batchSize,        "Batch size (0 = full batch)");
 SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, outputModelPath,  "Output model path (.pt)");
+SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, frameCollectionMode, "Frame collection mode");
+SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, firstTrainingFrame,  "First training frame");
+SET_PROPERTY_FIELD_LABEL(MLTrainingModifier, lastTrainingFrame,   "Last training frame");
 
 // Numeric constraints
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLTrainingModifier, cutoffRadius, WorldParameterUnit, 0);
@@ -75,7 +83,9 @@ SET_PROPERTY_FIELD_UNITS_AND_RANGE(MLTrainingModifier, rdfBins,      IntegerPara
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLTrainingModifier, hiddenSize1, IntegerParameterUnit, 1);
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLTrainingModifier, hiddenSize2, IntegerParameterUnit, 1);
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLTrainingModifier, numEpochs,   IntegerParameterUnit, 1);
-SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLTrainingModifier, batchSize,   IntegerParameterUnit, 0);
+SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLTrainingModifier, batchSize,        IntegerParameterUnit, 0);
+SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLTrainingModifier, firstTrainingFrame, IntegerParameterUnit, 0);
+SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(MLTrainingModifier, lastTrainingFrame,  IntegerParameterUnit, 0);
 
 // ---------------------------------------------------------------------------
 // OOMetaClass::isApplicableTo

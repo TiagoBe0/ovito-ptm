@@ -83,6 +83,14 @@ public:
     };
     Q_ENUM(InputMode)
 
+    /// Which animation frames are used to build the training dataset.
+    enum class FrameCollectionMode {
+        CurrentFrame = 0,  ///< Only the current animation frame (original behaviour).
+        AllFrames    = 1,  ///< Every frame in the loaded animation.
+        FrameRange   = 2   ///< A user-defined inclusive range [firstTrainingFrame, lastTrainingFrame].
+    };
+    Q_ENUM(FrameCollectionMode)
+
     /// Human-readable title shown in the pipeline panel.
     virtual QString objectTitle() const override { return tr("NN Training Modifier"); }
 
@@ -147,6 +155,19 @@ public:
 
     /// Filesystem path where the trained TorchScript model (.pt) is saved.
     DECLARE_MODIFIABLE_PROPERTY_FIELD(QString{"trained_model.pt"}, outputModelPath, setOutputModelPath);
+
+    // -----------------------------------------------------------------------
+    // Frame collection parameters
+    // -----------------------------------------------------------------------
+
+    /// Selects which animation frames contribute to the training dataset.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(MLTrainingModifier::FrameCollectionMode{MLTrainingModifier::FrameCollectionMode::CurrentFrame}, frameCollectionMode, setFrameCollectionMode);
+
+    /// First frame (inclusive) when frameCollectionMode == FrameRange.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(int{0}, firstTrainingFrame, setFirstTrainingFrame);
+
+    /// Last frame (inclusive) when frameCollectionMode == FrameRange.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(int{0}, lastTrainingFrame, setLastTrainingFrame);
 };
 
 }  // namespace Ovito

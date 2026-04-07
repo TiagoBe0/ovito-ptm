@@ -34,6 +34,8 @@
 #include <ovito/gui/desktop/properties/IntegerParameterUI.h>
 #include <ovito/gui/desktop/properties/ObjectStatusDisplay.h>
 #include <ovito/particles/util/CutoffNeighborFinder.h>
+#include <ovito/core/dataset/animation/AnimationSettings.h>
+#include <ovito/core/dataset/pipeline/ModificationNode.h>
 #include <QButtonGroup>
 #include <QGroupBox>
 #include <QGridLayout>
@@ -41,6 +43,7 @@
 #include <QHBoxLayout>
 #include <QMessageBox>
 #include <QRadioButton>
+#include <QSpinBox>
 #include "MLTrainingModifierEditor.h"
 
 // Include LibTorch headers only when the library is available.
@@ -89,6 +92,7 @@ struct TrainingResult
     int     numSamples  = 0;
     int     numClasses  = 0;
     int     numFeatures = 0;
+    int     numFrames   = 0;
     float   finalLoss   = 0.f;
     QString savedPath;
 };
@@ -436,6 +440,7 @@ static TrainingResult trainMLP(
     result.numSamples  = static_cast<int>(totalSamples);
     result.numClasses  = static_cast<int>(numClasses);
     result.numFeatures = numFeatures;
+    result.numFrames   = static_cast<int>(states.size());
     result.finalLoss   = finalLoss;
     result.savedPath   = outPath;
     return result;
@@ -637,6 +642,91 @@ void MLTrainingModifierEditor::createUI(const RolloutInsertionParameters& rollou
     }
 
     // -----------------------------------------------------------------------
+    // Training frames section
+    // -----------------------------------------------------------------------
+    {
+        _frameCollectionBox = new QGroupBox(tr("Training frames"), rollout);
+        QVBoxLayout* lay = new QVBoxLayout(_frameCollectionBox);
+        lay->setContentsMargins(4, 4, 4, 4);
+        lay->setSpacing(4);
+
+        lay->addWidget(new QLabel(
+            tr("<small>Choose which animation frames are used to build\n"
+               "the training dataset. More frames → better generalisation.</small>"),
+            _frameCollectionBox));
+
+        QButtonGroup* btnGroup = new QButtonGroup(_frameCollectionBox);
+        QRadioButton* rbCurrent = new QRadioButton(tr("Current frame only"), _frameCollectionBox);
+        QRadioButton* rbAll     = new QRadioButton(tr("All animation frames"), _frameCollectionBox);
+        QRadioButton* rbRange   = new QRadioButton(tr("Frame range:"), _frameCollectionBox);
+        btnGroup->addButton(rbCurrent, static_cast<int>(MLTrainingModifier::FrameCollectionMode::CurrentFrame));
+        btnGroup->addButton(rbAll,     static_cast<int>(MLTrainingModifier::FrameCollectionMode::AllFrames));
+        btnGroup->addButton(rbRange,   static_cast<int>(MLTrainingModifier::FrameCollectionMode::FrameRange));
+        lay->addWidget(rbCurrent);
+        lay->addWidget(rbAll);
+
+        // Frame-range row: radio + "From N To M" spinboxes
+        _frameRangeWidget = new QWidget(_frameCollectionBox);
+        QHBoxLayout* rangeRow = new QHBoxLayout(_frameRangeWidget);
+        rangeRow->setContentsMargins(0, 0, 0, 0);
+        rangeRow->addWidget(rbRange);
+        rangeRow->addWidget(new QLabel(tr("From:"), _frameRangeWidget));
+        _firstFrameSpin = new QSpinBox(_frameRangeWidget);
+        _firstFrameSpin->setRange(0, 999999);
+        _firstFrameSpin->setToolTip(tr("Index of the first animation frame to include in training."));
+        rangeRow->addWidget(_firstFrameSpin);
+        rangeRow->addWidget(new QLabel(tr("To:"), _frameRangeWidget));
+        _lastFrameSpin = new QSpinBox(_frameRangeWidget);
+        _lastFrameSpin->setRange(0, 999999);
+        _lastFrameSpin->setToolTip(tr("Index of the last animation frame to include in training (inclusive)."));
+        rangeRow->addWidget(_lastFrameSpin);
+        rangeRow->addStretch(1);
+        lay->addWidget(_frameRangeWidget);
+
+        mainLayout->addWidget(_frameCollectionBox);
+
+        // --- radio → modifier ---
+        connect(btnGroup, &QButtonGroup::idClicked, this, [this](int id) {
+            if(auto* mod = static_cast<MLTrainingModifier*>(editObject())) {
+                UndoableTransaction t;
+                t.begin(ui(), tr("Change frame collection mode"));
+                mod->setFrameCollectionMode(static_cast<MLTrainingModifier::FrameCollectionMode>(id));
+                t.commit();
+            }
+            updateFrameCollectionUI();
+        });
+
+        // --- spinboxes → modifier ---
+        connect(_firstFrameSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int val) {
+            if(_updatingFrameUI) return;
+            if(auto* mod = static_cast<MLTrainingModifier*>(editObject())) {
+                UndoableTransaction t;
+                t.begin(ui(), tr("Change first training frame"));
+                mod->setFirstTrainingFrame(val);
+                t.commit();
+            }
+        });
+        connect(_lastFrameSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int val) {
+            if(_updatingFrameUI) return;
+            if(auto* mod = static_cast<MLTrainingModifier*>(editObject())) {
+                UndoableTransaction t;
+                t.begin(ui(), tr("Change last training frame"));
+                mod->setLastTrainingFrame(val);
+                t.commit();
+            }
+        });
+
+        // --- modifier → UI sync ---
+        connect(this, &PropertiesEditor::contentsChanged, this, [btnGroup, this]() {
+            if(auto* mod = static_cast<MLTrainingModifier*>(editObject())) {
+                if(auto* btn = btnGroup->button(static_cast<int>(mod->frameCollectionMode())))
+                    btn->setChecked(true);
+            }
+            updateFrameCollectionUI();
+        });
+    }
+
+    // -----------------------------------------------------------------------
     // MLP architecture section
     // -----------------------------------------------------------------------
     {
@@ -719,15 +809,15 @@ void MLTrainingModifierEditor::createUI(const RolloutInsertionParameters& rollou
         lay->setSpacing(6);
 
         lay->addWidget(new QLabel(
-            tr("<small>Evaluates the upstream pipeline at the current frame,\n"
+            tr("<small>Evaluates the upstream pipeline at the selected frame(s),\n"
                "collects per-atom descriptors and labels, trains a 3-layer MLP,\n"
                "and saves the model as a .pt file.</small>"),
             box));
 
-        _trainButton = new QPushButton(tr("Collect from Current Frame && Train"), box);
+        _trainButton = new QPushButton(tr("Collect && Train"), box);
         _trainButton->setToolTip(tr(
-            "Evaluate the current animation frame, extract neighbour-distance\n"
-            "descriptors and integer class labels, train the MLP, and save\n"
+            "Evaluate the selected animation frame(s), extract descriptors\n"
+            "and integer class labels, train the MLP, and save\n"
             "the model to the specified output path."));
         lay->addWidget(_trainButton);
         connect(_trainButton, &QPushButton::clicked, this, &MLTrainingModifierEditor::onTrainClicked);
@@ -747,6 +837,7 @@ void MLTrainingModifierEditor::createUI(const RolloutInsertionParameters& rollou
     onInputModeChanged();
     updatePropertyList();
     updateLabelCombo();
+    updateFrameCollectionUI();
 }
 
 // ---------------------------------------------------------------------------
@@ -757,12 +848,11 @@ void MLTrainingModifierEditor::updateTrainButtonState()
 {
     if(!_trainButton) return;
 #ifdef OVITO_ML_HAS_LIBTORCH
-    _trainButton->setText(tr("Collect from Current Frame && Train"));
     _trainButton->setEnabled(true);
     _trainButton->setToolTip(_trainButton->toolTip()); // keep existing tooltip
 #else
     // Keep the button clickable so users get an explicit explanation dialog.
-    _trainButton->setText(tr("Collect from Current Frame && Train (Unavailable)"));
+    _trainButton->setText(tr("Collect && Train (Unavailable)"));
     _trainButton->setEnabled(true);
     _trainButton->setToolTip(tr("LibTorch is not available in this build.\n"
         "Click for details on how to enable training support."));
@@ -827,66 +917,178 @@ void MLTrainingModifierEditor::onTrainClicked()
         return;
     }
 
-    if(_statusLabel)
-        _statusLabel->setText(tr("Collecting data from the current frame..."));
+    // Determine frame collection mode and range.
+    const MLTrainingModifier::FrameCollectionMode iFrameMode = mod->frameCollectionMode();
 
     // -----------------------------------------------------------------------
-    // Get the cached upstream pipeline data for the current frame.
-    //
-    // getPipelineInput() returns the already-evaluated PipelineFlowState
-    // synchronously, avoiding the problematic async evaluation patterns.
+    // CurrentFrame path: fast, uses the already-evaluated cached pipeline state.
     // -----------------------------------------------------------------------
-    PipelineFlowState state = getPipelineInput();
+    if(iFrameMode == MLTrainingModifier::FrameCollectionMode::CurrentFrame) {
 
-    if(state.status().type() == PipelineStatus::Error || !state) {
         if(_statusLabel)
-            _statusLabel->setText(tr("Error: no valid pipeline data for the current frame.\n"
-                                     "Make sure at least one file is loaded and a modifier producing '%1' is upstream.")
-                                     .arg(labelProp));
+            _statusLabel->setText(tr("Collecting data from the current frame..."));
+
+        PipelineFlowState state = getPipelineInput();
+        if(state.status().type() == PipelineStatus::Error || !state) {
+            if(_statusLabel)
+                _statusLabel->setText(tr("Error: no valid pipeline data for the current frame.\n"
+                                         "Make sure at least one file is loaded and a modifier producing '%1' is upstream.")
+                                         .arg(labelProp));
+            return;
+        }
+
+        if(_statusLabel)
+            _statusLabel->setText(tr("Training MLP on current frame..."));
+
+        std::vector<PipelineFlowState> states;
+        states.push_back(std::move(state));
+
+        QPointer<MLTrainingModifierEditor> self(this);
+        auto trainFuture = asyncLaunch(
+            [states = std::move(states),
+             iMode, inputProps, cutoff, maxNeigh, rdfBinsVal, labelProp,
+             h1, h2, epochs, lr, batchSz, outPath]() mutable -> TrainingResult
+            {
+                return trainMLP(std::move(states),
+                    iMode, inputProps, cutoff, maxNeigh, rdfBinsVal, labelProp,
+                    h1, h2, epochs, lr, batchSz, outPath);
+            });
+
+        scheduleOperationAfter(std::move(trainFuture),
+            [self](TrainingResult result) {
+                if(!self) return;
+                if(self->_statusLabel)
+                    self->_statusLabel->setText(QStringLiteral(
+                        "Training complete!\n"
+                        "  Frames  : %1\n"
+                        "  Samples : %2\n"
+                        "  Classes : %3\n"
+                        "  Features: %4\n"
+                        "  Final loss: %5\n"
+                        "  Saved to: %6")
+                        .arg(result.numFrames)
+                        .arg(result.numSamples)
+                        .arg(result.numClasses)
+                        .arg(result.numFeatures)
+                        .arg(static_cast<double>(result.finalLoss), 0, 'f', 6)
+                        .arg(result.savedPath));
+            });
+
+        return;
+    }
+
+    // -----------------------------------------------------------------------
+    // AllFrames / FrameRange path: evaluate the pipeline at every selected
+    // frame inside a background task, then train on all collected states.
+    //
+    // We capture the modifier raw pointer (same pattern as
+    // ColorCodingModifierEditor::onAdjustRangeGlobal) — the ProgressDialog
+    // shown by scheduleOperationAfter blocks user interaction, so the modifier
+    // cannot be deleted while the task is running.
+    // -----------------------------------------------------------------------
+
+    // Determine start/end frame.
+    int startFr = 0, endFr = 0;
+    if(iFrameMode == MLTrainingModifier::FrameCollectionMode::AllFrames) {
+        if(AnimationSettings* anim = datasetContainer().activeAnimationSettings()) {
+            startFr = anim->firstFrame();
+            endFr   = anim->lastFrame();
+        }
+    } else {
+        // FrameRange
+        startFr = mod->firstTrainingFrame();
+        endFr   = mod->lastTrainingFrame();
+        if(endFr < startFr) std::swap(startFr, endFr);
+    }
+
+    if(startFr > endFr) {
+        QMessageBox::warning(parentWindow(), tr("Invalid frame range"),
+            tr("The frame range is empty. Please set a valid start and end frame."));
         return;
     }
 
     if(_statusLabel)
-        _statusLabel->setText(tr("Training MLP on current frame..."));
+        _statusLabel->setText(tr("Collecting data from %1 frame(s) (%2 – %3)...")
+            .arg(endFr - startFr + 1).arg(startFr).arg(endFr));
 
-    // Build single-element states vector and launch training in a
-    // background thread via asyncLaunch so that this_task::ui() and
-    // TaskProgress work correctly.
-    std::vector<PipelineFlowState> states;
-    states.push_back(std::move(state));
+    // Capture the modification nodes (obtained on the GUI thread) so the
+    // background task can call evaluateInput() on them.
+    QVector<ModificationNode*> nodeList = modificationNodes();
+    if(nodeList.isEmpty()) {
+        if(_statusLabel)
+            _statusLabel->setText(tr("Error: no modification node found. "
+                                     "Make sure the modifier is part of a pipeline."));
+        return;
+    }
 
     QPointer<MLTrainingModifierEditor> self(this);
-
     auto trainFuture = asyncLaunch(
-        [states = std::move(states),
+        [nodeList, startFr, endFr,
          iMode, inputProps, cutoff, maxNeigh, rdfBinsVal, labelProp,
          h1, h2, epochs, lr, batchSz, outPath]() mutable -> TrainingResult
         {
-            return trainMLP(
-                std::move(states),
-                iMode, inputProps,
-                cutoff, maxNeigh, rdfBinsVal, labelProp,
+            // ------------------------------------------------------------------
+            // Phase 0: collect pipeline states for every requested frame.
+            // evaluateInput() / blockForResult() is the same pattern used by
+            // ColorCodingModifier::adjustRangeGlobal() in a background task.
+            // ------------------------------------------------------------------
+            std::vector<PipelineFlowState> allStates;
+            const int numFrames = endFr - startFr + 1;
+
+            const bool hasTaskUi0 = this_task::get()
+                                 && this_task::get()->userInterface();
+            TaskProgress& collectProg = hasTaskUi0
+                ? *new TaskProgress(this_task::get()->userInterface().get())
+                : TaskProgress::Ignore;
+            struct PGuard0 { TaskProgress& r; bool o; ~PGuard0(){ if(o) delete &r; } }
+                g0{collectProg, hasTaskUi0};
+
+            collectProg.setMaximum(static_cast<qlonglong>(numFrames));
+
+            for(int frame = startFr; frame <= endFr; ++frame) {
+                if(this_task::get()) this_task::throwIfCanceled();
+
+                collectProg.setText(QStringLiteral(
+                    "MLTraining: collecting frame %1 / %2...")
+                    .arg(frame - startFr + 1).arg(numFrames));
+
+                for(ModificationNode* node : nodeList) {
+                    PipelineEvaluationResult evalResult =
+                        node->evaluateInput(PipelineEvaluationRequest(
+                            AnimationTime::fromFrame(frame)));
+                    allStates.push_back(evalResult.blockForResult());
+                }
+
+                collectProg.incrementValueNoCancel();
+            }
+
+            // ------------------------------------------------------------------
+            // Phase 1–4: train MLP on all collected states (delegates to
+            // the same trainMLP function used for single-frame training).
+            // ------------------------------------------------------------------
+            return trainMLP(std::move(allStates),
+                iMode, inputProps, cutoff, maxNeigh, rdfBinsVal, labelProp,
                 h1, h2, epochs, lr, batchSz, outPath);
         });
 
     scheduleOperationAfter(std::move(trainFuture),
         [self](TrainingResult result) {
             if(!self) return;
-            const QString msg = QStringLiteral(
-                "Training complete!\n"
-                "  Samples : %1\n"
-                "  Classes : %2\n"
-                "  Features: %3\n"
-                "  Final loss: %4\n"
-                "  Saved to: %5")
-                .arg(result.numSamples)
-                .arg(result.numClasses)
-                .arg(result.numFeatures)
-                .arg(static_cast<double>(result.finalLoss), 0, 'f', 6)
-                .arg(result.savedPath);
-
             if(self->_statusLabel)
-                self->_statusLabel->setText(msg);
+                self->_statusLabel->setText(QStringLiteral(
+                    "Training complete!\n"
+                    "  Frames  : %1\n"
+                    "  Samples : %2\n"
+                    "  Classes : %3\n"
+                    "  Features: %4\n"
+                    "  Final loss: %5\n"
+                    "  Saved to: %6")
+                    .arg(result.numFrames)
+                    .arg(result.numSamples)
+                    .arg(result.numClasses)
+                    .arg(result.numFeatures)
+                    .arg(static_cast<double>(result.finalLoss), 0, 'f', 6)
+                    .arg(result.savedPath));
         });
 #endif // OVITO_ML_HAS_LIBTORCH
 }
@@ -1035,6 +1237,30 @@ void MLTrainingModifierEditor::updateLabelCombo()
         _labelCombo->setCurrentText(current);
 
     _updatingLabelCombo = false;
+}
+
+// ---------------------------------------------------------------------------
+// updateFrameCollectionUI — show/hide spinboxes and sync values from modifier
+// ---------------------------------------------------------------------------
+
+void MLTrainingModifierEditor::updateFrameCollectionUI()
+{
+    if(!_frameRangeWidget || !_firstFrameSpin || !_lastFrameSpin) return;
+
+    auto* mod = static_cast<MLTrainingModifier*>(editObject());
+    const bool isRange = mod &&
+        mod->frameCollectionMode() == MLTrainingModifier::FrameCollectionMode::FrameRange;
+
+    _frameRangeWidget->setVisible(true); // always visible so the radio button is shown
+    _firstFrameSpin->setEnabled(isRange);
+    _lastFrameSpin->setEnabled(isRange);
+
+    if(mod) {
+        _updatingFrameUI = true;
+        _firstFrameSpin->setValue(mod->firstTrainingFrame());
+        _lastFrameSpin->setValue(mod->lastTrainingFrame());
+        _updatingFrameUI = false;
+    }
 }
 
 }  // namespace Ovito
