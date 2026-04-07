@@ -899,7 +899,7 @@ void MLTrainingModifierEditor::onPropertyItemChanged(QListWidgetItem*)
 }
 
 // ---------------------------------------------------------------------------
-// updateLabelCombo — repopulate integer/enum properties for the target
+// updateLabelCombo — repopulate all numeric scalar properties for the target
 // ---------------------------------------------------------------------------
 
 void MLTrainingModifierEditor::updateLabelCombo()
@@ -908,7 +908,12 @@ void MLTrainingModifierEditor::updateLabelCombo()
 
     _updatingLabelCombo = true;
 
-    const QString current = _labelCombo->currentText();
+    // Remember what was previously selected (or what the modifier stores).
+    QString current = _labelCombo->currentText();
+    if(current.isEmpty()) {
+        if(auto* mod = static_cast<MLTrainingModifier*>(editObject()))
+            current = mod->labelProperty();
+    }
     _labelCombo->clear();
 
     for(const PipelineFlowState& state : getPipelineInputs()) {
@@ -916,16 +921,19 @@ void MLTrainingModifierEditor::updateLabelCombo()
         if(!particles) continue;
 
         for(const Property* prop : particles->properties()) {
-            int dt = prop->dataType();
-            // Show only integer/enum properties — typical for class labels.
-            if(dt == QMetaType::Int || dt == QMetaType::LongLong ||
-               dt == QMetaType::UInt || dt == QMetaType::ULongLong)
-            {
-                if(prop->componentCount() == 1)
-                    _labelCombo->addItem(prop->name());
-            }
+            // Show all scalar (single-component) numeric properties.
+            // Integer properties are typical class labels; float properties
+            // produced by Voronoi or other modifiers can also be used when
+            // their values happen to be integer-valued class indices.
+            const int dt = prop->dataType();
+            const bool isNumeric =
+                dt == QMetaType::Float    || dt == QMetaType::Double  ||
+                dt == QMetaType::Int      || dt == QMetaType::LongLong ||
+                dt == QMetaType::UInt     || dt == QMetaType::ULongLong;
+            if(isNumeric && prop->componentCount() == 1)
+                _labelCombo->addItem(prop->name());
         }
-        break; // Only use first frame.
+        break; // Only use first frame — all frames assumed identical.
     }
 
     // Restore the previously stored label or the modifier's current value.
