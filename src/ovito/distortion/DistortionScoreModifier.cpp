@@ -185,16 +185,6 @@ Future<PipelineFlowState> DistortionScoreModifier::evaluateModifier(
         _modelCacheSlot = std::make_shared<MCDModelCache>();
     std::shared_ptr<void> cacheVoid = _modelCacheSlot;
 
-    // Pre-allocate output properties on the calling thread.
-    Property* scoreProp  = particles->createProperty(
-        DataBuffer::Initialized, QStringLiteral("DistortionScore_MCD"),
-        Property::FloatDefault, 1);
-    Property* defectProp = particles->createProperty(
-        DataBuffer::Initialized, QStringLiteral("IsDefect_MCD"),
-        Property::Int32, 1);
-    defectProp->addNumericType(Particles::OOClass(), 0, QStringLiteral("Normal"));
-    defectProp->addNumericType(Particles::OOClass(), 1, QStringLiteral("Defect"));
-
     // --- Background task ----------------------------------------------------
 
     return asyncLaunch([
@@ -202,7 +192,6 @@ Future<PipelineFlowState> DistortionScoreModifier::evaluateModifier(
             simCell, particles, posProp,
             N, maxK, cutoff, thresh,
             mPath = mPath.toStdString(),
-            scoreProp, defectProp,
             cacheVoid
         ]() mutable -> PipelineFlowState
     {
@@ -271,9 +260,18 @@ Future<PipelineFlowState> DistortionScoreModifier::evaluateModifier(
 
         progress.setText(tr("Distortion Score: computing distortion scores…"));
 
+        Property* scoreProp  = particles->createProperty(
+            DataBuffer::Uninitialized, QStringLiteral("DistortionScore_MCD"),
+            Property::FloatDefault, 1);
+        Property* defectProp = particles->createProperty(
+            DataBuffer::Uninitialized, QStringLiteral("IsDefect_MCD"),
+            Property::Int32, 1);
+        defectProp->addNumericType(Particles::OOClass(), 0, QStringLiteral("Normal"));
+        defectProp->addNumericType(Particles::OOClass(), 1, QStringLiteral("Defect"));
+
         {
-            BufferWriteAccess<FloatType, access_mode::read_write> scoreAcc(scoreProp);
-            BufferWriteAccess<int32_t,  access_mode::read_write> defectAcc(defectProp);
+            BufferWriteAccess<FloatType, access_mode::discard_write> scoreAcc(scoreProp);
+            BufferWriteAccess<int32_t,  access_mode::discard_write> defectAcc(defectProp);
 
             parallelFor(N, /*chunkSize=*/512, progress, [&](size_t i) {
                 const float* xi = descriptors.data() + i * static_cast<size_t>(maxK);
