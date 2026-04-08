@@ -120,6 +120,8 @@ public:
 
     /// Type-erased pointer to the cached MCDModelCache struct.
     /// Shared with background evaluation tasks; the pointee carries its own mutex.
+    // public: is needed because DECLARE_MODIFIABLE_PROPERTY_FIELD ends with private:
+public:
     std::shared_ptr<void> _modelCacheSlot;
 };
 
