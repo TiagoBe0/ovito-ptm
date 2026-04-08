@@ -11,6 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////
 
 #include <ovito/core/dataset/DataSet.h>
+#include <ovito/core/dataset/pipeline/ModificationNode.h>
 #include <ovito/core/dataset/pipeline/ModifierEvaluationRequest.h>
 #include <ovito/core/dataset/data/BufferAccess.h>
 #include <ovito/core/utilities/units/UnitsManager.h>
