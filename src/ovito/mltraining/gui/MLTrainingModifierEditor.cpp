@@ -157,7 +157,7 @@ static TrainingResult trainMLP(
         }
 
         const size_t N = posProp->size();
-        if(N == 0) {
+        if(N == 0 || labelPropObj->size() != N) {
             progress.incrementValue();
             continue;
         }
@@ -450,16 +450,16 @@ void MLTrainingModifierEditor::createUI(const RolloutInsertionParameters& rollou
         lay->setSpacing(6);
 
         lay->addWidget(new QLabel(
-            tr("<small>Evaluates the upstream pipeline at every animation frame,\n"
+            tr("<small>Evaluates the upstream pipeline at the current frame,\n"
                "collects per-atom descriptors and labels, trains a 3-layer MLP,\n"
-               "and saves the model as a TorchScript .pt file.</small>"),
+               "and saves the model to the specified output path.</small>"),
             box));
 
-        _trainButton = new QPushButton(tr("Collect from All Frames && Train"), box);
+        _trainButton = new QPushButton(tr("Train from Current Frame"), box);
         _trainButton->setToolTip(tr(
-            "Iterate over all animation frames, extract neighbour-distance\n"
-            "descriptors and integer class labels, train the MLP, and save\n"
-            "the TorchScript model to the specified output path."));
+            "Extract neighbour-distance descriptors and integer class labels\n"
+            "from the currently loaded .dump file, train the MLP, and save\n"
+            "the model to the specified output path."));
         lay->addWidget(_trainButton);
         connect(_trainButton, &QPushButton::clicked, this, &MLTrainingModifierEditor::onTrainClicked);
 
@@ -485,12 +485,12 @@ void MLTrainingModifierEditor::updateTrainButtonState()
 {
     if(!_trainButton) return;
 #ifdef OVITO_ML_HAS_LIBTORCH
-    _trainButton->setText(tr("Collect from All Frames && Train"));
+    _trainButton->setText(tr("Train from Current Frame"));
     _trainButton->setEnabled(true);
     _trainButton->setToolTip(_trainButton->toolTip()); // keep existing tooltip
 #else
     // Keep the button clickable so users get an explicit explanation dialog.
-    _trainButton->setText(tr("Collect from All Frames && Train (Unavailable)"));
+    _trainButton->setText(tr("Train from Current Frame (Unavailable)"));
     _trainButton->setEnabled(true);
     _trainButton->setToolTip(tr("LibTorch is not available in this build.\n"
         "Click for details on how to enable training support."));
@@ -521,27 +521,14 @@ void MLTrainingModifierEditor::onTrainClicked()
     if(!node) return;
 
     // -----------------------------------------------------------------------
-    // Collect animation frame times
+    // Use only the current animation frame (single .dump file)
     // -----------------------------------------------------------------------
     AnimationSettings* anim = nullptr;
     if(Scene* scene = datasetContainer().activeScene())
         anim = scene->animationSettings();
     if(!anim) return;
 
-    const int firstFrame = anim->firstFrame();
-    const int lastFrame  = anim->lastFrame();
-
-    if(firstFrame > lastFrame) {
-        QMessageBox::warning(parentWindow(),
-            tr("No frames"),
-            tr("The animation interval is empty. Load at least one .dump file first."));
-        return;
-    }
-
-    std::vector<AnimationTime> times;
-    times.reserve(static_cast<size_t>(lastFrame - firstFrame + 1));
-    for(int f = firstFrame; f <= lastFrame; ++f)
-        times.push_back(AnimationTime::fromFrame(f));
+    std::vector<AnimationTime> times = { anim->currentTime() };
 
     // Capture parameters by value — the modifier might change or be deleted
     // while the async operations are in flight.
@@ -568,7 +555,7 @@ void MLTrainingModifierEditor::onTrainClicked()
     }
 
     if(_statusLabel)
-        _statusLabel->setText(tr("Collecting data from %1 frames...").arg(times.size()));
+        _statusLabel->setText(tr("Collecting data from current frame..."));
 
     // -----------------------------------------------------------------------
     // Step 1: evaluate the upstream pipeline at every frame.
@@ -596,7 +583,7 @@ void MLTrainingModifierEditor::onTrainClicked()
         }
 
         if(_statusLabel)
-            _statusLabel->setText(tr("Training MLP on %1 frames...").arg(states.size()));
+            _statusLabel->setText(tr("Training MLP..."));
 
         // -----------------------------------------------------------------------
         // Step 2: feature extraction + training in a background thread.
@@ -609,9 +596,23 @@ void MLTrainingModifierEditor::onTrainClicked()
              cutoff, maxNeigh, labelProp,
              h1, h2, epochs, lr, batchSz, outPath]() mutable -> TrainingResult
             {
-                return trainMLP(std::move(states),
-                                cutoff, maxNeigh, labelProp,
-                                h1, h2, epochs, lr, batchSz, outPath);
+                // Catch any non-OVITO exception (e.g. c10::Error from LibTorch) and
+                // convert it to an OVITO Exception so it is handled gracefully by
+                // handleExceptions() — which is noexcept and only catches Exception.
+                // Without this, std::terminate would be called and the app would close.
+                try {
+                    return trainMLP(std::move(states),
+                                    cutoff, maxNeigh, labelProp,
+                                    h1, h2, epochs, lr, batchSz, outPath);
+                }
+                catch(const Exception&) { throw; }
+                catch(const std::exception& e) {
+                    throw Exception(QStringLiteral("MLTraining: %1")
+                        .arg(QString::fromStdString(e.what())));
+                }
+                catch(...) {
+                    throw Exception(QStringLiteral("MLTraining: unknown error during training."));
+                }
             });
 
         // Wrap self in a QPointer so the continuation is safe even if the
