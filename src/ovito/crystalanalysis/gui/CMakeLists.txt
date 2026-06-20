@@ -29,6 +29,7 @@ OVITO_STANDARD_PLUGIN(CrystalAnalysisGui
         objects/DislocationNetworkEditor.cpp
         objects/DislocationVisEditor.cpp
         modifier/DislocationAnalysisModifierEditor.cpp
+        modifier/DislocationTrackingModifierEditor.cpp
         modifier/ElasticStrainModifierEditor.cpp
         modifier/GrainSegmentationModifierEditor.cpp
         util/DislocationInspectionApplet.cpp

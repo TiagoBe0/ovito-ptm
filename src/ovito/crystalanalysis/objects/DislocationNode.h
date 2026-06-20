@@ -152,6 +152,11 @@ struct DislocationSegment
     /// A user-defined color assigned to the dislocation segment.
     Color customColor = Color(-1, -1, -1);
 
+    /// Persistent identifier of the dislocation track this segment belongs to across the trajectory.
+    /// A value of -1 means the segment has not been assigned to any track (default).
+    /// This field is filled in by the DislocationTrackingModifier.
+    int trackId = -1;
+
     /// Constructs a new dislocation segment with the given Burgers vector
     /// and connecting the two dislocation nodes.
     DislocationSegment(const ClusterVector& b, DislocationNode* forwardNode, DislocationNode* backwardNode) : burgersVector(b) {

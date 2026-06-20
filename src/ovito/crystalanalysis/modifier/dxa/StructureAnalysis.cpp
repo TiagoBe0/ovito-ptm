@@ -24,6 +24,7 @@
 #include <ovito/particles/util/NearestNeighborFinder.h>
 #include <ovito/particles/modifier/analysis/cna/CommonNeighborAnalysisModifier.h>
 #include <ovito/core/utilities/concurrent/ParallelFor.h>
+#include <ovito/core/utilities/concurrent/EnumerableThreadSpecific.h>
 #include <ovito/core/utilities/concurrent/Task.h>
 #include "StructureAnalysis.h"
 #include "DislocationAnalysisModifier.h"
@@ -536,32 +537,39 @@ void StructureAnalysis::identifyStructuresPTM(TaskProgress& progress, const Simu
 
     size_t n = positions()->size();
 
+    // A thread-local PTM kernel is created for each worker thread (the kernel holds per-atom
+    // scratch state and must not be shared between threads).
+    EnumerableThreadSpecific<PTMAlgorithm::Kernel> ptmKernels;
+
     // Pass 1: Cache topological neighbor orderings for all atoms (required by multi-shell structures).
     std::vector<uint64_t> cachedNeighbors(n, 0);
-    {
-        PTMAlgorithm::Kernel kernel(ptm);
-        for(size_t i = 0; i < n; i++) {
+    parallelForInnerOuter(n, 1024, progress, [&](auto&& iterate) {
+        PTMAlgorithm::Kernel& kernel = ptmKernels.create(ptm);
+        iterate([&](size_t i) {
+            if(_particleSelection && _particleSelection[i] == 0)
+                return;
             kernel.cacheNeighbors(i, &cachedNeighbors[i]);
-        }
-    }
+        });
+    });
 
     // Pass 2: Identify the structure type and fill the neighbor list for each atom.
     _maximumNeighborDistance = 0;
-    PTMAlgorithm::Kernel kernel(ptm);
-    for(size_t particleIndex = 0; particleIndex < n; particleIndex++) {
+    parallelForInnerOuter(n, 1024, progress, [&](auto&& iterate) {
+        PTMAlgorithm::Kernel& kernel = ptmKernels.create(ptm);
+        iterate([&](size_t particleIndex) {
 
         // Skip atoms excluded by the particle selection.
         if(_particleSelection && _particleSelection[particleIndex] == 0)
-            continue;
+            return;
 
         PTMAlgorithm::StructureType ptmType = kernel.identifyStructure(particleIndex, cachedNeighbors);
 
         if(ptmType == PTMAlgorithm::OTHER)
-            continue;
+            return;
 
         CoordinationStructureType coordType = ptmTypeToCoordType(ptmType);
         if(coordType == COORD_OTHER)
-            continue;
+            return;
 
         // Determine number of template neighbors for this structure type.
         int numNeighbors;
@@ -571,7 +579,7 @@ void StructureAnalysis::identifyStructuresPTM(TaskProgress& progress, const Simu
             case COORD_BCC:           numNeighbors = 14; break;
             case COORD_CUBIC_DIAMOND: numNeighbors = 16; break;
             case COORD_HEX_DIAMOND:   numNeighbors = 16; break;
-            default: continue;
+            default: return;
         }
 
         // Access the atomic environment produced by PTM (output_env after ptm_index).
@@ -581,11 +589,10 @@ void StructureAnalysis::identifyStructuresPTM(TaskProgress& progress, const Simu
 
         // Verify we have enough points (center + numNeighbors).
         if(env.num < numNeighbors + 1)
-            continue;
+            return;
 
         // Fill the neighbor list in template order and compute the maximum neighbor distance.
         FloatType maxNeighborDist = 0;
-        bool valid = true;
         for(int slot = 0; slot < numNeighbors; slot++) {
             int envIdx = slot + 1;  // template position: 0=center, 1..N=neighbors
 
@@ -608,16 +615,14 @@ void StructureAnalysis::identifyStructuresPTM(TaskProgress& progress, const Simu
             if(dist > maxNeighborDist) maxNeighborDist = dist;
         }
 
-        if(!valid)
-            continue;
-
         // Assign the identified structure type.
         _structureTypesArray[particleIndex] = coordType;
 
         // Thread-safe update of the maximum neighbor distance.
         FloatType prev_value = _maximumNeighborDistance;
         while(prev_value < maxNeighborDist && !_maximumNeighborDistance.compare_exchange_weak(prev_value, maxNeighborDist)) {}
-    }
+        });
+    });
 }
 
 /******************************************************************************

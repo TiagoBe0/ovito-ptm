@@ -36,6 +36,7 @@ SET(SourceFiles
     modifier/dxa/ElasticMapping.cpp
     modifier/dxa/InterfaceMesh.cpp
     modifier/dxa/DislocationTracer.cpp
+    modifier/tracking/DislocationTrackingModifier.cpp
     modifier/elasticstrain/ElasticStrainModifier.cpp
     modifier/elasticstrain/ElasticStrainEngine.cpp
     modifier/grains/GrainSegmentationModifier.cpp
