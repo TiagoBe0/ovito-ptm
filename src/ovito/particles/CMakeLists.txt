@@ -53,6 +53,7 @@ SET(SourceFiles
     modifier/analysis/voronoi/VoronoiAnalysisModifier.cpp
     modifier/analysis/cluster/ClusterAnalysisModifier.cpp
     modifier/analysis/wignerseitz/WignerSeitzAnalysisModifier.cpp
+    modifier/analysis/vacancy/VacancyAnalysisModifier.cpp
     modifier/analysis/ptm/PolyhedralTemplateMatchingModifier.cpp
     modifier/analysis/ptm/PTMAlgorithm.cpp
     modifier/analysis/surface/ConstructSurfaceModifier.cpp
