@@ -26,6 +26,8 @@
 #include <ovito/crystalanalysis/CrystalAnalysis.h>
 #include <ovito/crystalanalysis/objects/DislocationNetwork.h>
 #include <ovito/stdobj/simcell/SimulationCell.h>
+#include <ovito/stdobj/lines/Lines.h>
+#include <ovito/stdobj/lines/LinesVis.h>
 #include <ovito/core/dataset/pipeline/Modifier.h>
 #include <ovito/core/dataset/pipeline/ModificationNode.h>
 
@@ -58,11 +60,21 @@ class OVITO_CRYSTALANALYSIS_EXPORT DislocationTrackingModifier : public Modifier
 
 public:
 
+    /// Constructor: creates the visual element for the trajectory trails.
+    void initializeObject(ObjectInitializationFlags flags);
+
+    /// Replaces a visual element owned by this modifier (trajectory trails).
+    virtual void replaceVisualElement(DataVis* visElement, const std::function<OORef<DataVis>(const QString&)>& getReplacement) override;
+
     /// Is called by the pipeline system before a new modifier evaluation begins.
     virtual void preevaluateModifier(const ModifierEvaluationRequest& request, PipelineEvaluationResult::EvaluationTypes& evaluationTypes, TimeInterval& validityInterval) const override;
 
     /// Modifies the input data.
     virtual Future<PipelineFlowState> evaluateModifier(const ModifierEvaluationRequest& request, PipelineFlowState&& state) override;
+
+    /// Refresh the viewports and data inspector after the (asynchronous) trajectory scan completes,
+    /// so the newly computed track colors and metric attributes become visible without user interaction.
+    virtual bool shouldRefreshViewportsAfterEvaluation() override { return true; }
 
 private:
 
@@ -88,6 +100,15 @@ private:
     /// Physical time between two consecutive trajectory frames, used to convert per-dislocation
     /// displacements into velocities. The reported velocity is in (length unit) / (this unit).
     DECLARE_MODIFIABLE_PROPERTY_FIELD(FloatType{1}, timePerFrame, setTimePerFrame);
+
+    /// Draw the trajectory trail (centroid path) of each dislocation track up to the current frame.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(bool{true}, showTrails, setShowTrails);
+
+    /// Number of past frames to include in each trail (0 = full history).
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(int{0}, trailLength, setTrailLength);
+
+    /// The visual element used to render the dislocation trajectory trails.
+    DECLARE_MODIFIABLE_REFERENCE_FIELD_FLAGS(OORef<LinesVis>, trailsVis, setTrailsVis, PROPERTY_FIELD_DONT_PROPAGATE_MESSAGES | PROPERTY_FIELD_MEMORIZE | PROPERTY_FIELD_OPEN_SUBEDITOR);
 };
 
 /**
@@ -103,7 +124,9 @@ public:
     /// Compact per-segment descriptor used for matching.
     struct SegmentDescriptor {
         Point3 centroid = Point3::Origin();
-        Vector3 burgersSpatial = Vector3::Zero();
+        Vector3 burgersSpatial = Vector3::Zero();  ///< Burgers vector in the lab frame.
+        Vector3 burgersLocal = Vector3::Zero();    ///< Burgers vector in the crystal frame (stable under lattice rotation; used for matching).
+        Vector3 lineDir = Vector3::Zero();         ///< Unit line direction (end-to-end); drift is projected perpendicular to it (glide velocity).
         FloatType length = 0;
         int structure = -1;
         int typeId = -1;   ///< Index into _typeNames (Burgers vector family), or -1 if unknown.
@@ -112,8 +135,11 @@ public:
     /// Aggregated dislocation metrics computed for a single trajectory frame.
     struct FrameMetrics {
         int trackCount = 0;            ///< Number of distinct tracks present in this frame.
-        int births = 0;                ///< Tracks that start (nucleate) in this frame.
-        int deaths = 0;                ///< Tracks that end (annihilate) in this frame.
+        int births = 0;                ///< Tracks that start in this frame (nucleation + junction splits).
+        int deaths = 0;                ///< Tracks that end in this frame (annihilation + junction merges).
+        int nucleation = 0;            ///< Births with no neighbouring dislocation: true nucleation.
+        int annihilation = 0;          ///< Deaths with no surviving neighbour: true annihilation.
+        int reactions = 0;             ///< Births/deaths next to another dislocation: junction splits/merges.
         FloatType totalDensity = 0;    ///< Total dislocation density (line length / cell volume).
         FloatType meanVelocity = 0;    ///< Mean per-dislocation speed in this frame.
         FloatType medianVelocity = 0;  ///< Median per-dislocation speed in this frame.

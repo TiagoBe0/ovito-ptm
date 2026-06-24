@@ -27,6 +27,8 @@
 #include <ovito/crystalanalysis/objects/MicrostructurePhase.h>
 #include <ovito/crystalanalysis/objects/BurgersVectorFamily.h>
 #include <ovito/stdobj/simcell/SimulationCell.h>
+#include <ovito/stdobj/lines/Lines.h>
+#include <ovito/stdobj/lines/LinesVis.h>
 #include <ovito/core/dataset/pipeline/ModifierEvaluationTask.h>
 #include <ovito/core/app/UserInterface.h>
 #include <ovito/core/utilities/concurrent/TaskManager.h>
@@ -53,13 +55,19 @@ DEFINE_PROPERTY_FIELD(DislocationTrackingModifier, maxBridgeGap);
 DEFINE_PROPERTY_FIELD(DislocationTrackingModifier, minTrackLength);
 DEFINE_PROPERTY_FIELD(DislocationTrackingModifier, colorByTrack);
 DEFINE_PROPERTY_FIELD(DislocationTrackingModifier, timePerFrame);
+DEFINE_PROPERTY_FIELD(DislocationTrackingModifier, showTrails);
+DEFINE_PROPERTY_FIELD(DislocationTrackingModifier, trailLength);
+DEFINE_REFERENCE_FIELD(DislocationTrackingModifier, trailsVis);
 SET_PROPERTY_FIELD_LABEL(DislocationTrackingModifier, maxMatchingDistance, "Max. matching distance (0 = auto)");
 SET_PROPERTY_FIELD_LABEL(DislocationTrackingModifier, burgersTolerance, "Burgers vector tolerance");
 SET_PROPERTY_FIELD_LABEL(DislocationTrackingModifier, maxBridgeGap, "Max. bridged gap (frames)");
 SET_PROPERTY_FIELD_LABEL(DislocationTrackingModifier, minTrackLength, "Min. track length (frames)");
 SET_PROPERTY_FIELD_LABEL(DislocationTrackingModifier, colorByTrack, "Color lines by track");
 SET_PROPERTY_FIELD_LABEL(DislocationTrackingModifier, timePerFrame, "Time per frame (for velocity)");
+SET_PROPERTY_FIELD_LABEL(DislocationTrackingModifier, showTrails, "Show trajectory trails");
+SET_PROPERTY_FIELD_LABEL(DislocationTrackingModifier, trailLength, "Trail length (frames, 0 = all)");
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(DislocationTrackingModifier, timePerFrame, FloatParameterUnit, 0);
+SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(DislocationTrackingModifier, trailLength, IntegerParameterUnit, 0);
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(DislocationTrackingModifier, maxMatchingDistance, WorldParameterUnit, 0);
 SET_PROPERTY_FIELD_UNITS_AND_RANGE(DislocationTrackingModifier, burgersTolerance, PercentParameterUnit, 0, 1);
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(DislocationTrackingModifier, maxBridgeGap, IntegerParameterUnit, 0);
@@ -67,6 +75,34 @@ SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(DislocationTrackingModifier, minTrackLength
 
 IMPLEMENT_CREATABLE_OVITO_CLASS(DislocationTrackingModificationNode);
 SET_MODIFICATION_NODE_TYPE(DislocationTrackingModifier, DislocationTrackingModificationNode);
+
+/// Maps a track ID to a stable, well-separated color using the golden-ratio hue sequence.
+static Color trackColor(int trackId)
+{
+    FloatType hue = std::fmod((FloatType)trackId * FloatType(0.61803398875), FloatType(1));
+    return Color::fromHSV(hue, FloatType(0.85), FloatType(0.95));
+}
+
+/******************************************************************************
+* Constructor: creates the visual element for the trajectory trails.
+******************************************************************************/
+void DislocationTrackingModifier::initializeObject(ObjectInitializationFlags flags)
+{
+    Modifier::initializeObject(flags);
+    if(!flags.testFlag(ObjectInitializationFlag::DontInitializeObject)) {
+        setTrailsVis(OORef<LinesVis>::create(flags));
+        trailsVis()->setTitle(tr("Dislocation trails"));
+    }
+}
+
+/******************************************************************************
+* Replaces a visual element owned by this modifier.
+******************************************************************************/
+void DislocationTrackingModifier::replaceVisualElement(DataVis* visElement, const std::function<OORef<DataVis>(const QString&)>& getReplacement)
+{
+    if(trailsVis() == visElement)
+        setTrailsVis(static_object_cast<LinesVis>(getReplacement(tr("Dislocation trails"))));
+}
 
 /******************************************************************************
 * Asks the modifier whether it can be applied to the given input data.
@@ -208,9 +244,18 @@ void DislocationTrackingModificationNode::FrameCollector::operator()(int frame, 
             d.centroid = Point3::Origin() + sum / (FloatType)seg->line.size();
         }
 
+        // Line direction (end-to-end), used to project the drift velocity perpendicular to the line.
+        if(seg->line.size() >= 2) {
+            Vector3 ete = seg->line.back() - seg->line.front();
+            FloatType len = ete.length();
+            if(len > FLOATTYPE_EPSILON)
+                d.lineDir = ete / len;
+        }
+
         // Spatial Burgers vector and crystal structure of the embedding cluster.
         if(Cluster* cluster = seg->burgersVector.cluster()) {
             d.burgersSpatial = cluster->orientation * seg->burgersVector.localVec();
+            d.burgersLocal = seg->burgersVector.localVec();
             d.structure = cluster->structure;
 
             // Classify the segment into a Burgers vector family (dislocation type), same logic as DislocationVis.
@@ -292,8 +337,12 @@ void DislocationTrackingModificationNode::buildTracks()
     // Helper: are two segments compatible (same crystal structure, similar Burgers vector and length)?
     auto compatible = [&](const SegmentDescriptor& a, const SegmentDescriptor& b) -> bool {
         if(a.structure != b.structure) return false;
-        FloatType bref = std::max(a.burgersSpatial.length(), FloatType(1e-6));
-        if((a.burgersSpatial - b.burgersSpatial).length() > burgersTol * bref) return false;
+        // Compare the crystal-frame Burgers vectors (stable under lattice rotation),
+        // allowing a sign flip (DXA may traverse the same line in either direction).
+        FloatType bref = std::max(a.burgersLocal.length(), FloatType(1e-6));
+        FloatType bdiff = std::min((a.burgersLocal - b.burgersLocal).length(),
+                                   (a.burgersLocal + b.burgersLocal).length());
+        if(bdiff > burgersTol * bref) return false;
         if(a.length > 0 && b.length > 0) {
             FloatType ratio = std::min(a.length, b.length) / std::max(a.length, b.length);
             if(ratio < FloatType(0.33)) return false;
@@ -413,24 +462,88 @@ void DislocationTrackingModificationNode::buildTracks()
         }
     }
 
-    // Per-dislocation velocities, births and deaths from the track appearances.
-    std::vector<std::vector<FloatType>> speedsPerFrame(nFrames);
+    // Helper: is there any dislocation segment near point 'c' in the given frame?
+    // Used to tell a junction reaction (split/merge: a neighbour exists) from true
+    // nucleation/annihilation (the line appears/disappears in isolation).
+    // Radius within which a neighbouring dislocation counts as a junction partner. This is the
+    // interaction/junction scale (a few nm), larger than the frame-to-frame matching distance.
+    const FloatType reactionRadius = std::max(baseThreshold * FloatType(2), FloatType(10));
+    auto neighborExists = [&](int frame, const Point3& c) -> bool {
+        if(frame < 0 || frame >= nFrames) return false;
+        const SimulationCell* cellF = _frameCells[frame] ? _frameCells[frame].get() : nullptr;
+        for(const SegmentDescriptor& d : _frameDescriptors[frame]) {
+            Vector3 delta = d.centroid - c;
+            if(cellF) delta = cellF->wrapVector(delta);
+            if(delta.length() <= reactionRadius) return true;
+        }
+        return false;
+    };
+
+    // Births/deaths from track lifetimes, and per-track DRIFT velocity.
+    // NOTE: frame-to-frame displacement is dominated by thermal jitter of the dislocation
+    // core and by PBC/segmentation artifacts; the physical glide velocity is the time-averaged
+    // drift, computed here as the least-squares slope of the PBC-unwrapped centroid vs time.
+    std::vector<FloatType> trackDrift(_numTracks, FloatType(0));
+    std::vector<char> driftValid(_numTracks, 0);
+    const int minDriftSpan = std::max(5, nFrames / 20);
     for(int tid = 0; tid < _numTracks; tid++) {
         const auto& app = trackAppearances[tid];
         if(app.empty()) continue;
         int firstFrame = app.front().first;
         int lastFrame = app.back().first;
-        if(firstFrame > 0) _frameMetrics[firstFrame].births++;
-        if(lastFrame < nFrames - 1) _frameMetrics[lastFrame].deaths++;
-        for(size_t k = 1; k < app.size(); k++) {
-            int fa = app[k - 1].first, fb = app[k].first;
-            const Point3& ca = _frameDescriptors[fa][app[k - 1].second].centroid;
-            const Point3& cb = _frameDescriptors[fb][app[k].second].centroid;
-            Vector3 delta = cb - ca;
-            if(_frameCells[fb]) delta = _frameCells[fb]->wrapVector(delta);
-            FloatType dt = (FloatType)(fb - fa) * timePerFrame;
-            if(dt <= 0) dt = timePerFrame;
-            speedsPerFrame[fb].push_back(delta.length() / dt);
+        if(firstFrame > 0) {
+            FrameMetrics& mb = _frameMetrics[firstFrame];
+            mb.births++;
+            const Point3& c0 = _frameDescriptors[firstFrame][app.front().second].centroid;
+            if(neighborExists(firstFrame - 1, c0)) mb.reactions++;   // split off an existing line
+            else mb.nucleation++;                                    // true nucleation
+        }
+        if(lastFrame < nFrames - 1) {
+            FrameMetrics& md = _frameMetrics[lastFrame];
+            md.deaths++;
+            const Point3& cL = _frameDescriptors[lastFrame][app.back().second].centroid;
+            if(neighborExists(lastFrame + 1, cL)) md.reactions++;    // merged into a neighbour
+            else md.annihilation++;                                  // true annihilation
+        }
+        const int n = (int)app.size();
+        if(n < 2 || (lastFrame - firstFrame) < minDriftSpan) continue;
+
+        // Build the PBC-unwrapped centroid trajectory and accumulate least-squares sums.
+        Point3 acc = _frameDescriptors[app[0].first][app[0].second].centroid;
+        FloatType tbar = 0;
+        Vector3 pbar = Vector3::Zero();
+        std::vector<FloatType> ts(n);
+        std::vector<Vector3> ps(n);
+        ts[0] = (FloatType)app[0].first * timePerFrame;
+        ps[0] = acc - Point3::Origin();
+        for(int k = 1; k < n; k++) {
+            const Point3& cprev = _frameDescriptors[app[k-1].first][app[k-1].second].centroid;
+            const Point3& ccur  = _frameDescriptors[app[k].first][app[k].second].centroid;
+            Vector3 d = ccur - cprev;
+            if(_frameCells[app[k].first]) d = _frameCells[app[k].first]->wrapVector(d);
+            acc += d;
+            ts[k] = (FloatType)app[k].first * timePerFrame;
+            ps[k] = acc - Point3::Origin();
+        }
+        for(int k = 0; k < n; k++) { tbar += ts[k]; pbar += ps[k]; }
+        tbar /= n; pbar /= (FloatType)n;
+        FloatType stt = 0;
+        Vector3 stp = Vector3::Zero();
+        for(int k = 0; k < n; k++) {
+            FloatType dt = ts[k] - tbar;
+            stt += dt * dt;
+            stp += dt * (ps[k] - pbar);
+        }
+        if(stt > 0) {
+            Vector3 slope = stp / stt;
+            // Project the drift onto the plane perpendicular to the line direction: the along-line
+            // component is not glide and is dominated by thermal/segmentation noise. This yields the
+            // physical glide (+climb) velocity, validated against Orowan on a single-dislocation test.
+            const Vector3& nd = _frameDescriptors[app[0].first][app[0].second].lineDir;
+            if(nd.length() > FloatType(0.5))
+                slope = slope - slope.dot(nd) * nd;
+            trackDrift[tid] = slope.length();
+            driftValid[tid] = 1;
         }
     }
 
@@ -454,14 +567,20 @@ void DislocationTrackingModificationNode::buildTracks()
         for(int t = 0; t < numTypes; t++)
             m.densityByType[t] = (volume > 0) ? lengthByType[t] / volume : FloatType(0);
 
-        std::vector<FloatType>& speeds = speedsPerFrame[f];
-        if(!speeds.empty()) {
-            std::sort(speeds.begin(), speeds.end());
+        // Velocity statistics: aggregate the per-track DRIFT velocity over the tracks present
+        // in this frame (drift removes the thermal-jitter/PBC artifacts of frame-to-frame deltas).
+        std::vector<FloatType> driftHere;
+        driftHere.reserve(presentTracks.size());
+        for(int tid : presentTracks)
+            if(tid >= 0 && tid < (int)trackDrift.size() && driftValid[tid])
+                driftHere.push_back(trackDrift[tid]);
+        if(!driftHere.empty()) {
+            std::sort(driftHere.begin(), driftHere.end());
             FloatType sum = 0;
-            for(FloatType v : speeds) sum += v;
-            m.meanVelocity = sum / (FloatType)speeds.size();
-            m.medianVelocity = speeds[speeds.size() / 2];
-            m.maxVelocity = speeds.back();
+            for(FloatType v : driftHere) sum += v;
+            m.meanVelocity = sum / (FloatType)driftHere.size();
+            m.medianVelocity = driftHere[driftHere.size() / 2];
+            m.maxVelocity = driftHere.back();
         }
     }
 
@@ -498,40 +617,143 @@ void DislocationTrackingModificationNode::applyTracks(const ModifierEvaluationRe
     if(currentFrame < 0)
         currentFrame = animationTimeToSourceFrame(request.time());
 
-    bool colorByTrack = true;
-    if(DislocationTrackingModifier* mod = dynamic_object_cast<DislocationTrackingModifier>(modifier()))
-        colorByTrack = mod->colorByTrack();
+    DislocationTrackingModifier* mod = dynamic_object_cast<DislocationTrackingModifier>(modifier());
+    bool colorByTrack = mod ? mod->colorByTrack() : true;
 
     DislocationNetwork* network = state.expectMutableObject<DislocationNetwork>();
     for(DislocationSegment* seg : network->segments()) {
         int tid = trackIdOf(currentFrame, seg->id);
         seg->trackId = tid;
-        if(colorByTrack && tid >= 0) {
-            // Map the track ID to a well-separated hue using the golden ratio.
-            FloatType hue = std::fmod((FloatType)tid * FloatType(0.61803398875), FloatType(1));
-            seg->customColor = Color::fromHSV(hue, FloatType(0.85), FloatType(0.95));
-        }
-        else {
+        if(colorByTrack && tid >= 0)
+            seg->customColor = trackColor(tid);
+        else
             seg->customColor = Color(-1, -1, -1);
+    }
+
+    // ---- Frank's rule check: at every junction node the (signed) Burgers vectors must sum to zero.
+    // Uses the sense-consistent dislocation graph (junctionRing + node->burgersVector() which returns
+    // +b for a forward node and -b for a backward node). Residual ~0 confirms Burgers conservation.
+    int frankJunctions = 0;
+    FloatType frankMaxResidual = 0, frankSumResidual = 0;
+    std::unordered_set<const DislocationNode*> frankVisited;
+    for(DislocationSegment* seg : network->segments()) {
+        for(int k = 0; k < 2; k++) {
+            DislocationNode* node = seg->nodes[k];
+            if(!node || node->isDangling() || frankVisited.count(node)) continue;
+            Vector3 bsum = Vector3::Zero();
+            FloatType bref = 0;
+            int arms = 0;
+            DislocationNode* n = node;
+            do {
+                frankVisited.insert(n);
+                ClusterVector bv = n->burgersVector();
+                if(bv.cluster()) {
+                    Vector3 bs = bv.toSpatialVector();
+                    bsum += bs;
+                    bref = std::max(bref, bs.length());
+                }
+                arms++;
+                n = n->junctionRing;
+            } while(n != node && n != nullptr);
+            if(arms >= 3) {   // a real junction (>=3 arms)
+                FloatType res = (bref > 0) ? bsum.length() / bref : bsum.length();
+                frankMaxResidual = std::max(frankMaxResidual, res);
+                frankSumResidual += res;
+                frankJunctions++;
+            }
         }
     }
+    state.setAttribute(QStringLiteral("DislocationTracking.frank_junctions"), QVariant::fromValue(frankJunctions), this);
+    state.setAttribute(QStringLiteral("DislocationTracking.frank_max_residual"),
+                       QVariant::fromValue(frankMaxResidual), this);
+    state.setAttribute(QStringLiteral("DislocationTracking.frank_mean_residual"),
+                       QVariant::fromValue(frankJunctions > 0 ? frankSumResidual / frankJunctions : FloatType(0)), this);
 
     // Emit the per-frame metrics as global attributes. These are graphable over the trajectory and
     // can be exported to CSV via File > Export File > "Table of Values".
     if(currentFrame >= 0 && currentFrame < (int)_frameMetrics.size()) {
         const FrameMetrics& m = _frameMetrics[currentFrame];
-        state.addAttribute(QStringLiteral("DislocationTracking.track_count"), QVariant::fromValue(m.trackCount), this);
-        state.addAttribute(QStringLiteral("DislocationTracking.births"), QVariant::fromValue(m.births), this);
-        state.addAttribute(QStringLiteral("DislocationTracking.deaths"), QVariant::fromValue(m.deaths), this);
-        state.addAttribute(QStringLiteral("DislocationTracking.total_density"), QVariant::fromValue(m.totalDensity), this);
-        state.addAttribute(QStringLiteral("DislocationTracking.mean_velocity"), QVariant::fromValue(m.meanVelocity), this);
-        state.addAttribute(QStringLiteral("DislocationTracking.median_velocity"), QVariant::fromValue(m.medianVelocity), this);
-        state.addAttribute(QStringLiteral("DislocationTracking.max_velocity"), QVariant::fromValue(m.maxVelocity), this);
+        state.setAttribute(QStringLiteral("DislocationTracking.track_count"), QVariant::fromValue(m.trackCount), this);
+        state.setAttribute(QStringLiteral("DislocationTracking.births"), QVariant::fromValue(m.births), this);
+        state.setAttribute(QStringLiteral("DislocationTracking.deaths"), QVariant::fromValue(m.deaths), this);
+        state.setAttribute(QStringLiteral("DislocationTracking.nucleation"), QVariant::fromValue(m.nucleation), this);
+        state.setAttribute(QStringLiteral("DislocationTracking.annihilation"), QVariant::fromValue(m.annihilation), this);
+        state.setAttribute(QStringLiteral("DislocationTracking.reactions"), QVariant::fromValue(m.reactions), this);
+        state.setAttribute(QStringLiteral("DislocationTracking.total_density"), QVariant::fromValue(m.totalDensity), this);
+        state.setAttribute(QStringLiteral("DislocationTracking.mean_velocity"), QVariant::fromValue(m.meanVelocity), this);
+        state.setAttribute(QStringLiteral("DislocationTracking.median_velocity"), QVariant::fromValue(m.medianVelocity), this);
+        state.setAttribute(QStringLiteral("DislocationTracking.max_velocity"), QVariant::fromValue(m.maxVelocity), this);
         for(int t = 0; t < (int)m.densityByType.size() && t < (int)_typeNames.size(); t++) {
             QString safe;
             for(QChar ch : _typeNames[t])
                 safe += ch.isLetterOrNumber() ? ch : QChar('_');
-            state.addAttribute(QStringLiteral("DislocationTracking.density.%1").arg(safe), QVariant::fromValue(m.densityByType[t]), this);
+            state.setAttribute(QStringLiteral("DislocationTracking.density.%1").arg(safe), QVariant::fromValue(m.densityByType[t]), this);
+        }
+    }
+
+    // Build the trajectory trails: one polyline per track tracing its centroid path up to the
+    // current frame, coloured by track. Rendered natively by a LinesVis element.
+    if(mod && mod->showTrails() && mod->trailsVis() && currentFrame >= 0 && currentFrame < (int)_trackIds.size()) {
+        const int trailLen = mod->trailLength();
+        const int startFrame = (trailLen > 0) ? std::max(0, currentFrame - trailLen) : 0;
+
+        // Gather, per track, its ordered centroids within [startFrame, currentFrame].
+        std::unordered_map<int, std::vector<Point3>> perTrack;
+        for(int f = startFrame; f <= currentFrame; f++) {
+            const std::vector<int>& ids = _trackIds[f];
+            for(int s = 0; s < (int)ids.size(); s++)
+                if(ids[s] >= 0)
+                    perTrack[ids[s]].push_back(_frameDescriptors[f][s].centroid);
+        }
+
+        // Threshold for breaking a polyline where it crosses a periodic boundary.
+        const SimulationCell* cell = _frameCells[currentFrame] ? _frameCells[currentFrame].get() : nullptr;
+        FloatType minEdge = 0;
+        if(cell) {
+            const AffineTransformation& cm = cell->cellMatrix();
+            for(int dim = 0; dim < 3; dim++) {
+                FloatType e = cm.column(dim).length();
+                if(e > 0 && (minEdge == 0 || e < minEdge)) minEdge = e;
+            }
+        }
+        const FloatType jumpThresh = (minEdge > 0) ? FloatType(0.5) * minEdge : FloatType(1e30);
+
+        // Assemble the vertex / section / colour arrays.
+        std::vector<Point3> verts;
+        std::vector<int64_t> sections;
+        std::vector<ColorG> colors;
+        int64_t nextSection = 0;
+        for(const auto& entry : perTrack) {
+            const std::vector<Point3>& pts = entry.second;
+            if(pts.size() < 2) continue;
+            ColorG col = trackColor(entry.first).toDataType<GraphicsFloatType>();
+            int64_t section = nextSection++;
+            verts.push_back(pts[0]); sections.push_back(section); colors.push_back(col);
+            for(size_t k = 1; k < pts.size(); k++) {
+                if((pts[k] - pts[k-1]).length() > jumpThresh)
+                    section = nextSection++;   // PBC crossing: start a new line
+                verts.push_back(pts[k]); sections.push_back(section); colors.push_back(col);
+            }
+        }
+
+        if(!verts.empty()) {
+            DataOORef<Lines> trails = DataOORef<Lines>::create();
+            trails->setCreatedByNode(this);
+            trails->setTitle(tr("Dislocation trails"));
+            trails->setIdentifier(QStringLiteral("dislocation_trails"));
+            trails->setElementCount(verts.size());
+            {
+                BufferWriteAccess<Point3, access_mode::discard_read_write> posA = trails->createProperty(Lines::PositionProperty);
+                BufferWriteAccess<int64_t, access_mode::discard_read_write> secA = trails->createProperty(Lines::SectionProperty);
+                BufferWriteAccess<ColorG, access_mode::discard_read_write> colA = trails->createProperty(Lines::ColorProperty);
+                for(size_t i = 0; i < verts.size(); i++) {
+                    posA[i] = verts[i];
+                    secA[i] = sections[i];
+                    colA[i] = colors[i];
+                }
+            }
+            trails->setVisElement(OORef<LinesVis>(mod->trailsVis()));
+            state.addObject(std::move(trails));
         }
     }
 

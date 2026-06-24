@@ -83,6 +83,17 @@ void DislocationTrackingModifierEditor::createUI(const RolloutInsertionParameter
     BooleanParameterUI* colorByTrackUI = createParamUI<BooleanParameterUI>(PROPERTY_FIELD(DislocationTrackingModifier::colorByTrack));
     sublayout2->addWidget(colorByTrackUI->checkBox());
 
+    BooleanParameterUI* showTrailsUI = createParamUI<BooleanParameterUI>(PROPERTY_FIELD(DislocationTrackingModifier::showTrails));
+    sublayout2->addWidget(showTrailsUI->checkBox());
+
+    QGridLayout* trailGrid = new QGridLayout();
+    trailGrid->setContentsMargins(0,0,0,0);
+    trailGrid->setColumnStretch(1, 1);
+    IntegerParameterUI* trailLengthUI = createParamUI<IntegerParameterUI>(PROPERTY_FIELD(DislocationTrackingModifier::trailLength));
+    trailGrid->addWidget(trailLengthUI->label(), 0, 0);
+    trailGrid->addLayout(trailLengthUI->createFieldLayout(), 0, 1);
+    sublayout2->addLayout(trailGrid);
+
     // Status display.
     layout->addWidget(createParamUI<ObjectStatusDisplay>()->statusWidget());
 }
