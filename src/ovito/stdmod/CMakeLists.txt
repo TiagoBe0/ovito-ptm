@@ -41,6 +41,7 @@ OVITO_STANDARD_PLUGIN(StdMod
         modifiers/ManualSelectionModifier.cpp
         modifiers/ComputePropertyModifier.cpp
         modifiers/CombineDatasetsModifier.cpp
+        modifiers/CombineMultipleDatasetsModifier.cpp
         modifiers/ColorByTypeModifier.cpp
         viewport/ColorLegendOverlay.cpp
     PLUGIN_DEPENDENCIES

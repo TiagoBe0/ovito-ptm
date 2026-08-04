@@ -39,6 +39,7 @@ OVITO_STANDARD_PLUGIN(StdModGui
         ManualSelectionModifierEditor.cpp
         ComputePropertyModifierEditor.cpp
         CombineDatasetsModifierEditor.cpp
+        CombineMultipleDatasetsModifierEditor.cpp
         ColorByTypeModifierEditor.cpp
         ColorLegendOverlayEditor.cpp
     PLUGIN_DEPENDENCIES StdMod StdObjGui
