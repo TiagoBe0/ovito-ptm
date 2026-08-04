@@ -392,22 +392,31 @@ void DislocationTrackingModificationNode::buildTracks()
     // 'maxBridge' frames. We only connect a track that ends (its component is absent from the
     // intermediate frames) to one that starts after the gap.
     const int maxStride = std::max(1, maxBridge + 1);
-    for(int stride = 2; stride <= maxStride; stride++) {
-        // Snapshot the frames each component currently appears in.
-        std::unordered_set<long long> rootFramePresence;
-        rootFramePresence.reserve(totalNodes * 2);
+    // Presence set: which frames each component (keyed by its current union-find root) appears in.
+    // It must be rebuilt before every matchPair below, because matchPair's unite() mutates the roots
+    // as we go: a once-per-stride snapshot would go stale (still keyed by the pre-merge roots) after
+    // the first bridge and let the "genuine gap" guard leak, over-connecting distinct dislocations.
+    std::unordered_set<long long> rootFramePresence;
+    rootFramePresence.reserve(totalNodes * 2);
+    auto rebuildPresence = [&]() {
+        rootFramePresence.clear();
         for(int n = 0; n < totalNodes; n++)
             rootFramePresence.insert((long long)findRoot(n) * nFrames + frameOfNode[n]);
-        auto presentInRange = [&](int root, int lo, int hi) -> bool {
-            for(int f = lo; f <= hi; f++)
-                if(rootFramePresence.count((long long)root * nFrames + f)) return true;
-            return false;
-        };
-
+    };
+    auto presentInRange = [&](int root, int lo, int hi) -> bool {
+        for(int f = lo; f <= hi; f++)
+            if(rootFramePresence.count((long long)root * nFrames + f)) return true;
+        return false;
+    };
+    for(int stride = 2; stride <= maxStride; stride++) {
         FloatType scale = std::sqrt((FloatType)stride);
         for(int fa = 0; fa + stride < nFrames; fa++) {
             int fb = fa + stride;
             int gapLo = fa + 1, gapHi = fb - 1;
+            // Refresh presence against the current roots. Within a single matchPair the roots stay
+            // consistent (its unite() calls run only after all guard/candidate evaluation), so one
+            // rebuild per (stride, fa) is both necessary and sufficient.
+            rebuildPresence();
             auto guard = [&](int i, int j) -> bool {
                 int ri = findRoot(offset[fa] + i);
                 int rj = findRoot(offset[fb] + j);
@@ -539,7 +548,20 @@ void DislocationTrackingModificationNode::buildTracks()
             // Project the drift onto the plane perpendicular to the line direction: the along-line
             // component is not glide and is dominated by thermal/segmentation noise. This yields the
             // physical glide (+climb) velocity, validated against Orowan on a single-dislocation test.
-            const Vector3& nd = _frameDescriptors[app[0].first][app[0].second].lineDir;
+            //
+            // Take the line direction from the appearance with the LONGEST segment rather than the
+            // first appearance: a track often nucleates as a short (or single-point, hence lineDir=0)
+            // segment whose end-to-end direction is ill-defined, which would skip the projection and
+            // leave the speed inflated by the along-line component.
+            Vector3 nd = Vector3::Zero();
+            FloatType bestLen = -1;
+            for(const auto& a : app) {
+                const SegmentDescriptor& sd = _frameDescriptors[a.first][a.second];
+                if(sd.length > bestLen && sd.lineDir.length() > FloatType(0.5)) {
+                    bestLen = sd.length;
+                    nd = sd.lineDir;
+                }
+            }
             if(nd.length() > FloatType(0.5))
                 slope = slope - slope.dot(nd) * nd;
             trackDrift[tid] = slope.length();
