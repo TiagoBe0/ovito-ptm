@@ -31,7 +31,46 @@
 namespace Ovito {
 
 /**
- * \brief Robust point-defect analysis that refines the Wigner-Seitz result.
+ * \brief Gradient-boosted tree ensemble for the learned vacancy-candidate classification.
+ *
+ * Loaded from the JSON file written by research/vacancy_analysis/scripts/export_ml_model.py.
+ * Evaluation is dependency-free: prob = sigmoid(baseline + sum of leaf values), with the
+ * decision rule x[feature] <= threshold -> left child, else right child.
+ */
+class OVITO_PARTICLES_EXPORT VacancyMLModel
+{
+public:
+
+    struct Node {
+        int32_t feature;
+        FloatType threshold;
+        FloatType value;
+        int32_t left;
+        int32_t right;
+        bool leaf;
+    };
+
+    /// Number of input features the model expects (fixed descriptor layout).
+    static constexpr int NUM_FEATURES = 17;
+
+    /// Loads and validates a model file. Throws an Exception on error.
+    static std::shared_ptr<const VacancyMLModel> load(const QString& path);
+
+    /// Evaluates the ensemble, returning the vacancy probability.
+    FloatType evaluate(const FloatType* features) const;
+
+    /// Sentinel value (in nn units) substituted for "no such site" distances.
+    FloatType farSentinel() const { return _farSentinel; }
+
+private:
+
+    std::vector<std::vector<Node>> _trees;
+    FloatType _baseline = 0;
+    FloatType _farSentinel = 5;
+};
+
+/**
+ * \brief Consensus point-defect analysis that refines the Wigner-Seitz result.
  *
  * Standard Wigner-Seitz (WS) occupancy analysis overcounts vacancies in heavily deformed,
  * compressed or radiation-damaged regions and at grain boundaries/surfaces, because non-affine
@@ -39,14 +78,15 @@ namespace Ovito {
  * spatially-correlated vacancy-interstitial (Frenkel) pairs.
  *
  * This modifier generates WS candidates internally and then applies a consensus of physical
- * filters that a *true* missing atom must satisfy but a deformation artifact does not:
+ * filters intended to separate likely point-defect candidates from deformation artifacts:
  *   1. Frenkel-pair recombination: a candidate vacancy adjacent to an over-occupied site is the
  *      signature of a displaced (not a missing) atom -> annihilate the pair.
- *   2. Free-volume confirmation: a real vacancy leaves a measurable cavity (no current atom sits
+ *   2. Free-volume confirmation: a likely vacancy leaves a measurable cavity (no current atom sits
  *      close to the empty site).
  *   3. Structural masking: candidates surrounded by disordered atoms (grain boundary / surface /
  *      amorphous) are reported separately, not as point vacancies. The disorder signal is taken
- *      from an upstream PTM/CNA (Structure Type), Centrosymmetry, or AtomicStrain (Shear Strain).
+ *      from an upstream PTM/CNA (Structure Type), Centrosymmetry, AtomicStrain (Shear Strain), or
+ *      imported LAMMPS per-atom columns such as c_centro/c_coord.
  *
  * Both the raw WS counts and the corrected counts are emitted as global attributes so the
  * overcount can be quantified directly.
@@ -61,19 +101,22 @@ public:
     enum MaskSignalType {
         StructureSignal,        ///< Structure Type == OTHER (from PTM / CNA).
         CentrosymmetrySignal,   ///< Centrosymmetry parameter above an automatic cutoff.
-        ShearStrainSignal       ///< Atomic shear strain above an automatic cutoff.
+        ShearStrainSignal,      ///< Atomic shear strain above an automatic cutoff.
+        LammpsCentroSignal,     ///< Imported LAMMPS c_centro column above an automatic cutoff.
+        LammpsCoordSignal       ///< Imported LAMMPS c_coord column below an automatic cutoff.
     };
     Q_ENUM(MaskSignalType)
 
     /// Per-reference-site classification stored in the "Defect Type" output property.
     enum DefectType {
         DefectOK = 0,           ///< Normally occupied site.
-        DefectVacancy = 1,      ///< Confirmed true vacancy.
+        DefectVacancy = 1,      ///< Classified vacancy candidate.
         DefectInterstitial = 2, ///< Over-occupied site (interstitial).
         DefectFrenkel = 3,      ///< Vacancy recombined with an adjacent interstitial (deformation artifact).
-        DefectNoCavity = 4,     ///< Empty site without real free volume (collapsed/deformation artifact).
+        DefectNoCavity = 4,     ///< Empty site without enough local free volume (collapsed/deformation artifact).
         DefectStructural = 5,   ///< Empty site inside a disordered region (grain boundary / amorphous).
-        DefectSurface = 6       ///< Empty site at/near a free surface.
+        DefectSurfaceOrVoid = 6, ///< Empty site near a free surface, void, or low-density region.
+        DefectMLRejected = 7    ///< Empty site the learned classifier rejected as a deformation artifact.
     };
 
 protected:
@@ -99,6 +142,8 @@ private:
                 bool requireFreeVolume, FloatType cavityRadiusRatio,
                 bool maskDisordered, MaskSignalType maskSignal, FloatType maskThreshold,
                 ConstPropertyPtr structureProperty, ConstPropertyPtr cspProperty, ConstPropertyPtr shearProperty,
+                ConstPropertyPtr lammpsCentroProperty, ConstPropertyPtr lammpsCoordProperty,
+                std::shared_ptr<const VacancyMLModel> mlModel, FloatType mlThreshold,
                 OOWeakRef<const PipelineNode> createdByNode) :
             Engine(std::move(positions), simCell, std::move(refPositions), simCellRef,
                 nullptr, nullptr, affineMapping, false),
@@ -106,6 +151,8 @@ private:
             _requireFreeVolume(requireFreeVolume), _cavityRadiusRatio(cavityRadiusRatio),
             _maskDisordered(maskDisordered), _maskSignal(maskSignal), _maskThreshold(maskThreshold),
             _structureProperty(std::move(structureProperty)), _cspProperty(std::move(cspProperty)), _shearProperty(std::move(shearProperty)),
+            _lammpsCentroProperty(std::move(lammpsCentroProperty)), _lammpsCoordProperty(std::move(lammpsCoordProperty)),
+            _mlModel(std::move(mlModel)), _mlThreshold(mlThreshold),
             _referenceState(std::move(referenceState)),
             _createdByNode(std::move(createdByNode)) {}
 
@@ -130,6 +177,12 @@ private:
         ConstPropertyPtr _structureProperty;
         ConstPropertyPtr _cspProperty;
         ConstPropertyPtr _shearProperty;
+        ConstPropertyPtr _lammpsCentroProperty;
+        ConstPropertyPtr _lammpsCoordProperty;
+
+        // Optional learned classifier (ML mode); null = rule-based classification.
+        std::shared_ptr<const VacancyMLModel> _mlModel;
+        FloatType _mlThreshold;
 
         const PipelineFlowState _referenceState;
         OOWeakRef<const PipelineNode> _createdByNode;
@@ -141,10 +194,10 @@ private:
     /// Distance cutoff for Frenkel pairing, in simulation units. <= 0 means auto (~1.2 * nn distance).
     DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(FloatType{0}, recombinationCutoff, setRecombinationCutoff, PROPERTY_FIELD_MEMORIZE)
 
-    /// Require a real cavity (free volume) at a candidate vacancy site.
+    /// Require local free volume at a candidate vacancy site.
     DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(bool{true}, requireFreeVolume, setRequireFreeVolume, PROPERTY_FIELD_MEMORIZE)
 
-    /// Minimum cavity radius for a true vacancy, expressed as a fraction of the nn distance.
+    /// Minimum cavity radius for a vacancy candidate, expressed as a fraction of the nn distance.
     DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(FloatType{0.5}, cavityRadiusRatio, setCavityRadiusRatio, PROPERTY_FIELD_MEMORIZE)
 
     /// Exclude candidate vacancies that sit inside disordered (grain-boundary/surface) regions.
@@ -155,6 +208,15 @@ private:
 
     /// Fraction of disordered neighbors above which a candidate vacancy is treated as structural.
     DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(FloatType{0.5}, maskThreshold, setMaskThreshold, PROPERTY_FIELD_MEMORIZE)
+
+    /// Classify candidates with the learned (GBDT) model instead of the fixed-threshold rules.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(bool{false}, mlClassification, setMlClassification, PROPERTY_FIELD_MEMORIZE)
+
+    /// Path of the JSON model file written by export_ml_model.py.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(QString{}, mlModelPath, setMlModelPath, PROPERTY_FIELD_MEMORIZE)
+
+    /// Probability above which the learned model classifies a candidate as a true vacancy.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(FloatType{0.5}, mlThreshold, setMlThreshold, PROPERTY_FIELD_MEMORIZE)
 };
 
 }   // End of namespace

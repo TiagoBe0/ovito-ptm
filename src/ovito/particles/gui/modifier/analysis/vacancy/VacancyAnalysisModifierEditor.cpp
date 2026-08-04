@@ -27,6 +27,7 @@
 #include <ovito/gui/desktop/properties/IntegerParameterUI.h>
 #include <ovito/gui/desktop/properties/IntegerRadioButtonParameterUI.h>
 #include <ovito/gui/desktop/properties/FloatParameterUI.h>
+#include <ovito/gui/desktop/properties/StringParameterUI.h>
 #include <ovito/gui/desktop/properties/SubObjectParameterUI.h>
 #include <ovito/gui/desktop/properties/ObjectStatusDisplay.h>
 #include <ovito/core/dataset/io/FileSource.h>
@@ -78,11 +79,11 @@ void VacancyAnalysisModifierEditor::createUI(const RolloutInsertionParameters& r
     sublayout->setColumnStretch(1, 1);
 
     BooleanParameterUI* freeVolUI = createParamUI<BooleanParameterUI>(PROPERTY_FIELD(VacancyAnalysisModifier::requireFreeVolume));
-    freeVolUI->checkBox()->setText(tr("Require a real cavity at the vacant site"));
+    freeVolUI->checkBox()->setText(tr("Require local free volume at the vacant site"));
     sublayout->addWidget(freeVolUI->checkBox(), 0, 0, 1, 2);
 
     FloatParameterUI* cavityRatioUI = createParamUI<FloatParameterUI>(PROPERTY_FIELD(VacancyAnalysisModifier::cavityRadiusRatio));
-    cavityRatioUI->label()->setText(tr("Min. cavity radius (× nn dist.):"));
+    cavityRatioUI->label()->setText(tr("Min. cavity radius (x nn dist.):"));
     sublayout->addWidget(cavityRatioUI->label(), 1, 0);
     sublayout->addLayout(cavityRatioUI->createFieldLayout(), 1, 1);
     connect(freeVolUI->checkBox(), &QCheckBox::toggled, cavityRatioUI, &FloatParameterUI::setEnabled);
@@ -100,24 +101,54 @@ void VacancyAnalysisModifierEditor::createUI(const RolloutInsertionParameters& r
     maskUI->checkBox()->setText(tr("Exclude vacancies in grain boundaries / surfaces"));
     sublayout->addWidget(maskUI->checkBox(), 0, 0, 1, 2);
 
-    sublayout->addWidget(new QLabel(tr("Disorder signal (from upstream modifier):")), 1, 0, 1, 2);
+    sublayout->addWidget(new QLabel(tr("Disorder signal (upstream/imported):")), 1, 0, 1, 2);
     IntegerRadioButtonParameterUI* maskSignalUI = createParamUI<IntegerRadioButtonParameterUI>(PROPERTY_FIELD(VacancyAnalysisModifier::maskSignal));
     QRadioButton* structureBtn = maskSignalUI->addRadioButton(VacancyAnalysisModifier::StructureSignal, tr("Structure Type (PTM/CNA)"));
     QRadioButton* cspBtn = maskSignalUI->addRadioButton(VacancyAnalysisModifier::CentrosymmetrySignal, tr("Centrosymmetry"));
     QRadioButton* shearBtn = maskSignalUI->addRadioButton(VacancyAnalysisModifier::ShearStrainSignal, tr("Shear Strain"));
+    QRadioButton* lammpsCentroBtn = maskSignalUI->addRadioButton(VacancyAnalysisModifier::LammpsCentroSignal, tr("LAMMPS c_centro"));
+    QRadioButton* lammpsCoordBtn = maskSignalUI->addRadioButton(VacancyAnalysisModifier::LammpsCoordSignal, tr("LAMMPS c_coord"));
     sublayout->addWidget(structureBtn, 2, 0, 1, 2);
     sublayout->addWidget(cspBtn, 3, 0, 1, 2);
     sublayout->addWidget(shearBtn, 4, 0, 1, 2);
+    sublayout->addWidget(lammpsCentroBtn, 5, 0, 1, 2);
+    sublayout->addWidget(lammpsCoordBtn, 6, 0, 1, 2);
 
     FloatParameterUI* maskThresholdUI = createParamUI<FloatParameterUI>(PROPERTY_FIELD(VacancyAnalysisModifier::maskThreshold));
     maskThresholdUI->label()->setText(tr("Disorder fraction threshold:"));
-    sublayout->addWidget(maskThresholdUI->label(), 5, 0);
-    sublayout->addLayout(maskThresholdUI->createFieldLayout(), 5, 1);
+    sublayout->addWidget(maskThresholdUI->label(), 7, 0);
+    sublayout->addLayout(maskThresholdUI->createFieldLayout(), 7, 1);
 
     connect(maskUI->checkBox(), &QCheckBox::toggled, maskSignalUI, &IntegerRadioButtonParameterUI::setEnabled);
     connect(maskUI->checkBox(), &QCheckBox::toggled, maskThresholdUI, &FloatParameterUI::setEnabled);
     maskSignalUI->setEnabled(maskUI->checkBox()->isChecked());
     maskThresholdUI->setEnabled(maskUI->checkBox()->isChecked());
+
+    // --- Learned (ML) classification. ---
+    QGroupBox* mlGroupBox = new QGroupBox(tr("ML classification"));
+    layout->addWidget(mlGroupBox);
+    sublayout = new QGridLayout(mlGroupBox);
+    sublayout->setContentsMargins(4,4,4,4);
+    sublayout->setSpacing(4);
+    sublayout->setColumnStretch(1, 1);
+
+    BooleanParameterUI* mlUI = createParamUI<BooleanParameterUI>(PROPERTY_FIELD(VacancyAnalysisModifier::mlClassification));
+    mlUI->checkBox()->setText(tr("Classify candidates with the learned model"));
+    sublayout->addWidget(mlUI->checkBox(), 0, 0, 1, 2);
+
+    sublayout->addWidget(new QLabel(tr("Model file (export_ml_model.py JSON):")), 1, 0, 1, 2);
+    StringParameterUI* mlModelPathUI = createParamUI<StringParameterUI>(PROPERTY_FIELD(VacancyAnalysisModifier::mlModelPath));
+    sublayout->addWidget(mlModelPathUI->textBox(), 2, 0, 1, 2);
+
+    FloatParameterUI* mlThresholdUI = createParamUI<FloatParameterUI>(PROPERTY_FIELD(VacancyAnalysisModifier::mlThreshold));
+    mlThresholdUI->label()->setText(tr("Probability threshold:"));
+    sublayout->addWidget(mlThresholdUI->label(), 3, 0);
+    sublayout->addLayout(mlThresholdUI->createFieldLayout(), 3, 1);
+
+    connect(mlUI->checkBox(), &QCheckBox::toggled, mlModelPathUI, &StringParameterUI::setEnabled);
+    connect(mlUI->checkBox(), &QCheckBox::toggled, mlThresholdUI, &FloatParameterUI::setEnabled);
+    mlModelPathUI->setEnabled(mlUI->checkBox()->isChecked());
+    mlThresholdUI->setEnabled(mlUI->checkBox()->isChecked());
 
     // --- Affine mapping of the simulation cell. ---
     QGroupBox* mappingGroupBox = new QGroupBox(tr("Affine mapping of simulation cell"));
