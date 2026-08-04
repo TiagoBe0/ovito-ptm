@@ -1,0 +1,9 @@
+# autogenerado por sweep.py -- material Au
+variable a0 equal 4.07011
+lattice fcc 4.07011
+region box block 0 28 0 28 0 28
+create_box 1 box
+create_atoms 1 box
+mass 1 196.97    # Au
+pair_style eam/alloy
+pair_coeff * * /home/santi/Documents/lammps2026/potentials/Au-Grochola-JCP05.eam.alloy Au

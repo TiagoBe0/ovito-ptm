@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amorphous carbon cluster analysis &mdash; modifier reference (unofficial fork docs, styled after the OVITO User Manual)</title>
+<style>
+* { box-sizing: border-box; }
+html, body { margin:0; padding:0; }
+body {
+  font-family: Lato, "proxima-nova", "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 24px;
+  color: #404040;
+  background: #fcfcfc;
+}
+a { color:#2980b9; text-decoration:none; }
+a:hover { text-decoration:underline; }
+p { margin: 0 0 24px; }
+hr { border:0; border-top:1px solid #e1e4e5; margin:24px 0; }
+h1,h2,h3,h4,h5,h6 {
+  font-family: "Roboto Slab","ff-tisa-web-pro",Georgia,Arial,sans-serif;
+  font-weight:700; color:#2c2c2c; margin: 32px 0 16px;
+}
+h1 { font-size:175%; padding-bottom:10px; border-bottom:1px solid #e1e4e5; margin-top:0; }
+h2 { font-size:150%; }
+h3 { font-size:125%; }
+h4 { font-size:115%; }
+.headerlink { opacity:0; margin-left:6px; font-size:80%; color:#a2a2a2; }
+h1:hover .headerlink, h2:hover .headerlink, h3:hover .headerlink { opacity:1; }
+
+/* ---- layout: fixed dark sidebar + content column, same skeleton as the
+   Read the Docs theme OVITO's own manual uses ---- */
+.wy-grid-for-nav { position:relative; }
+.wy-nav-side {
+  position:fixed; top:0; bottom:0; left:0; width:300px;
+  background:#343131; color:#9b9b9b; overflow-y:auto; z-index:200;
+}
+.wy-side-nav-search {
+  display:block; padding:0.809em; background:#2980b9; text-align:center; color:#fcfcfc;
+}
+.wy-side-nav-search img.logo { width:100%; max-width:230px; background:#fff; border-radius:4px; padding:6px; }
+.wy-side-nav-search .version { display:block; margin-top:6px; font-size:85%; opacity:0.85; }
+.wy-menu-vertical { padding-bottom:2em; }
+.wy-menu-vertical ul { margin:0; padding:0; list-style:none; }
+.wy-menu-vertical li { list-style:none; }
+.wy-menu-vertical li.caption {
+  color:#55a5d9; font-size:85%; font-weight:700; text-transform:uppercase;
+  padding: 1.2em 1.618em 0.2em; letter-spacing: 0.5px;
+}
+.wy-menu-vertical a {
+  display:block; line-height:18px; padding:0.4045em 1.618em; font-size:90%; color:#d9d9d9;
+}
+.wy-menu-vertical a:hover { background:#4e4a4a; }
+.wy-menu-vertical li.current > a, .wy-menu-vertical a.current {
+  background:#fcfcfc; color:#404040; font-weight:700; border-top:1px solid #c9c9c9; border-bottom:1px solid #c9c9c9;
+}
+.wy-menu-vertical .pro-tag {
+  display:inline-block; margin-left:4px; font-size:75%; font-weight:700;
+  background:rgb(230,200,170); color:#404040; border-radius:3px; padding:1px 4px;
+}
+
+.wy-nav-content-wrap { margin-left:300px; background:#fcfcfc; min-height:100vh; }
+.wy-nav-content { max-width:950px; margin:0 auto; padding:1.618em 3.236em 4em; }
+
+.wy-breadcrumbs { list-style:none; margin:0; padding:0.6em 0; font-size:90%; }
+.wy-breadcrumbs li { display:inline; }
+.wy-breadcrumbs .aside { float:right; text-align:right; font-size:95%; }
+
+/* ---- admonitions (note / warning / seealso), same palette as the real theme ---- */
+.admonition { margin:0 0 24px; padding:12px 12px 12px 12px; border-radius:2px; }
+.admonition-title { margin:-12px -12px 12px; padding:8px 12px; font-weight:700; border-radius:2px 2px 0 0; color:#fff; }
+.admonition p:last-child { margin-bottom:0; }
+.admonition.note, .admonition.seealso { background:#e7f2fa; }
+.admonition.note .admonition-title, .admonition.seealso .admonition-title { background:#6ab0de; }
+.admonition.warning { background:#ffedcc; }
+.admonition.warning .admonition-title { background:#f0b37e; }
+.admonition.danger { background:#fdf3f2; }
+.admonition.danger .admonition-title { background:#f29f97; }
+
+/* ---- inline GUI-label references, tables, code ---- */
+.guilabel {
+  display:inline-block; font-size:80%; font-weight:700; border-radius:4px;
+  padding:2.4px 6px; margin:auto 2px; border:1px solid #7fbbe3; background:#e7f2fa; color:#2c2c2c;
+}
+code, .literal {
+  font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size:85%;
+  background:#fff; border:1px solid #e1e4e5; padding:2px 5px; color:#e74c3c;
+}
+pre {
+  font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size:85%;
+  background:#f8f8f8; border:1px solid #e1e4e5; border-left:3px solid #2980b9;
+  padding:12px 16px; overflow-x:auto; line-height:1.5; color:#404040;
+}
+pre code { background:none; border:0; padding:0; color:inherit; }
+
+table.docutils {
+  border-collapse:collapse; margin:0 0 24px; width:100%; font-size:90%;
+}
+table.docutils th, table.docutils td { padding:8px 16px; border-bottom:1px solid #e1e4e5; text-align:left; vertical-align:top; }
+table.docutils thead th { border-bottom:2px solid #e1e4e5; font-weight:700; }
+table.docutils tbody tr:nth-child(odd) { background:#f3f6f6; }
+
+ul, ol { margin:0 0 24px; padding-left:1.6em; }
+li { margin-bottom:6px; }
+li > p { margin-bottom:6px; }
+figure { margin: 0 0 24px; text-align:center; }
+figure img { max-width:100%; border:1px solid #e1e4e5; }
+figcaption { font-size:85%; color:#767676; font-style:italic; margin-top:4px; }
+
+.rst-footer-buttons { display:flex; justify-content:space-between; margin-top:48px; }
+.btn {
+  display:inline-block; padding:8px 16px; border-radius:4px; background:#f3f6f6; color:#404040 !important;
+  font-weight:700; text-decoration:none !important; border:1px solid #e1e4e5;
+}
+.btn:hover { background:#e5ebeb; }
+.doc-footer { color:#808080; font-size:85%; margin-top:24px; }
+
+.unofficial-banner {
+  background:#fdf6e3; border:1px solid #f0e0b0; border-radius:3px;
+  padding:10px 14px; font-size:88%; color:#6b5a1e; margin-bottom:24px;
+}
+
+@media (max-width: 900px) {
+  .wy-nav-side { display:none; }
+  .wy-nav-content-wrap { margin-left:0; }
+}
+</style>
+</head>
+<body>
+<div class="wy-grid-for-nav">
+
+<nav class="wy-nav-side">
+  <div class="wy-side-nav-search">
+    <img class="logo" alt="OVITO" src="data:image/png;base64,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Lm9yZy94bXAvIgogICAgeG1sbnM6ZGM9Imh0dHA6Ly9wdXJsLm9yZy9kYy9lbGVtZW50cy8xLjEvIgogICAgeG1sbnM6dGlmZj0iaHR0cDovL25zLmFkb2JlLmNvbS90aWZmLzEuMC8iCiAgICB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iCiAgIHhtcE1NOkRvY3VtZW50SUQ9ImdpbXA6ZG9jaWQ6Z2ltcDpkMWY5NWFkMy1kNDZhLTRiOWUtOTE3NS05ZWRiMDlmZjE1MjkiCiAgIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6YzM3N2VmNjYtYjZlZi00YjAxLWEyNWMtOTQwMWI4OWU3YjEzIgogICB4bXBNTTpPcmlnaW5hbERvY3VtZW50SUQ9InhtcC5kaWQ6OTc1NWQ2ZjktMmM0MC00MWI2LWI2M2UtMDRhNTJlODIxZTZkIgogICBHSU1QOkFQST0iMi4wIgogICBHSU1QOlBsYXRmb3JtPSJXaW5kb3dzIgogICBHSU1QOlRpbWVTdGFtcD0iMTYxODA3OTc0MTU2NTYzMyIKICAgR0lNUDpWZXJzaW9uPSIyLjEwLjIyIgogICBkYzpGb3JtYXQ9ImltYWdlL3BuZyIKICAgdGlmZjpPcmllbnRhdGlvbj0iMSIKICAgeG1wOkNyZWF0b3JUb29sPSJHSU1QIDIuMTAiPgogICA8aXB0Y0V4dDpMb2NhdGlvbkNyZWF0ZWQ+CiAgICA8cmRmOkJhZy8+CiAgIDwvaXB0Y0V4dDpMb2NhdGlvbkNyZWF0ZWQ+CiAgIDxpcHRjRXh0OkxvY2F0aW9uU2hvd24+CiAgICA8cmRmOkJhZy8+CiAgIDwvaXB0Y0V4dDpMb2NhdGlvblNob3duPgogICA8aXB0Y0V4dDpBcnR3b3JrT3JPYmplY3Q+CiAgICA8cmRmOkJhZy8+CiAgIDwvaXB0Y0V4dDpBcnR3b3JrT3JPYmplY3Q+CiAgIDxpcHRjRXh0OlJlZ2lzdHJ5SWQ+CiAgICA8cmRmOkJhZy8+CiAgIDwvaXB0Y0V4dDpSZWdpc3RyeUlkPgogICA8eG1wTU06SGlzdG9yeT4KICAgIDxyZGY6U2VxPgogICAgIDxyZGY6bGkKICAgICAgc3RFdnQ6YWN0aW9uPSJzYXZlZCIKICAgICAgc3RFdnQ6Y2hhbmdlZD0iLyIKICAgICAgc3RFdnQ6aW5zdGFuY2VJRD0ieG1wLmlpZDo2NWY2ZDg5Zi1jMWVmLTQ2ZTQtYWQ5ZC01Yzk5NmEyNTY0ODEiCiAgICAgIHN0RXZ0OnNvZnR3YXJlQWdlbnQ9IkdpbXAgMi4xMCAoV2luZG93cykiCiAgICAgIHN0RXZ0OndoZW49IjIwMjEtMDQtMTBUMjA6MzU6NDEiLz4KICAgIDwvcmRmOlNlcT4KICAgPC94bXBNTTpIaXN0b3J5PgogICA8cGx1czpJbWFnZVN1cHBsaWVyPgogICAgPHJkZjpTZXEvPgogICA8L3BsdXM6SW1hZ2VTdXBwbGllcj4KICAgPHBsdXM6SW1hZ2VDcmVhdG9yPgogICAgPHJkZjpTZXEvPgogICA8L3BsdXM6SW1hZ2VDcmVhdG9yPgogICA8cGx1czpDb3B5cmlnaHRPd25lcj4KICAgIDxyZGY6U2VxLz4KICAgPC9wbHVzOkNvcHlyaWdodE93bmVyPgogICA8cGx1czpMaWNlbnNvcj4KICAgIDxyZGY6U2VxLz4KICAgPC9wbHVzOkxpY2Vuc29yPgogIDwvcmRmOkRlc2NyaXB0aW9uPgogPC9yZGY6UkRGPgo8L3g6eG1wbWV0YT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgIAo8P3hwYWNrZXQgZW5kPSJ3Ij8+pG1eIwAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAAFjAAABYwBQNL4DAAAAAd0SU1FB+UEChIjKfPZ/iYAABRJSURBVHja7Z15tFxVlYe/TQYIIQkkJAwBgQAyJiDihCAIAootoigotCgCIiyW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">
+    <span class="version">DislocationTracking fork &middot; unofficial docs</span>
+  </div>
+  <div class="wy-menu-vertical">
+    <p class="caption">Pipelines</p>
+    <ul>
+      <li><a href="javascript:void(0)">Data sources</a></li>
+      <li><a href="javascript:void(0)">Data objects</a></li>
+      <li><a href="javascript:void(0)">Visual elements</a></li>
+    </ul>
+    <p class="caption">Modifiers &raquo; Analysis</p>
+    <ul>
+<li><a class="" href="javascript:void(0)">Ackland-Jones analysis</a></li>
+<li><a class="" href="javascript:void(0)">Affine transformation</a></li>
+<li><a class="" href="javascript:void(0)">Ambient occlusion</a></li>
+<li class="current"><a class="current" href="#">Amorphous carbon cluster analysis</a></li>
+<li><a class="" href="javascript:void(0)">Amorphous carbon cluster tracking</a></li>
+<li><a class="" href="javascript:void(0)">Assign color</a></li>
+<li><a class="" href="javascript:void(0)">Atomic strain</a></li>
+<li><a class="" href="javascript:void(0)">Bond angle distribution <span class="pro-tag">pro</span></a></li>
+<li><a class="" href="javascript:void(0)">Centrosymmetry parameter</a></li>
+<li><a class="" href="javascript:void(0)">Cluster analysis</a></li>
+<li><a class="" href="javascript:void(0)">Color coding</a></li>
+<li><a class="" href="javascript:void(0)">Common neighbor analysis</a></li>
+<li><a class="" href="javascript:void(0)">Construct surface mesh</a></li>
+<li><a class="" href="javascript:void(0)">Coordination analysis</a></li>
+<li><a class="" href="javascript:void(0)">Expression selection</a></li>
+<li><a class="" href="javascript:void(0)">Polyhedral template matching</a></li>
+<li><a class="" href="javascript:void(0)">Voronoi analysis</a></li>
+<li><a class="" href="javascript:void(0)">Wigner-Seitz defect analysis</a></li>
+    </ul>
+  </div>
+</nav>
+
+<section class="wy-nav-content-wrap">
+<div class="wy-nav-content">
+
+<div class="wy-breadcrumbs">
+  <span><a href="javascript:void(0)">Home</a> &raquo; <a href="javascript:void(0)">Reference</a> &raquo; <a href="javascript:void(0)">Pipelines</a> &raquo; <a href="javascript:void(0)">Modifiers</a> &raquo; Amorphous carbon cluster analysis</span>
+  <span class="aside"><a href="AMORPHOUS_CARBON_MODIFIER.md">Full technical notes &rarr;</a><br><a href="MANUAL_TECNICO.md">Manual de estudio (ES) &rarr;</a></span>
+</div>
+<hr>
+
+<div class="unofficial-banner">
+  This page documents a modifier added in a private research fork of OVITO
+  (this repository). It is formatted after the official
+  <a href="https://www.ovito.org/docs/current/reference/pipelines/modifiers/index.html">OVITO User Manual</a>
+  for readability, but is <strong>not</strong> part of the official OVITO
+  documentation and has not been reviewed by OVITO GmbH.
+</div>
+
+<h1>Amorphous carbon cluster analysis<a class="headerlink" href="#top">&para;</a></h1>
+
+<p>This modifier is intended for large amorphous-carbon configurations. It
+classifies every carbon atom by hybridization state (sp, sp2, or sp3) from
+its coordination number, groups atoms of a selected hybridization state into
+connected clusters, and can additionally detect <strong>closed primitive
+rings</strong> in the resulting bond graph &mdash; letting individual rings
+be isolated and counted by the number of atoms they contain.</p>
+
+<p>It appears in the <span class="guilabel">Analysis</span> modifier category
+as <strong>Amorphous carbon cluster analysis</strong>. A companion modifier,
+<a href="javascript:void(0)">Amorphous carbon cluster tracking</a>, matches
+clusters found by this modifier between a reference configuration and the
+current one, to follow how a domain breaks apart over a damage sequence.</p>
+
+<h2>Coordination and hybridization<a class="headerlink" href="#hybridization">&para;</a></h2>
+
+<p>The <span class="guilabel">Coordination cutoff</span> parameter is the
+C&ndash;C neighbor cutoff used to determine each atom's coordination number
+and, from it, its hybridization: 2 neighbors &rarr; sp, 3 &rarr; sp2, 4
+&rarr; sp3 (any other coordination is classified as &ldquo;other&rdquo;,
+typically an under- or over-coordinated defect site). A typical choice is
+the first minimum of the C&ndash;C pair distribution function.</p>
+
+<p>The modifier outputs two particle properties from this step:</p>
+<table class="docutils">
+<thead><tr><th>Property</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>Carbon Coordination</code></td><td>Number of neighbors inside the coordination cutoff.</td></tr>
+<tr><td><code>Hybridization</code></td><td>0 = other, 1 = sp, 2 = sp2, 3 = sp3.</td></tr>
+</tbody>
+</table>
+
+<h2>Connected domains<a class="headerlink" href="#connected-domains">&para;</a></h2>
+
+<p>The <span class="guilabel">Connected domains</span> option selects which
+hybridization state's atoms are clustered: <span class="guilabel">Cluster
+sp2 atoms</span> or <span class="guilabel">Cluster sp3 atoms</span>. Atoms of
+the selected state are connected into clusters using the <span
+class="guilabel">Cluster bond cutoff</span> parameter.</p>
+
+<div class="admonition warning">
+<p class="admonition-title">Keep the two cutoffs equal</p>
+<p>The bond cutoff defaults to the same value as the coordination cutoff,
+because a bond good enough to make an atom sp3 should also be a bond along
+which its cluster (and, see below, its rings) propagate. A bond cutoff
+<em>shorter</em> than the coordination cutoff discards real bonds and
+inflates the cluster count; a bond cutoff <em>longer</em> than the
+coordination cutoff connects clusters along bonds that never counted toward
+any atom's hybridization, and simultaneously causes the coordination cutoff
+to under-count neighbors, demoting real sp3 atoms to sp2. On one measured
+configuration, a 1.9&nbsp;&Aring; / 2.3&nbsp;&Aring; mismatch left roughly
+half of the sp3 population holding a bond outside the graph that defined
+their own hybridization. Set the two cutoffs equal unless a deliberately
+stricter or looser connectivity criterion is required, and report the
+cutoffs alongside any cluster or ring count.</p>
+</div>
+
+<p>Clusters smaller than <span class="guilabel">Minimum relevant cluster
+size</span> remain labeled but are excluded from the relevant-cluster count
+and the clustered fraction.</p>
+
+<h3>Clustering a percolating network<a class="headerlink" href="#percolating">&para;</a></h3>
+
+<p>Connected-component analysis is degenerate for a network above the
+percolation threshold, which is where sp3-rich amorphous carbon sits: the
+largest connected component typically holds &gt;90% of the phase regardless
+of accumulated damage, so its size barely moves as a damage indicator. The
+<span class="guilabel">Minimum same-phase neighbors</span> parameter
+restricts clustering to the well-embedded core of the phase: only atoms with
+at least this many same-phase neighbors are clustered at all. At 0, the
+whole phase is clustered (degenerate, as above); at 3, only the core is, and
+the core does lose percolation under damage.</p>
+
+<table class="docutils">
+<thead><tr><th></th><th>whole phase</th><th>core (&ge;3 same-phase neighbors)</th></tr></thead>
+<tbody>
+<tr><td>largest / clustered, low damage</td><td>0.985</td><td>0.912</td></tr>
+<tr><td>largest / clustered, high damage</td><td>0.946</td><td>0.030</td></tr>
+</tbody>
+</table>
+
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Under a core filter, <code>largest_cluster_fraction</code> and
+<code>clustered_fraction</code> still divide by the whole phase, not by the
+atoms admitted by the filter. Use the <code>*_core_*</code> counterparts
+(<code>largest_cluster_core_fraction</code>, <code>clustered_core_fraction</code>)
+whenever the filter is active, and never compare a whole-phase fraction
+between runs that used a different filter setting.</p>
+</div>
+
+<h2 id="ring-statistics">Ring statistics<a class="headerlink" href="#ring-statistics">&para;</a></h2>
+
+<p>Enabling <span class="guilabel">Detect closed rings (SP/primitive)</span>
+searches the same-phase bond graph for <strong>closed primitive rings</strong>
+and reports how many atoms each one is made of &mdash; the quantitative
+counterpart of isolating individual closed rings by eye when clustering sp3
+(or sp2) atoms with the cutoffs tuned so that a ring reads as a clean loop.
+It is off by default (see <a href="#cost">performance</a>, below); selecting
+<span class="guilabel">Color by ring size</span> also enables it
+automatically.</p>
+
+<h3>Ring definition<a class="headerlink" href="#ring-definition">&para;</a></h3>
+
+<p>A closed walk is not a useful count by itself: a dense, percolating sp3
+network has thousands of closed walks per atom once combinations of smaller
+rings are allowed &mdash; two hexagons fused along a shared edge also form a
+ten-membered closed walk around their outer boundary, which is not a
+physically distinct ring. The modifier instead uses the
+<strong>shortest-path (SP) / primitive ring</strong> criterion:</p>
+
+<blockquote>
+<p>D.&nbsp;S.&nbsp;Franzblau, <em>Shortest-path network analysis of the
+topology of amorphous solids</em>, Phys.&nbsp;Rev.&nbsp;B <strong>44</strong>,
+4925 (1991).</p>
+</blockquote>
+
+<p>For every bond <code>(i, j)</code>, the modifier finds the shortest
+alternative path connecting <code>i</code> and <code>j</code> that does not
+use that bond directly. The resulting cycle is accepted as a ring only if no
+pair of atoms on it is connected by a strictly shorter path through the rest
+of the graph &mdash; the test that rejects the fused-hexagon example above.
+Ties among several equally short alternative paths through the same bond are
+all enumerated and checked independently (capped at 32 candidate paths and
+64 tied predecessors per node, to remain tractable in locally symmetric,
+diamond-like regions; this cap is not expected to bind on a genuinely
+amorphous network).</p>
+
+<div class="admonition note">
+<p class="admonition-title">Periodic boundary conditions</p>
+<p>A candidate ring is only accepted if it closes in real, unwrapped space:
+the net periodic-image shift accumulated around the loop must be exactly
+zero, using the same integer bookkeeping the percolation test already uses
+for clusters. This prevents a path that merely wraps around the periodic
+cell &mdash; a percolation loop, not a molecule &mdash; from being reported
+as a ring. In practice this never binds for realistic cell sizes: a ring of
+up to <span class="guilabel">Maximum ring size to search</span> atoms spans
+at most a few bond lengths, far below a typical simulation cell edge
+length.</p>
+</div>
+
+<h3>Parameters<a class="headerlink" href="#ring-parameters">&para;</a></h3>
+
+<table class="docutils">
+<thead><tr><th>Parameter</th><th>Role</th><th>Default</th></tr></thead>
+<tbody>
+<tr><td><span class="guilabel">Maximum ring size to search</span></td>
+<td>Bounds the shortest-path search depth; the main cost control. Real rings
+in amorphous carbon are almost always well under 10 atoms.</td><td>8</td></tr>
+<tr><td><span class="guilabel">Minimum ring size to search</span></td>
+<td>Filters out reported rings smaller than this size <em>after</em>
+detection (e.g. to exclude triangles). Cannot go below 3, the smallest ring a
+simple graph can contain; 1- and 2-atom &ldquo;rings&rdquo; never occur.</td>
+<td>3</td></tr>
+</tbody>
+</table>
+
+<p>Raising <span class="guilabel">Minimum ring size to search</span> does not
+search for a larger ring through the same bond in place of a discarded small
+one &mdash; each bond contributes at most its own shortest primitive ring
+(or tied set of rings), consistent with the SP criterion above.</p>
+
+<h3>Output<a class="headerlink" href="#ring-output">&para;</a></h3>
+
+<table class="docutils">
+<thead><tr><th>Property / attribute</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>Ring Size</code></td><td>Size, in atoms, of the smallest primitive ring the atom belongs to; 0 if none.</td></tr>
+<tr><td><code>Smallest Ring Identifier</code></td><td>ID of that ring (ties broken by lowest ID). Use with Expression Selection, e.g. <code>SmallestRingIdentifier==42</code>, to isolate and count the atoms of exactly one ring.</td></tr>
+<tr><td><code>Ring Membership Count</code></td><td>Number of distinct primitive rings the atom belongs to (2 for an atom shared by two fused rings, etc.).</td></tr>
+<tr><td><code>AmorphousCarbon.ring_count_total</code></td><td>Total number of primitive rings found.</td></tr>
+<tr><td><code>AmorphousCarbon.ring_mean_size</code></td><td>Mean ring size over all counted rings.</td></tr>
+<tr><td><code>AmorphousCarbon.ring_count_&lt;N&gt;</code></td><td>Histogram: number of rings of size exactly <code>N</code>.</td></tr>
+</tbody>
+</table>
+
+<p><span class="guilabel">Color by ring size</span> maps <code>Ring Size</code>
+to a sequential ramp (light = small rings, dark = large rings); atoms
+outside any found ring are shown in a neutral graphite tone.</p>
+
+<h3 id="cost">Performance<a class="headerlink" href="#cost">&para;</a></h3>
+
+<p>The search runs a depth-bounded breadth-first search from every bond in
+the selected phase, so cost scales with the number of bonds and with
+<span class="guilabel">Maximum ring size to search</span>. Measured on a
+473,344-atom configuration: about 10 seconds in addition to the existing
+cluster analysis (which by itself takes about 10 seconds), with the default
+maximum ring size of 8.</p>
+
+<h3>Validation</h3>
+
+<p>No independent reference implementation exists for this criterion, so
+correctness was checked against physical expectation rather than a
+line-by-line comparison. On the least-damaged configuration available (most
+diamond-like), the sp3 primitive rings averaged <strong>6.004</strong> atoms
+&mdash; matching the ideal diamond lattice, which is composed entirely of
+six-membered (chair-conformation) rings, to three significant figures. Under
+accumulated damage, the mean ring size decreased as five-membered defect
+rings appeared, and the sp2 phase (fragmented into small clusters) yielded
+far fewer rings than the percolating sp3 matrix &mdash; both in the
+physically expected direction. Raising <span class="guilabel">Minimum ring
+size to search</span> from 3 to 6 on one configuration removed rings and
+raised the mean size monotonically, as a size floor must.</p>
+
+<div class="admonition warning">
+<p class="admonition-title">Rings are not the same as visually distinguishable cluster shape</p>
+<p>Before this per-bond search existed, the only way to spot a &ldquo;ring&rdquo;
+was by eye, from small connected-component clusters that happened to look
+loop-shaped &mdash; which depends on how fragmented the network is, not on
+whether real closed cycles exist. A configuration where nearly the entire
+phase sits in one giant cluster has no small-cluster substructure left to
+look at, even though it may contain <em>more</em> real primitive rings than
+a more fragmented, more damaged configuration where small ring-shaped
+clusters are easy to see. Always read ring counts from <code>Ring Size</code>
+/ <code>ring_count_total</code>, never from how many ring-like shapes are
+visible in a cluster-colored render.</p>
+</div>
+
+<h2>Visualization<a class="headerlink" href="#visualization">&para;</a></h2>
+
+<p>The <span class="guilabel">Particle coloring</span> option can color
+particles by hybridization, cluster identifier, cluster size, same-phase
+coordination, or (see above) ring size, or leave existing colors untouched.</p>
+
+<h2>Global attributes</h2>
+
+<p>All attributes are reported under the <code>AmorphousCarbon.*</code>
+namespace: composition counts and percentages for each hybridization state,
+cluster statistics (count, largest cluster size and fraction, percolation
+flag, radius of gyration), the core-filter counterparts described above, the
+two cutoffs used, and &mdash; when ring analysis is enabled &mdash; the ring
+statistics listed in the table above.</p>
+
+<h2>Batch mode</h2>
+
+<p>The companion command-line entry point <code>--carbon-track</code> runs
+this modifier (and, downstream, <a href="javascript:void(0)">Amorphous
+carbon cluster tracking</a>) over a whole trajectory without opening the
+GUI, writing one CSV row per frame. Ring analysis is controlled by
+<code>--carbon-track-rings</code>, <code>--carbon-track-max-ring-size</code>,
+and <code>--carbon-track-min-ring-size</code>.</p>
+
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a href="AMORPHOUS_CARBON_MODIFIER.md">AMORPHOUS_CARBON_MODIFIER.md</a>
+&mdash; full parameter/attribute reference and batch-mode CLI flags.<br>
+<a href="MANUAL_TECNICO.md">MANUAL_TECNICO.md</a> &mdash; study notes (in
+Spanish) on the ring-detection algorithm, worked examples, and a
+question-and-answer section.</p>
+</div>
+
+<div class="rst-footer-buttons">
+  <a class="btn" href="AMORPHOUS_CARBON_MODIFIER.md">&larr; Full technical notes</a>
+  <a class="btn" href="MANUAL_TECNICO.md">Manual de estudio (ES) &rarr;</a>
+</div>
+
+<hr>
+<p class="doc-footer">Unofficial reference page for this OVITO fork, styled
+after the OVITO User Manual layout for readability. Not affiliated with or
+reviewed by OVITO GmbH.</p>
+
+</div>
+</section>
+</div>
+</body>
+</html>

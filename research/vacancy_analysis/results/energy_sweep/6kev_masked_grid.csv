@@ -1,0 +1,253 @@
+source_file,source_frame,timestep,mask_signal,mask_threshold,cavity_radius_ratio,recombination_cutoff,frenkel_recombination,require_free_volume,mask_disordered,raw_ws_vacancies,raw_ws_interstitials,vacancy_count,interstitial_count,frenkel_recombined,freevolume_excluded,structural_excluded,surface_or_void_excluded,estimated_nn_distance,mask_signal_used,mask_signal_cutoff,status_type,status_text
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.0,0,0,lammps-c-coord,0.3,0.5,auto,true,true,true,0,0,0,0,0,0,0,0,2.38972214702881,true,11.97120840846533,success,"Classified 0 vacancy candidates and 0 corrected interstitials.
+Wigner-Seitz raw: 0 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.5000,1,5000,lammps-c-coord,0.3,0.5,auto,true,true,true,394,394,0,212,182,0,212,0,2.38972214702881,true,11.88449989572352,success,"Classified 0 vacancy candidates and 212 corrected interstitials.
+Wigner-Seitz raw: 394 vacancies. Removed: 182 Frenkel pairs, 0 without free volume, 212 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.10000,2,10000,lammps-c-coord,0.3,0.5,auto,true,true,true,224,224,4,115,109,0,111,0,2.38972214702881,true,11.92798962349809,success,"Classified 4 vacancy candidates and 115 corrected interstitials.
+Wigner-Seitz raw: 224 vacancies. Removed: 109 Frenkel pairs, 0 without free volume, 111 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.15000,3,15000,lammps-c-coord,0.3,0.5,auto,true,true,true,43,43,12,23,20,0,11,0,2.38972214702881,true,11.95014733550541,success,"Classified 12 vacancy candidates and 23 corrected interstitials.
+Wigner-Seitz raw: 43 vacancies. Removed: 20 Frenkel pairs, 0 without free volume, 11 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.20000,4,20000,lammps-c-coord,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96184936823539,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.25000,5,25000,lammps-c-coord,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96346758026949,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.30000,6,30000,lammps-c-coord,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96556025510768,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.35000,7,35000,lammps-c-coord,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96631862022695,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.40000,8,40000,lammps-c-coord,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96703413020006,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.45000,9,45000,lammps-c-coord,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96652496870912,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.50000,10,50000,lammps-c-coord,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96739360958076,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.55000,11,55000,lammps-c-coord,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96803000478752,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.60000,12,60000,lammps-c-coord,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96765940201179,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.65000,13,65000,lammps-c-coord,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96781730950102,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.70000,14,70000,lammps-c-coord,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96663140274472,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.75000,15,75000,lammps-c-coord,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.9669698595013,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.80000,16,80000,lammps-c-coord,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96795752049571,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.85000,17,85000,lammps-c-coord,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96800367230188,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.90000,18,90000,lammps-c-coord,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96730275348582,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.95000,19,95000,lammps-c-coord,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96881928114927,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.100000,20,100000,lammps-c-coord,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.967667201636,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.0,0,0,lammps-c-coord,0.5,0.5,auto,true,true,true,0,0,0,0,0,0,0,0,2.38972214702881,true,11.97120840846533,success,"Classified 0 vacancy candidates and 0 corrected interstitials.
+Wigner-Seitz raw: 0 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.5000,1,5000,lammps-c-coord,0.5,0.5,auto,true,true,true,394,394,3,212,182,0,209,0,2.38972214702881,true,11.88449989572352,success,"Classified 3 vacancy candidates and 212 corrected interstitials.
+Wigner-Seitz raw: 394 vacancies. Removed: 182 Frenkel pairs, 0 without free volume, 209 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.10000,2,10000,lammps-c-coord,0.5,0.5,auto,true,true,true,224,224,23,115,109,0,92,0,2.38972214702881,true,11.92798962349809,success,"Classified 23 vacancy candidates and 115 corrected interstitials.
+Wigner-Seitz raw: 224 vacancies. Removed: 109 Frenkel pairs, 0 without free volume, 92 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.15000,3,15000,lammps-c-coord,0.5,0.5,auto,true,true,true,43,43,18,23,20,0,5,0,2.38972214702881,true,11.95014733550541,success,"Classified 18 vacancy candidates and 23 corrected interstitials.
+Wigner-Seitz raw: 43 vacancies. Removed: 20 Frenkel pairs, 0 without free volume, 5 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.20000,4,20000,lammps-c-coord,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96184936823539,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.25000,5,25000,lammps-c-coord,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96346758026949,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.30000,6,30000,lammps-c-coord,0.5,0.5,auto,true,true,true,10,10,1,10,0,0,9,0,2.38972214702881,true,11.96556025510768,success,"Classified 1 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 9 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.35000,7,35000,lammps-c-coord,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96631862022695,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.40000,8,40000,lammps-c-coord,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96703413020006,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.45000,9,45000,lammps-c-coord,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96652496870912,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.50000,10,50000,lammps-c-coord,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96739360958076,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.55000,11,55000,lammps-c-coord,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96803000478752,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.60000,12,60000,lammps-c-coord,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96765940201179,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.65000,13,65000,lammps-c-coord,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96781730950102,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.70000,14,70000,lammps-c-coord,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96663140274472,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.75000,15,75000,lammps-c-coord,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.9669698595013,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.80000,16,80000,lammps-c-coord,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96795752049571,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.85000,17,85000,lammps-c-coord,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96800367230188,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.90000,18,90000,lammps-c-coord,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96730275348582,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.95000,19,95000,lammps-c-coord,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96881928114927,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.100000,20,100000,lammps-c-coord,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.967667201636,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.0,0,0,lammps-c-coord,0.7,0.5,auto,true,true,true,0,0,0,0,0,0,0,0,2.38972214702881,true,11.97120840846533,success,"Classified 0 vacancy candidates and 0 corrected interstitials.
+Wigner-Seitz raw: 0 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.5000,1,5000,lammps-c-coord,0.7,0.5,auto,true,true,true,394,394,10,212,182,0,202,0,2.38972214702881,true,11.88449989572352,success,"Classified 10 vacancy candidates and 212 corrected interstitials.
+Wigner-Seitz raw: 394 vacancies. Removed: 182 Frenkel pairs, 0 without free volume, 202 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.10000,2,10000,lammps-c-coord,0.7,0.5,auto,true,true,true,224,224,78,115,109,0,37,0,2.38972214702881,true,11.92798962349809,success,"Classified 78 vacancy candidates and 115 corrected interstitials.
+Wigner-Seitz raw: 224 vacancies. Removed: 109 Frenkel pairs, 0 without free volume, 37 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.15000,3,15000,lammps-c-coord,0.7,0.5,auto,true,true,true,43,43,22,23,20,0,1,0,2.38972214702881,true,11.95014733550541,success,"Classified 22 vacancy candidates and 23 corrected interstitials.
+Wigner-Seitz raw: 43 vacancies. Removed: 20 Frenkel pairs, 0 without free volume, 1 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.20000,4,20000,lammps-c-coord,0.7,0.5,auto,true,true,true,10,10,4,10,0,0,6,0,2.38972214702881,true,11.96184936823539,success,"Classified 4 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 6 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.25000,5,25000,lammps-c-coord,0.7,0.5,auto,true,true,true,10,10,1,10,0,0,9,0,2.38972214702881,true,11.96346758026949,success,"Classified 1 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 9 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.30000,6,30000,lammps-c-coord,0.7,0.5,auto,true,true,true,10,10,2,10,0,0,8,0,2.38972214702881,true,11.96556025510768,success,"Classified 2 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 8 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.35000,7,35000,lammps-c-coord,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96631862022695,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.40000,8,40000,lammps-c-coord,0.7,0.5,auto,true,true,true,10,10,1,10,0,0,9,0,2.38972214702881,true,11.96703413020006,success,"Classified 1 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 9 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.45000,9,45000,lammps-c-coord,0.7,0.5,auto,true,true,true,10,10,3,10,0,0,7,0,2.38972214702881,true,11.96652496870912,success,"Classified 3 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 7 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.50000,10,50000,lammps-c-coord,0.7,0.5,auto,true,true,true,10,10,2,10,0,0,8,0,2.38972214702881,true,11.96739360958076,success,"Classified 2 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 8 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.55000,11,55000,lammps-c-coord,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96803000478752,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.60000,12,60000,lammps-c-coord,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.96765940201179,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.65000,13,65000,lammps-c-coord,0.7,0.5,auto,true,true,true,10,10,1,10,0,0,9,0,2.38972214702881,true,11.96781730950102,success,"Classified 1 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 9 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.70000,14,70000,lammps-c-coord,0.7,0.5,auto,true,true,true,10,10,2,10,0,0,8,0,2.38972214702881,true,11.96663140274472,success,"Classified 2 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 8 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.75000,15,75000,lammps-c-coord,0.7,0.5,auto,true,true,true,10,10,1,10,0,0,9,0,2.38972214702881,true,11.9669698595013,success,"Classified 1 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 9 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.80000,16,80000,lammps-c-coord,0.7,0.5,auto,true,true,true,10,10,1,10,0,0,9,0,2.38972214702881,true,11.96795752049571,success,"Classified 1 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 9 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.85000,17,85000,lammps-c-coord,0.7,0.5,auto,true,true,true,10,10,1,10,0,0,9,0,2.38972214702881,true,11.96800367230188,success,"Classified 1 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 9 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.90000,18,90000,lammps-c-coord,0.7,0.5,auto,true,true,true,10,10,1,10,0,0,9,0,2.38972214702881,true,11.96730275348582,success,"Classified 1 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 9 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.95000,19,95000,lammps-c-coord,0.7,0.5,auto,true,true,true,10,10,1,10,0,0,9,0,2.38972214702881,true,11.96881928114927,success,"Classified 1 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 9 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.100000,20,100000,lammps-c-coord,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,11.967667201636,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.0,0,0,lammps-c-centro,0.3,0.5,auto,true,true,true,0,0,0,0,0,0,0,0,2.38972214702881,true,0.4967815853971254,success,"Classified 0 vacancy candidates and 0 corrected interstitials.
+Wigner-Seitz raw: 0 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.5000,1,5000,lammps-c-centro,0.3,0.5,auto,true,true,true,394,394,0,212,182,0,212,0,2.38972214702881,true,0.8006380643745056,success,"Classified 0 vacancy candidates and 212 corrected interstitials.
+Wigner-Seitz raw: 394 vacancies. Removed: 182 Frenkel pairs, 0 without free volume, 212 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.10000,2,10000,lammps-c-centro,0.3,0.5,auto,true,true,true,224,224,0,115,109,0,115,0,2.38972214702881,true,0.7215401016159771,success,"Classified 0 vacancy candidates and 115 corrected interstitials.
+Wigner-Seitz raw: 224 vacancies. Removed: 109 Frenkel pairs, 0 without free volume, 115 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.15000,3,15000,lammps-c-centro,0.3,0.5,auto,true,true,true,43,43,0,23,20,0,23,0,2.38972214702881,true,0.5895808052725813,success,"Classified 0 vacancy candidates and 23 corrected interstitials.
+Wigner-Seitz raw: 43 vacancies. Removed: 20 Frenkel pairs, 0 without free volume, 23 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.20000,4,20000,lammps-c-centro,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5382973113700757,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.25000,5,25000,lammps-c-centro,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5308829905447595,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.30000,6,30000,lammps-c-centro,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5268634578365238,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.35000,7,35000,lammps-c-centro,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5240655512860808,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.40000,8,40000,lammps-c-centro,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5216164310310483,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.45000,9,45000,lammps-c-centro,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5177413498367889,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.50000,10,50000,lammps-c-centro,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5165811406223242,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.55000,11,55000,lammps-c-centro,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5147463422344871,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.60000,12,60000,lammps-c-centro,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5138550784802604,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.65000,13,65000,lammps-c-centro,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5129829934423407,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.70000,14,70000,lammps-c-centro,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5120197747291912,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.75000,15,75000,lammps-c-centro,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5118648661101888,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.80000,16,80000,lammps-c-centro,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5113882377513743,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.85000,17,85000,lammps-c-centro,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5106617859005167,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.90000,18,90000,lammps-c-centro,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5110547839651044,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.95000,19,95000,lammps-c-centro,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5106325307954294,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.100000,20,100000,lammps-c-centro,0.3,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.510595613809581,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.0,0,0,lammps-c-centro,0.5,0.5,auto,true,true,true,0,0,0,0,0,0,0,0,2.38972214702881,true,0.4967815853971254,success,"Classified 0 vacancy candidates and 0 corrected interstitials.
+Wigner-Seitz raw: 0 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.5000,1,5000,lammps-c-centro,0.5,0.5,auto,true,true,true,394,394,0,212,182,0,212,0,2.38972214702881,true,0.8006380643745056,success,"Classified 0 vacancy candidates and 212 corrected interstitials.
+Wigner-Seitz raw: 394 vacancies. Removed: 182 Frenkel pairs, 0 without free volume, 212 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.10000,2,10000,lammps-c-centro,0.5,0.5,auto,true,true,true,224,224,0,115,109,0,115,0,2.38972214702881,true,0.7215401016159771,success,"Classified 0 vacancy candidates and 115 corrected interstitials.
+Wigner-Seitz raw: 224 vacancies. Removed: 109 Frenkel pairs, 0 without free volume, 115 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.15000,3,15000,lammps-c-centro,0.5,0.5,auto,true,true,true,43,43,0,23,20,0,23,0,2.38972214702881,true,0.5895808052725813,success,"Classified 0 vacancy candidates and 23 corrected interstitials.
+Wigner-Seitz raw: 43 vacancies. Removed: 20 Frenkel pairs, 0 without free volume, 23 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.20000,4,20000,lammps-c-centro,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5382973113700757,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.25000,5,25000,lammps-c-centro,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5308829905447595,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.30000,6,30000,lammps-c-centro,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5268634578365238,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.35000,7,35000,lammps-c-centro,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5240655512860808,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.40000,8,40000,lammps-c-centro,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5216164310310483,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.45000,9,45000,lammps-c-centro,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5177413498367889,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.50000,10,50000,lammps-c-centro,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5165811406223242,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.55000,11,55000,lammps-c-centro,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5147463422344871,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.60000,12,60000,lammps-c-centro,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5138550784802604,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.65000,13,65000,lammps-c-centro,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5129829934423407,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.70000,14,70000,lammps-c-centro,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5120197747291912,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.75000,15,75000,lammps-c-centro,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5118648661101888,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.80000,16,80000,lammps-c-centro,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5113882377513743,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.85000,17,85000,lammps-c-centro,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5106617859005167,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.90000,18,90000,lammps-c-centro,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5110547839651044,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.95000,19,95000,lammps-c-centro,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5106325307954294,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.100000,20,100000,lammps-c-centro,0.5,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.510595613809581,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.0,0,0,lammps-c-centro,0.7,0.5,auto,true,true,true,0,0,0,0,0,0,0,0,2.38972214702881,true,0.4967815853971254,success,"Classified 0 vacancy candidates and 0 corrected interstitials.
+Wigner-Seitz raw: 0 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.5000,1,5000,lammps-c-centro,0.7,0.5,auto,true,true,true,394,394,0,212,182,0,212,0,2.38972214702881,true,0.8006380643745056,success,"Classified 0 vacancy candidates and 212 corrected interstitials.
+Wigner-Seitz raw: 394 vacancies. Removed: 182 Frenkel pairs, 0 without free volume, 212 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.10000,2,10000,lammps-c-centro,0.7,0.5,auto,true,true,true,224,224,0,115,109,0,115,0,2.38972214702881,true,0.7215401016159771,success,"Classified 0 vacancy candidates and 115 corrected interstitials.
+Wigner-Seitz raw: 224 vacancies. Removed: 109 Frenkel pairs, 0 without free volume, 115 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.15000,3,15000,lammps-c-centro,0.7,0.5,auto,true,true,true,43,43,0,23,20,0,23,0,2.38972214702881,true,0.5895808052725813,success,"Classified 0 vacancy candidates and 23 corrected interstitials.
+Wigner-Seitz raw: 43 vacancies. Removed: 20 Frenkel pairs, 0 without free volume, 23 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.20000,4,20000,lammps-c-centro,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5382973113700757,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.25000,5,25000,lammps-c-centro,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5308829905447595,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.30000,6,30000,lammps-c-centro,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5268634578365238,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.35000,7,35000,lammps-c-centro,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5240655512860808,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.40000,8,40000,lammps-c-centro,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5216164310310483,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.45000,9,45000,lammps-c-centro,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5177413498367889,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.50000,10,50000,lammps-c-centro,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5165811406223242,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.55000,11,55000,lammps-c-centro,0.7,0.5,auto,true,true,true,10,10,1,10,0,0,9,0,2.38972214702881,true,0.5147463422344871,success,"Classified 1 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 9 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.60000,12,60000,lammps-c-centro,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5138550784802604,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.65000,13,65000,lammps-c-centro,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5129829934423407,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.70000,14,70000,lammps-c-centro,0.7,0.5,auto,true,true,true,10,10,1,10,0,0,9,0,2.38972214702881,true,0.5120197747291912,success,"Classified 1 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 9 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.75000,15,75000,lammps-c-centro,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5118648661101888,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.80000,16,80000,lammps-c-centro,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5113882377513743,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.85000,17,85000,lammps-c-centro,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5106617859005167,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.90000,18,90000,lammps-c-centro,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5110547839651044,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.95000,19,95000,lammps-c-centro,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.5106325307954294,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.100000,20,100000,lammps-c-centro,0.7,0.5,auto,true,true,true,10,10,0,10,0,0,10,0,2.38972214702881,true,0.510595613809581,success,"Classified 0 vacancy candidates and 10 corrected interstitials.
+Wigner-Seitz raw: 10 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 10 in disordered regions, 0 near surfaces/voids."

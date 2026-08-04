@@ -8,7 +8,7 @@ model as a TorchScript file (.pt) that can be loaded by MLStructureModifier.
 
 Usage
 -----
-    python scripts/train_structure_classifier.py [--output model.pt]
+    python research/ml_structure_classifier/scripts/train_structure_classifier.py [--output model.pt]
 
 Requirements
 ------------

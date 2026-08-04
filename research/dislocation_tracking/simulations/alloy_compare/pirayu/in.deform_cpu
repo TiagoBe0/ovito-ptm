@@ -1,0 +1,80 @@
+# =====================================================================
+#  Deformacion homogenea parametrizada -- barrido de erate para B(v).
+#  VERSION CPU para pirayu (build-pirayu/lmp, sin paquete GPU).
+#  Identica a in.deform salvo que se quitaron 'package gpu 1' y
+#  'suffix gpu' (el binario de pirayu es CPU puro: PKG_GPU=OFF).
+#
+#  Modos: compress (erate<0 en x) | tension (erate>0 en x) | shear (xy)
+#
+#  Variables esperadas (via -var):
+#    mat    : au|cu|ni|al|fecrni|cantor   (selecciona mat_${mat}.in)
+#    mode   : compress|tension|shear
+#    erate  : MAGNITUD de la tasa (1/ps, positiva); el signo lo pone el modo
+#    seed   : semilla (alloy + termico)
+#    run    : etiqueta unica de la corrida (nombre del dump/log)
+#    nsteps : pasos de deformacion (lo calcula el driver)
+#    dstep  : cada cuantos pasos se vuelca un frame (lo calcula el driver)
+# =====================================================================
+units           metal
+dimension       3
+boundary        p p p
+atom_style      atomic
+
+variable        mat    index au
+variable        mode   index compress
+variable        erate  index 0.005
+variable        seed   index 12345
+variable        run    index test
+variable        nsteps index 30000
+variable        dstep  index 200
+
+# --- crea cristal + potencial (define a0, box 28^3, masas, pair_coeff) ---
+include         mat_${mat}.in
+
+neighbor        2.0 bin
+neigh_modify    delay 0 every 1 check yes
+
+# --- caja triclinica si hay corte ---
+if "${mode} == shear" then "change_box all triclinic"
+
+# --- minimizacion (relaja distorsion substitucional en aleaciones; nula en puros) ---
+min_style       cg
+minimize        1.0e-6 1.0e-8 1000 10000
+reset_timestep  0
+
+# --- estado termico ---
+velocity        all create 300.0 ${seed} mom yes rot yes dist gaussian
+
+timestep        0.001
+thermo          500
+thermo_style    custom step temp pe press pxx pyy pzz pxy lx ly lz xy
+
+# --- relajacion NPT isotropica a 300 K ---
+fix             relax all npt temp 300 300 0.1 iso 0 0 1.0
+run             3000
+unfix           relax
+
+reset_timestep  0
+compute         Tdef all temp/deform
+
+dump            traj all custom ${dstep} dump.${run}.lammpstrj id type x y z
+dump_modify     traj sort id
+
+# --- deformacion a tasa constante segun el modo ---
+if "${mode} == compress" then &
+  "fix integ all npt temp 300 300 0.1 y 0 0 1.0 z 0 0 1.0" &
+  "fix_modify integ temp Tdef" &
+  "fix def all deform 1 x erate -${erate} units box remap v"
+
+if "${mode} == tension" then &
+  "fix integ all npt temp 300 300 0.1 y 0 0 1.0 z 0 0 1.0" &
+  "fix_modify integ temp Tdef" &
+  "fix def all deform 1 x erate ${erate} units box remap v"
+
+if "${mode} == shear" then &
+  "fix integ all nvt temp 300 300 0.1" &
+  "fix_modify integ temp Tdef" &
+  "fix def all deform 1 xy erate ${erate} remap v"
+
+run             ${nsteps}
+write_data      ${run}_final.data

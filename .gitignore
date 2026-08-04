@@ -7,3 +7,13 @@ doc/python/example_snippets/output/
 CMakeFiles
 __pycache__
 tests/opengl/
+
+# --- research/: datos pesados, regenerables o de terceros ---
+# Nunca se versionan. Viven en el arbol de trabajo pero fuera de git.
+# Trayectorias LAMMPS, logs de corrida y potenciales EAM (~450 MB)
+research/dislocation_tracking/data/
+# Casos sinteticos: se regeneran con scripts/generate_*.py (~22 MB)
+research/vacancy_analysis/datasets/generated/
+# Salidas sueltas de barridos
+research/**/_scratch/
+*.lammpstrj

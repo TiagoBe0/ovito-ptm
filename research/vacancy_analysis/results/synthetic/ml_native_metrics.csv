@@ -1,0 +1,91 @@
+dataset,sigma,predictor,precision,recall,f1,tp,fp,fn
+cascade_fcc_8x8x8_seed7,0.15,raw WS,1.0,1.0,1.0,40,0,0
+cascade_fcc_8x8x8_seed7,0.15,rules,1.0,1.0,1.0,40,0,0
+cascade_fcc_8x8x8_seed7,0.15,ml,1.0,1.0,1.0,40,0,0
+cascade_fcc_8x8x8_seed7,0.25,raw WS,0.8478,1.0,0.9176,39,7,0
+cascade_fcc_8x8x8_seed7,0.25,rules,0.95,0.9744,0.962,38,2,1
+cascade_fcc_8x8x8_seed7,0.25,ml,0.975,1.0,0.9873,39,1,0
+cascade_fcc_8x8x8_seed7,0.35,raw WS,0.5846,1.0,0.7379,38,27,0
+cascade_fcc_8x8x8_seed7,0.35,rules,0.7907,0.8947,0.8395,34,9,4
+cascade_fcc_8x8x8_seed7,0.35,ml,0.9706,0.8684,0.9167,33,1,5
+cascade_fcc_8x8x8_seed7,0.45,raw WS,0.4865,1.0,0.6545,36,38,0
+cascade_fcc_8x8x8_seed7,0.45,rules,0.6875,0.9167,0.7857,33,15,3
+cascade_fcc_8x8x8_seed7,0.45,ml,0.9118,0.8611,0.8857,31,3,5
+cascade_fcc_8x8x8_seed7,0.60,raw WS,0.5075,1.0,0.6733,34,33,0
+cascade_fcc_8x8x8_seed7,0.60,rules,0.66,0.9706,0.7857,33,17,1
+cascade_fcc_8x8x8_seed7,0.60,ml,0.9091,0.8824,0.8955,30,3,4
+cascade_fcc_8x8x8_seed7,all,raw WS,0.6404,1.0,0.7808,187,105,0
+cascade_fcc_8x8x8_seed7,all,rules,0.8054,0.9519,0.8725,178,43,9
+cascade_fcc_8x8x8_seed7,all,ml,0.9558,0.9251,0.9402,173,8,14
+cluster_fcc_8x8x8_seed7,0.04,raw WS,1.0,1.0,1.0,40,0,0
+cluster_fcc_8x8x8_seed7,0.04,rules,1.0,1.0,1.0,40,0,0
+cluster_fcc_8x8x8_seed7,0.04,ml,1.0,1.0,1.0,40,0,0
+cluster_fcc_8x8x8_seed7,0.08,raw WS,1.0,1.0,1.0,40,0,0
+cluster_fcc_8x8x8_seed7,0.08,rules,1.0,1.0,1.0,40,0,0
+cluster_fcc_8x8x8_seed7,0.08,ml,1.0,1.0,1.0,40,0,0
+cluster_fcc_8x8x8_seed7,0.12,raw WS,1.0,1.0,1.0,40,0,0
+cluster_fcc_8x8x8_seed7,0.12,rules,1.0,1.0,1.0,40,0,0
+cluster_fcc_8x8x8_seed7,0.12,ml,1.0,1.0,1.0,40,0,0
+cluster_fcc_8x8x8_seed7,0.16,raw WS,0.661,1.0,0.7959,39,20,0
+cluster_fcc_8x8x8_seed7,0.16,rules,0.9268,0.9744,0.95,38,3,1
+cluster_fcc_8x8x8_seed7,0.16,ml,0.9737,0.9487,0.961,37,1,2
+cluster_fcc_8x8x8_seed7,0.20,raw WS,0.2469,1.0,0.396,40,122,0
+cluster_fcc_8x8x8_seed7,0.20,rules,0.5962,0.775,0.6739,31,21,9
+cluster_fcc_8x8x8_seed7,0.20,ml,0.8333,0.75,0.7895,30,6,10
+cluster_fcc_8x8x8_seed7,all,raw WS,0.5836,1.0,0.737,199,142,0
+cluster_fcc_8x8x8_seed7,all,rules,0.8873,0.9497,0.9175,189,24,10
+cluster_fcc_8x8x8_seed7,all,ml,0.9639,0.9397,0.9517,187,7,12
+noise_fcc_8x8x8_seed7,0.00,raw WS,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.00,rules,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.00,ml,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.02,raw WS,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.02,rules,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.02,ml,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.04,raw WS,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.04,rules,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.04,ml,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.06,raw WS,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.06,rules,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.06,ml,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.08,raw WS,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.08,rules,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.08,ml,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.10,raw WS,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.10,rules,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.10,ml,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.12,raw WS,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.12,rules,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.12,ml,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.14,raw WS,0.9302,1.0,0.9639,40,3,0
+noise_fcc_8x8x8_seed7,0.14,rules,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.14,ml,1.0,1.0,1.0,40,0,0
+noise_fcc_8x8x8_seed7,0.16,raw WS,0.678,1.0,0.8081,40,19,0
+noise_fcc_8x8x8_seed7,0.16,rules,0.9756,1.0,0.9877,40,1,0
+noise_fcc_8x8x8_seed7,0.16,ml,0.973,0.9,0.9351,36,1,4
+noise_fcc_8x8x8_seed7,0.18,raw WS,0.375,1.0,0.5455,36,60,0
+noise_fcc_8x8x8_seed7,0.18,rules,0.6818,0.8333,0.75,30,14,6
+noise_fcc_8x8x8_seed7,0.18,ml,0.9091,0.8333,0.8696,30,3,6
+noise_fcc_8x8x8_seed7,0.20,raw WS,0.2327,1.0,0.3776,37,122,0
+noise_fcc_8x8x8_seed7,0.20,rules,0.4717,0.6757,0.5556,25,28,12
+noise_fcc_8x8x8_seed7,0.20,ml,0.6857,0.6486,0.6667,24,11,13
+noise_fcc_8x8x8_seed7,all,raw WS,0.6797,1.0,0.8093,433,204,0
+noise_fcc_8x8x8_seed7,all,rules,0.9061,0.9584,0.9315,415,43,18
+noise_fcc_8x8x8_seed7,all,ml,0.9647,0.9469,0.9557,410,15,23
+strain_fcc_8x8x8_seed7,0.20,raw WS,1.0,1.0,1.0,40,0,0
+strain_fcc_8x8x8_seed7,0.20,rules,1.0,1.0,1.0,40,0,0
+strain_fcc_8x8x8_seed7,0.20,ml,1.0,1.0,1.0,40,0,0
+strain_fcc_8x8x8_seed7,0.40,raw WS,1.0,1.0,1.0,40,0,0
+strain_fcc_8x8x8_seed7,0.40,rules,1.0,1.0,1.0,40,0,0
+strain_fcc_8x8x8_seed7,0.40,ml,1.0,1.0,1.0,40,0,0
+strain_fcc_8x8x8_seed7,0.60,raw WS,0.2836,1.0,0.4419,38,96,0
+strain_fcc_8x8x8_seed7,0.60,rules,0.4815,0.6842,0.5652,26,28,12
+strain_fcc_8x8x8_seed7,0.60,ml,0.8929,0.6579,0.7576,25,3,13
+strain_fcc_8x8x8_seed7,0.80,raw WS,0.0857,1.0,0.1579,30,320,0
+strain_fcc_8x8x8_seed7,0.80,rules,0.1609,0.4667,0.2393,14,73,16
+strain_fcc_8x8x8_seed7,0.80,ml,0.9286,0.4333,0.5909,13,1,17
+strain_fcc_8x8x8_seed7,1.00,raw WS,0.0634,1.0,0.1192,18,266,0
+strain_fcc_8x8x8_seed7,1.00,rules,0.1733,0.7222,0.2796,13,62,5
+strain_fcc_8x8x8_seed7,1.00,ml,0.3889,0.3889,0.3889,7,11,11
+strain_fcc_8x8x8_seed7,all,raw WS,0.1958,1.0,0.3274,166,682,0
+strain_fcc_8x8x8_seed7,all,rules,0.4493,0.8012,0.5758,133,163,33
+strain_fcc_8x8x8_seed7,all,ml,0.8929,0.753,0.817,125,15,41

@@ -1,0 +1,113 @@
+# results -> /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep
+
+== 1kev
+   ref: dump.ballistic_1kev.FeCrNi_1kev.0
+  RUN: 1kev_masked_grid.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/1kev/dump.ballistic_1kev.FeCrNi_1kev.0
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/1kev/dump.ballistic_1kev.FeCrNi_1kev.*
+     Vacancy sweep: wrote 468 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/1kev_masked_grid.csv
+  RUN: 1kev_nomask.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/1kev/dump.ballistic_1kev.FeCrNi_1kev.0
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/1kev/dump.ballistic_1kev.FeCrNi_1kev.*
+     Vacancy sweep: wrote 78 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/1kev_nomask.csv
+
+== 2kev  [needs_review ref]
+   ref: dump.ballistic_2kev.FeCrNi_2kev_s.12000
+  RUN: 2kev_masked_grid.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/2kev/dump.ballistic_2kev.FeCrNi_2kev_s.12000
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/2kev/dump.ballistic_2kev.FeCrNi_2kev_s.*
+     Vacancy sweep: wrote 648 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/2kev_masked_grid.csv
+  RUN: 2kev_nomask.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/2kev/dump.ballistic_2kev.FeCrNi_2kev_s.12000
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/2kev/dump.ballistic_2kev.FeCrNi_2kev_s.*
+     Vacancy sweep: wrote 108 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/2kev_nomask.csv
+
+== 3kev  [needs_review ref]
+   ref: dump.ballistic_3kev.FeCrNi_3kev.16000
+  RUN: 3kev_masked_grid.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/3kev/dump.ballistic_3kev.FeCrNi_3kev.16000
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/3kev/dump.ballistic_3kev.FeCrNi_3kev.*
+     Vacancy sweep: wrote 492 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/3kev_masked_grid.csv
+  RUN: 3kev_nomask.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/3kev/dump.ballistic_3kev.FeCrNi_3kev.16000
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/3kev/dump.ballistic_3kev.FeCrNi_3kev.*
+     Vacancy sweep: wrote 82 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/3kev_nomask.csv
+
+== 4kev
+   ref: dump.ballistic.FeCrNi_4keV.0
+  RUN: 4kev_masked_grid.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/4kev/dump.ballistic.FeCrNi_4keV.0
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/4kev/dump.ballistic.FeCrNi_4keV.*
+     Vacancy sweep: wrote 54 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/4kev_masked_grid.csv
+  RUN: 4kev_nomask.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/4kev/dump.ballistic.FeCrNi_4keV.0
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/4kev/dump.ballistic.FeCrNi_4keV.*
+     Vacancy sweep: wrote 9 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/4kev_nomask.csv
+
+== 5kev
+   ref: dump.ballistic_5kev.FeCrNi_5kev_v2.0
+  RUN: 5kev_masked_grid.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/5kev/dump.ballistic_5kev.FeCrNi_5kev_v2.0
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/5kev/dump.ballistic_5kev.FeCrNi_5kev_v2.*
+     Vacancy sweep: wrote 660 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/5kev_masked_grid.csv
+  RUN: 5kev_nomask.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/5kev/dump.ballistic_5kev.FeCrNi_5kev_v2.0
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/5kev/dump.ballistic_5kev.FeCrNi_5kev_v2.*
+     Vacancy sweep: wrote 110 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/5kev_nomask.csv
+
+== 6kev
+   ref: dump.ballistic.FeCrNi_6keV.0
+  RUN: 6kev_masked_grid.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.0
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.*
+     Vacancy sweep: wrote 126 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/6kev_masked_grid.csv
+  RUN: 6kev_nomask.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.0
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/6kev/dump.ballistic.FeCrNi_6keV.*
+     Vacancy sweep: wrote 21 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/6kev_nomask.csv
+
+== 6kev_it1
+   ref: dump.ballistic.FeCrNi_6keV.0
+  RUN: 6kev_it1_masked_grid.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/6kev_it1/dump.ballistic.FeCrNi_6keV.0
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/6kev_it1/dump.ballistic.FeCrNi_6keV.*
+     Vacancy sweep: wrote 6 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/6kev_it1_masked_grid.csv
+  RUN: 6kev_it1_nomask.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/6kev_it1/dump.ballistic.FeCrNi_6keV.0
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/6kev_it1/dump.ballistic.FeCrNi_6keV.*
+     Vacancy sweep: wrote 1 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/6kev_it1_nomask.csv
+
+== 6kev_it2
+   ref: dump.ballistic.FeCrNi_6keV_it2.0
+  RUN: 6kev_it2_masked_grid.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/6kev_it2/dump.ballistic.FeCrNi_6keV_it2.0
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/6kev_it2/dump.ballistic.FeCrNi_6keV_it2.*
+     Vacancy sweep: wrote 126 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/6kev_it2_masked_grid.csv
+  RUN: 6kev_it2_nomask.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/6kev_it2/dump.ballistic.FeCrNi_6keV_it2.0
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/6kev_it2/dump.ballistic.FeCrNi_6keV_it2.*
+     Vacancy sweep: wrote 21 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/6kev_it2_nomask.csv
+
+== 7kev
+   ref: dump.ballistic.FeCrNi_7keV.0
+  RUN: 7kev_masked_grid.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/7kev/dump.ballistic.FeCrNi_7keV.0
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/7kev/dump.ballistic.FeCrNi_7keV.*
+     Vacancy sweep: wrote 126 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/7kev_masked_grid.csv
+  RUN: 7kev_nomask.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/7kev/dump.ballistic.FeCrNi_7keV.0
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/7kev/dump.ballistic.FeCrNi_7keV.*
+     Vacancy sweep: wrote 21 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/7kev_nomask.csv
+
+== 8kev_real
+   ref: dump.ballistic.FeCrNi_8keV.0
+  RUN: 8kev_real_masked_grid.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.0
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.*
+     Vacancy sweep: wrote 126 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/8kev_real_masked_grid.csv
+  RUN: 8kev_real_nomask.csv
+     Vacancy sweep: loading reference /media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.0
+     Vacancy sweep: loading input /media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.*
+     Vacancy sweep: wrote 21 rows to /home/santi/Documents/ovito-DislocationTraking/research/vacancy_analysis/results/energy_sweep/8kev_real_nomask.csv
+
+# done. all ok.

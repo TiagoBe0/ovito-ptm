@@ -7,6 +7,24 @@
 > Repo: fork `TiagoBe0/ovito-ptm` · branch `feature/dislocation-tracking`
 > Estado: **en desarrollo, sin commitear** · build pendiente de rehacer (ver §5).
 
+## Estructura
+
+    docs/                        presentación OVITO_PTM_Tracking_ES.pptx
+    scripts/sweep.py             barrido erate -> B(v): corre LAMMPS, DXA+tracking, agrega métricas
+    simulations/alloy_compare/   inputs LAMMPS (in.deform, mat_*.in) y variantes de cluster en pirayu/
+    results/                     figuras y agregados
+    data/                        trayectorias, logs y potenciales EAM (NO versionado, ~450 MB)
+
+`sweep.py` se corre desde la raíz del repositorio y resuelve solo las rutas:
+lee los inputs de `simulations/`, escribe dumps y logs en `data/` y figuras en
+`results/`.
+
+```bash
+python3 research/dislocation_tracking/scripts/sweep.py gen
+python3 research/dislocation_tracking/scripts/sweep.py run --mats au cu
+python3 research/dislocation_tracking/scripts/sweep.py plot
+```
+
 ---
 
 ## 1. Objetivo

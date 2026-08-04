@@ -1,0 +1,15 @@
+# Mini-validacion: crea el cristal, carga el potencial y calcula energia (run 0).
+# Detecta errores de ruta de potencial, mapeo de elementos y creacion de caja
+# en segundos, sin gastar cola SLURM.
+units           metal
+dimension       3
+boundary        p p p
+atom_style      atomic
+variable        mat  index fecrni
+variable        seed index 12345
+include         mat_${mat}.in
+neighbor        2.0 bin
+neigh_modify    delay 0 every 1 check yes
+thermo          1
+thermo_style    custom step atoms pe press vol
+run             0

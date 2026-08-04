@@ -1,0 +1,17 @@
+# material CoCrFeNi (Cantor sin Mn) -- rutas corregidas para pirayu
+variable a0 equal 3.57
+lattice fcc 3.57
+region box block 0 28 0 28 0 28
+create_box 4 box
+create_atoms 1 box
+set type 1 type/fraction 2 0.25000 ${seed}
+variable sb equal round(${seed})+10007
+variable sc equal round(${seed})+20011
+set type 1 type/fraction 3 0.33333 ${sb}
+set type 1 type/fraction 4 0.50000 ${sc}
+mass 1 55.845    # Fe
+mass 2 58.6934    # Ni
+mass 3 51.9961    # Cr
+mass 4 58.933    # Co
+pair_style eam/alloy
+pair_coeff * * FeNiCrCoCu_Farkas_Caro.eam.alloy Fe Ni Cr Co

@@ -1,0 +1,64 @@
+source_file,source_frame,timestep,mask_signal,mask_threshold,cavity_radius_ratio,recombination_cutoff,frenkel_recombination,require_free_volume,mask_disordered,raw_ws_vacancies,raw_ws_interstitials,vacancy_count,interstitial_count,frenkel_recombined,freevolume_excluded,structural_excluded,surface_or_void_excluded,estimated_nn_distance,estimated_nn_distance_current,mask_signal_used,mask_signal_cutoff,status_type,status_text
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.0,0,0,disabled,0.5,0.5,auto,true,true,false,0,0,0,0,0,0,0,0,2.38972214702881,2.38972214702881,false,-1,success,"Classified 0 vacancy candidates and 0 corrected interstitials.
+Wigner-Seitz raw: 0 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.5000,1,5000,disabled,0.5,0.5,auto,true,true,false,254,254,50,130,124,0,0,0,2.38972214702881,2.389687354027715,false,-1,success,"Classified 50 vacancy candidates and 130 corrected interstitials.
+Wigner-Seitz raw: 254 vacancies. Removed: 124 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 100 rule-passed candidates, restored 20 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.10000,2,10000,disabled,0.5,0.5,auto,true,true,false,651,651,82,299,352,0,0,0,2.38972214702881,2.384328955911915,false,-1,success,"Classified 82 vacancy candidates and 299 corrected interstitials.
+Wigner-Seitz raw: 651 vacancies. Removed: 352 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 233 rule-passed candidates, restored 16 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.15000,3,15000,disabled,0.5,0.5,auto,true,true,false,175,175,25,76,99,0,0,0,2.38972214702881,2.386789455649581,false,-1,success,"Classified 25 vacancy candidates and 76 corrected interstitials.
+Wigner-Seitz raw: 175 vacancies. Removed: 99 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 56 rule-passed candidates, restored 5 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.20000,4,20000,disabled,0.5,0.5,auto,true,true,false,16,16,15,15,1,0,0,0,2.38972214702881,2.387225223978663,false,-1,success,"Classified 15 vacancy candidates and 15 corrected interstitials.
+Wigner-Seitz raw: 16 vacancies. Removed: 1 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.25000,5,25000,disabled,0.5,0.5,auto,true,true,false,14,14,14,14,0,0,0,0,2.38972214702881,2.385545727920554,false,-1,success,"Classified 14 vacancy candidates and 14 corrected interstitials.
+Wigner-Seitz raw: 14 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.30000,6,30000,disabled,0.5,0.5,auto,true,true,false,14,14,14,14,0,0,0,0,2.38972214702881,2.38807069618971,false,-1,success,"Classified 14 vacancy candidates and 14 corrected interstitials.
+Wigner-Seitz raw: 14 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.35000,7,35000,disabled,0.5,0.5,auto,true,true,false,14,14,14,14,0,0,0,0,2.38972214702881,2.387866170873062,false,-1,success,"Classified 14 vacancy candidates and 14 corrected interstitials.
+Wigner-Seitz raw: 14 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.40000,8,40000,disabled,0.5,0.5,auto,true,true,false,14,14,14,14,0,0,0,0,2.38972214702881,2.389251173485115,false,-1,success,"Classified 14 vacancy candidates and 14 corrected interstitials.
+Wigner-Seitz raw: 14 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.45000,9,45000,disabled,0.5,0.5,auto,true,true,false,14,14,14,14,0,0,0,0,2.38972214702881,2.389251995918391,false,-1,success,"Classified 14 vacancy candidates and 14 corrected interstitials.
+Wigner-Seitz raw: 14 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.50000,10,50000,disabled,0.5,0.5,auto,true,true,false,14,14,14,14,0,0,0,0,2.38972214702881,2.385796196325245,false,-1,success,"Classified 14 vacancy candidates and 14 corrected interstitials.
+Wigner-Seitz raw: 14 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.55000,11,55000,disabled,0.5,0.5,auto,true,true,false,14,14,14,14,0,0,0,0,2.38972214702881,2.388337557800396,false,-1,success,"Classified 14 vacancy candidates and 14 corrected interstitials.
+Wigner-Seitz raw: 14 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.60000,12,60000,disabled,0.5,0.5,auto,true,true,false,14,14,14,14,0,0,0,0,2.38972214702881,2.390824382927358,false,-1,success,"Classified 14 vacancy candidates and 14 corrected interstitials.
+Wigner-Seitz raw: 14 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.65000,13,65000,disabled,0.5,0.5,auto,true,true,false,14,14,14,14,0,0,0,0,2.38972214702881,2.387063188606449,false,-1,success,"Classified 14 vacancy candidates and 14 corrected interstitials.
+Wigner-Seitz raw: 14 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.70000,14,70000,disabled,0.5,0.5,auto,true,true,false,14,14,14,14,0,0,0,0,2.38972214702881,2.386823579571811,false,-1,success,"Classified 14 vacancy candidates and 14 corrected interstitials.
+Wigner-Seitz raw: 14 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.75000,15,75000,disabled,0.5,0.5,auto,true,true,false,14,14,14,14,0,0,0,0,2.38972214702881,2.388462945075765,false,-1,success,"Classified 14 vacancy candidates and 14 corrected interstitials.
+Wigner-Seitz raw: 14 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.80000,16,80000,disabled,0.5,0.5,auto,true,true,false,14,14,14,14,0,0,0,0,2.38972214702881,2.389006312256209,false,-1,success,"Classified 14 vacancy candidates and 14 corrected interstitials.
+Wigner-Seitz raw: 14 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.85000,17,85000,disabled,0.5,0.5,auto,true,true,false,14,14,14,14,0,0,0,0,2.38972214702881,2.388425223866132,false,-1,success,"Classified 14 vacancy candidates and 14 corrected interstitials.
+Wigner-Seitz raw: 14 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.90000,18,90000,disabled,0.5,0.5,auto,true,true,false,14,14,14,14,0,0,0,0,2.38972214702881,2.39034130826542,false,-1,success,"Classified 14 vacancy candidates and 14 corrected interstitials.
+Wigner-Seitz raw: 14 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.95000,19,95000,disabled,0.5,0.5,auto,true,true,false,14,14,14,14,0,0,0,0,2.38972214702881,2.388974361520028,false,-1,success,"Classified 14 vacancy candidates and 14 corrected interstitials.
+Wigner-Seitz raw: 14 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
+/media/santi/ALMACEN_GRANDE_2/pka_acero/8kev_real/dump.ballistic.FeCrNi_8keV.100000,20,100000,disabled,0.5,0.5,auto,true,true,false,14,14,14,14,0,0,0,0,2.38972214702881,2.39100538686135,false,-1,success,"Classified 14 vacancy candidates and 14 corrected interstitials.
+Wigner-Seitz raw: 14 vacancies. Removed: 0 Frenkel pairs, 0 without free volume, 0 in disordered regions, 0 near surfaces/voids.
+ML classifier verdict (threshold 0.5): rejected 0 rule-passed candidates, restored 0 rule-rejected ones."
