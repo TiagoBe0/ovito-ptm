@@ -204,4 +204,15 @@ IF(OVITO_BUILD_PLUGIN_PYSCRIPT AND NOT OVITO_BUILD_BASIC)
         # Uninstall Python packages from the embedded interpreter that should not be part of the official distribution.
         INSTALL(CODE "${OVITO_UNINSTALL_UNUSED_PYTHON_MODULES_CODE}")
     ENDIF()
+
+ENDIF()
+
+# In-process regression test for AmorphousCarbonTrackingModifier (see
+# AmorphousCarbonSelfTestService in the Particles plugin). Builds a synthetic scenario in memory,
+# runs it through the real modifier and checks every expected outcome; exits non-zero on any
+# failed check. ENABLE_TESTING() at the top of the root CMakeLists.txt was previously vestigial --
+# no add_test() had ever been registered in this fork. Not run under Emscripten, which cannot
+# execute the resulting binary directly on the host.
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME AmorphousCarbonSelfTest COMMAND Ovito --nogui --carbon-track-selftest)
 ENDIF()

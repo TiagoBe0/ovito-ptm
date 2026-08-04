@@ -52,6 +52,10 @@ SET(SourceFiles
     modifier/analysis/diamond/IdentifyDiamondModifier.cpp
     modifier/analysis/voronoi/VoronoiAnalysisModifier.cpp
     modifier/analysis/cluster/ClusterAnalysisModifier.cpp
+    modifier/analysis/amorphous_carbon/AmorphousCarbonModifier.cpp
+    modifier/analysis/amorphous_carbon/AmorphousCarbonTrackingModifier.cpp
+    modifier/analysis/amorphous_carbon/AmorphousCarbonTrackingSweepService.cpp
+    modifier/analysis/amorphous_carbon/AmorphousCarbonSelfTestService.cpp
     modifier/analysis/wignerseitz/WignerSeitzAnalysisModifier.cpp
     modifier/analysis/vacancy/VacancyAnalysisModifier.cpp
     modifier/analysis/vacancy/VacancyAnalysisSweepService.cpp

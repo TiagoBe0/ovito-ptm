@@ -43,6 +43,8 @@ OVITO_STANDARD_PLUGIN(ParticlesGui
         modifier/analysis/diamond/IdentifyDiamondModifierEditor.cpp
         modifier/analysis/voronoi/VoronoiAnalysisModifierEditor.cpp
         modifier/analysis/cluster/ClusterAnalysisModifierEditor.cpp
+        modifier/analysis/amorphous_carbon/AmorphousCarbonModifierEditor.cpp
+        modifier/analysis/amorphous_carbon/AmorphousCarbonTrackingModifierEditor.cpp
         modifier/analysis/wignerseitz/WignerSeitzAnalysisModifierEditor.cpp
         modifier/analysis/vacancy/VacancyAnalysisModifierEditor.cpp
         modifier/analysis/ptm/PolyhedralTemplateMatchingModifierEditor.cpp
