@@ -33,6 +33,10 @@ OVITO_STANDARD_PLUGIN(StdModGui
         SelectTypeModifierEditor.cpp
         HistogramModifierEditor.cpp
         ScatterPlotModifierEditor.cpp
+        TimeSeriesModifierEditor.cpp
+        TimeAveragingModifierEditor.cpp
+        DifferenceBetweenFramesModifierEditor.cpp
+        ReducePropertyModifierEditor.cpp
         ReplicateModifierEditor.cpp
         ExpressionSelectionModifierEditor.cpp
         FreezePropertyModifierEditor.cpp

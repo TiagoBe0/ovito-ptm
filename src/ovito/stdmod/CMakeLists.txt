@@ -33,6 +33,11 @@ OVITO_STANDARD_PLUGIN(StdMod
         modifiers/SelectTypeModifier.cpp
         modifiers/HistogramModifier.cpp
         modifiers/ScatterPlotModifier.cpp
+        modifiers/TimeSeriesModifier.cpp
+        modifiers/AnalysisModifiersSelfTestService.cpp
+        modifiers/TimeAveragingModifier.cpp
+        modifiers/DifferenceBetweenFramesModifier.cpp
+        modifiers/ReducePropertyModifier.cpp
         modifiers/ReplicateModifier.cpp
         modifiers/ExpressionSelectionModifier.cpp
         modifiers/LinesModifierDelegates.cpp

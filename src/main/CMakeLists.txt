@@ -216,3 +216,13 @@ ENDIF()
 IF(NOT EMSCRIPTEN)
     ADD_TEST(NAME AmorphousCarbonSelfTest COMMAND Ovito --nogui --carbon-track-selftest)
 ENDIF()
+
+# In-process regression tests for the Time series, Time averaging, Reduce property and Difference between
+# frames modifiers (see AnalysisModifiersSelfTestService in the StdMod plugin). Build real pipelines over a
+# synthetic dump with known attribute values.
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME TimeSeriesSelfTest COMMAND Ovito --nogui --time-series-selftest)
+    ADD_TEST(NAME TimeAveragingSelfTest COMMAND Ovito --nogui --time-averaging-selftest)
+    ADD_TEST(NAME ReducePropertySelfTest COMMAND Ovito --nogui --reduce-property-selftest)
+    ADD_TEST(NAME DifferenceBetweenFramesSelfTest COMMAND Ovito --nogui --difference-between-frames-selftest)
+ENDIF()
