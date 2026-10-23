@@ -105,7 +105,7 @@ void ConstructSurfaceModifierEditor::createUI(const RolloutInsertionParameters& 
 
     BooleanGroupBoxParameterUI* regionsSettingsUI =
         createParamUI<BooleanGroupBoxParameterUI>(PROPERTY_FIELD(ConstructSurfaceModifier::identifyRegions));
-#ifdef OVITO_BUILD_PROFESSIONAL
+#ifndef OVITO_BUILD_BASIC
     regionsSettingsUI->groupBox()->setTitle(tr("Identify volumetric regions"));
 #else
     regionsSettingsUI->groupBox()->setTitle(tr("Identify volumetric regions (requires OVITO Pro)"));
@@ -123,7 +123,7 @@ void ConstructSurfaceModifierEditor::createUI(const RolloutInsertionParameters& 
         createParamUI<BooleanParameterUI>(PROPERTY_FIELD(ConstructSurfaceModifier::mapParticlesToRegions));
     mapParticlesToRegionsUI->setEnabled(false);
     sublayout->addWidget(mapParticlesToRegionsUI->checkBox(), row++, 1, 1, 2);
-#ifdef OVITO_BUILD_PROFESSIONAL
+#ifndef OVITO_BUILD_BASIC
     auto mapParticlesToRegionsUpdater = [=]() { mapParticlesToRegionsUI->setEnabled(alphaShapeMethodBtn->isChecked()); };
     connect(alphaShapeMethodBtn, &QRadioButton::toggled, mapParticlesToRegionsUI, mapParticlesToRegionsUpdater);
     connect(gaussianDensityBtn, &QRadioButton::toggled, mapParticlesToRegionsUI, mapParticlesToRegionsUpdater);
@@ -134,7 +134,7 @@ void ConstructSurfaceModifierEditor::createUI(const RolloutInsertionParameters& 
                                     2);  // Note: Mode hint "2" is used to switch to the surface mesh regions view.
     ShowRegionsListBtn->setEnabled(false);
     sublayout->addWidget(ShowRegionsListBtn, row++, 1, 1, 2);
-#ifdef OVITO_BUILD_PROFESSIONAL
+#ifndef OVITO_BUILD_BASIC
     connect(this, &PropertiesEditor::contentsChanged, this, [this, ShowRegionsListBtn]() {
         ConstructSurfaceModifier* modifier = static_object_cast<ConstructSurfaceModifier>(editObject());
         ShowRegionsListBtn->setEnabled(modifier && modifier->identifyRegions());

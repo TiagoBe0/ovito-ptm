@@ -95,7 +95,7 @@ void DislocationAnalysisModifierEditor::createUI(const RolloutInsertionParameter
     sublayout->addWidget(onlySelectedParticlesUI->checkBox(), row++, 0);
 
     BooleanParameterUI* markCoreAtomsUI = createParamUI<BooleanParameterUI>(PROPERTY_FIELD(DislocationAnalysisModifier::markCoreAtoms));
-#ifdef OVITO_BUILD_PROFESSIONAL
+#ifndef OVITO_BUILD_BASIC
     markCoreAtomsUI->checkBox()->setText(PROPERTY_FIELD(DislocationAnalysisModifier::markCoreAtoms)->displayName());
 #else
     markCoreAtomsUI->checkBox()->setText(PROPERTY_FIELD(DislocationAnalysisModifier::markCoreAtoms)->displayName() +

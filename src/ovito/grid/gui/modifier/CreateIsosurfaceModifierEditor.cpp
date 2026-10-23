@@ -95,7 +95,7 @@ void CreateIsosurfaceModifierEditor::createUI(const RolloutInsertionParameters& 
 
     BooleanGroupBoxParameterUI* regionsSettingsUI =
         createParamUI<BooleanGroupBoxParameterUI>(PROPERTY_FIELD(CreateIsosurfaceModifier::identifyRegions));
-#ifdef OVITO_BUILD_PROFESSIONAL
+#ifndef OVITO_BUILD_BASIC
     regionsSettingsUI->groupBox()->setTitle(tr("Identify volumetric regions"));
 #else
     regionsSettingsUI->groupBox()->setTitle(tr("Identify volumetric regions (requires OVITO Pro)"));
@@ -113,7 +113,7 @@ void CreateIsosurfaceModifierEditor::createUI(const RolloutInsertionParameters& 
                                     2);  // Note: Mode hint "2" is used to switch to the surface mesh regions view.
     ShowRegionsListBtn->setEnabled(false);
     sublayout->addWidget(ShowRegionsListBtn, 0, 1, 1, 2);
-#ifdef OVITO_BUILD_PROFESSIONAL
+#ifndef OVITO_BUILD_BASIC
     connect(this, &PropertiesEditor::contentsChanged, this, [this, ShowRegionsListBtn]() {
         CreateIsosurfaceModifier* modifier = static_object_cast<CreateIsosurfaceModifier>(editObject());
         ShowRegionsListBtn->setEnabled(modifier && modifier->identifyRegions());
