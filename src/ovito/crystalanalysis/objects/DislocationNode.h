@@ -157,6 +157,13 @@ struct DislocationSegment
     /// This field is filled in by the DislocationTrackingModifier.
     int trackId = -1;
 
+    /// Glide drift speed of the track this segment belongs to, in (length unit)/(time unit).
+    /// This is a whole-track quantity (the time-averaged drift over the track's lifetime), so it is
+    /// the same for every appearance of the same dislocation. A negative value means "not measured":
+    /// either the segment belongs to no track or the track is too short-lived for a drift fit.
+    /// This field is filled in by the DislocationTrackingModifier.
+    FloatType trackVelocity = -1;
+
     /// Constructs a new dislocation segment with the given Burgers vector
     /// and connecting the two dislocation nodes.
     DislocationSegment(const ClusterVector& b, DislocationNode* forwardNode, DislocationNode* backwardNode) : burgersVector(b) {

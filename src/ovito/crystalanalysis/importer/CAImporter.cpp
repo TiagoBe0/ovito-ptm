@@ -105,8 +105,10 @@ void CAImporter::FrameLoader::loadFile()
     TaskProgress progress(this_task::ui());
     progress.setText(tr("Reading CA file %1").arg(fileHandle().toString()));
 
-    // Open file for reading.
-    CompressedTextReader stream(fileHandle());
+    // Open file for reading, positioned at the requested frame. A single CA file may hold a whole
+    // sequence of frames concatenated (discoverFramesInFile() records one byte offset per frame);
+    // without seeking here, every animation frame would return the first record of the file.
+    CompressedTextReader stream(fileHandle(), frame().byteOffset, frame().lineNumber);
 
     // Read file header.
     stream.readLine();

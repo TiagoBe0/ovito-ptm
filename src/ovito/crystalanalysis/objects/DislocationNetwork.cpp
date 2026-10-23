@@ -79,6 +79,7 @@ OORef<RefTarget> DislocationNetwork::clone(bool deepCopy, CloneHelper& cloneHelp
         newSegment->coreSize = oldSegment->coreSize;
         newSegment->customColor = oldSegment->customColor;
         newSegment->trackId = oldSegment->trackId;
+        newSegment->trackVelocity = oldSegment->trackVelocity;
         OVITO_ASSERT(newSegment->id == oldSegment->id);
     }
 

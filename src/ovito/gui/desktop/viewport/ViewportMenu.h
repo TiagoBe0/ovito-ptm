@@ -58,6 +58,7 @@ private Q_SLOTS:
     void onAdjustView();
     void onViewNode(QAction* action);
     void onCreateCamera();
+    void onAnimateCameraPath();
     void onDeleteViewport();
     void onSplitViewport(ViewportLayoutCell::SplitDirection direction);
     void onPipelineVisibility(bool checked);

@@ -29,6 +29,7 @@
 #include <ovito/stdobj/simcell/SimulationCell.h>
 #include <ovito/stdobj/lines/Lines.h>
 #include <ovito/stdobj/lines/LinesVis.h>
+#include <ovito/stdobj/table/DataTable.h>
 #include <ovito/core/dataset/pipeline/ModifierEvaluationTask.h>
 #include <ovito/core/app/UserInterface.h>
 #include <ovito/core/utilities/concurrent/TaskManager.h>
@@ -58,6 +59,10 @@ DEFINE_PROPERTY_FIELD(DislocationTrackingModifier, timePerFrame);
 DEFINE_PROPERTY_FIELD(DislocationTrackingModifier, showTrails);
 DEFINE_PROPERTY_FIELD(DislocationTrackingModifier, trailLength);
 DEFINE_REFERENCE_FIELD(DislocationTrackingModifier, trailsVis);
+DEFINE_PROPERTY_FIELD(DislocationTrackingModifier, projectPerpendicular);
+DEFINE_PROPERTY_FIELD(DislocationTrackingModifier, matchSpatialBurgers);
+DEFINE_PROPERTY_FIELD(DislocationTrackingModifier, pbcClosedExemption);
+DEFINE_PROPERTY_FIELD(DislocationTrackingModifier, driftVelocity);
 SET_PROPERTY_FIELD_LABEL(DislocationTrackingModifier, maxMatchingDistance, "Max. matching distance (0 = auto)");
 SET_PROPERTY_FIELD_LABEL(DislocationTrackingModifier, burgersTolerance, "Burgers vector tolerance");
 SET_PROPERTY_FIELD_LABEL(DislocationTrackingModifier, maxBridgeGap, "Max. bridged gap (frames)");
@@ -250,6 +255,16 @@ void DislocationTrackingModificationNode::FrameCollector::operator()(int frame, 
             FloatType len = ete.length();
             if(len > FLOATTYPE_EPSILON)
                 d.lineDir = ete / len;
+
+            // Does the line close on itself through the periodic boundary? Its two ends are then the
+            // same point modulo the cell, while being far apart in unwrapped space. Such a line has
+            // no observable position ALONG itself: DXA opens the loop at an arbitrary point, so the
+            // centroid slides freely along the line direction from frame to frame. Matching must not
+            // penalise that displacement (see the along-line gate in buildTracks).
+            if(const SimulationCell* cell = _node->_frameCells[frame].get()) {
+                if(len > FLOATTYPE_EPSILON && cell->wrapVector(ete).length() < FloatType(0.3) * len)
+                    d.pbcClosed = true;
+            }
         }
 
         // Spatial Burgers vector and crystal structure of the embedding cluster.
@@ -286,12 +301,18 @@ void DislocationTrackingModificationNode::buildTracks()
     int maxBridge = 0;
     int minLength = 1;
     FloatType timePerFrame = 1;
+    // Diagnostic switches: each disables one ingredient of the algorithm (see the header).
+    bool useProjection = true, useSpatialBurgers = true, usePbcExemption = true, useDrift = true;
     if(DislocationTrackingModifier* mod = dynamic_object_cast<DislocationTrackingModifier>(modifier())) {
         maxDist = mod->maxMatchingDistance();
         burgersTol = mod->burgersTolerance();
         maxBridge = mod->maxBridgeGap();
         minLength = std::max(1, mod->minTrackLength());
         timePerFrame = mod->timePerFrame() > 0 ? mod->timePerFrame() : FloatType(1);
+        useProjection = mod->projectPerpendicular();
+        useSpatialBurgers = mod->matchSpatialBurgers();
+        usePbcExemption = mod->pbcClosedExemption();
+        useDrift = mod->driftVelocity();
     }
 
     // Build per-frame offsets into a global node index space (one node per (frame, segment)).
@@ -337,17 +358,41 @@ void DislocationTrackingModificationNode::buildTracks()
     // Helper: are two segments compatible (same crystal structure, similar Burgers vector and length)?
     auto compatible = [&](const SegmentDescriptor& a, const SegmentDescriptor& b) -> bool {
         if(a.structure != b.structure) return false;
-        // Compare the crystal-frame Burgers vectors (stable under lattice rotation),
-        // allowing a sign flip (DXA may traverse the same line in either direction).
-        FloatType bref = std::max(a.burgersLocal.length(), FloatType(1e-6));
-        FloatType bdiff = std::min((a.burgersLocal - b.burgersLocal).length(),
-                                   (a.burgersLocal + b.burgersLocal).length());
-        if(bdiff > burgersTol * bref) return false;
+
+        // Burgers vectors must agree, up to a sign flip (DXA may traverse the same line in either
+        // direction). Two frames of reference are checked and either one suffices:
+        //
+        //  - the crystal frame is stable under lattice rotation, but NOT under DXA's choice of
+        //    reference orientation for a cluster: that choice is remade every frame, and when it
+        //    changes, every crystal-frame Burgers vector of that cluster jumps to a symmetry-
+        //    equivalent variant at once (measured: 1/6[-2,-1,1] -> 1/6[-1,2,1] with an unchanged
+        //    spatial vector), which used to kill every track in the cluster in the same frame;
+        //  - the spatial frame is immune to that relabelling and only drifts as fast as the lattice
+        //    itself rotates, i.e. negligibly between neighbouring frames.
+        auto burgersMatches = [&](const Vector3& ba, const Vector3& bb) {
+            FloatType bref = std::max(ba.length(), FloatType(1e-6));
+            FloatType bdiff = std::min((ba - bb).length(), (ba + bb).length());
+            return bdiff <= burgersTol * bref;
+        };
+        if(!burgersMatches(a.burgersLocal, b.burgersLocal)
+                && !(useSpatialBurgers && burgersMatches(a.burgersSpatial, b.burgersSpatial)))
+            return false;
         if(a.length > 0 && b.length > 0) {
             FloatType ratio = std::min(a.length, b.length) / std::max(a.length, b.length);
             if(ratio < FloatType(0.33)) return false;
         }
         return true;
+    };
+
+    // Helper: the line direction to project displacements onto when comparing two segments.
+    // Taken from the better-resolved (longer) of the two: a short or single-point segment has an
+    // ill-defined end-to-end direction.
+    auto matchingLineDir = [](const SegmentDescriptor& a, const SegmentDescriptor& b) -> Vector3 {
+        const SegmentDescriptor& longer  = (a.length >= b.length) ? a : b;
+        const SegmentDescriptor& shorter = (a.length >= b.length) ? b : a;
+        if(longer.lineDir.length() > FloatType(0.5)) return longer.lineDir;
+        if(shorter.lineDir.length() > FloatType(0.5)) return shorter.lineDir;
+        return Vector3::Zero();
     };
 
     // Greedy mutual-nearest matching between two frames, uniting the matched segments.
@@ -367,8 +412,34 @@ void DislocationTrackingModificationNode::buildTracks()
                 if(!compatible(A[i], B[j])) continue;
                 Vector3 delta = B[j].centroid - A[i].centroid;
                 if(cellB) delta = cellB->wrapVector(delta);
+
+                // The position of a dislocation ALONG its own line carries no information: a line
+                // that closes through the periodic boundary is unwrapped by DXA starting from an
+                // arbitrary point of the loop, so its centroid slides along the line direction from
+                // frame to frame even when the dislocation does not move at all (measured on a
+                // static edge dipole: ~20 A of pure along-line jitter, i.e. half the line period,
+                // which shatters centroid matching into hundreds of spurious births and deaths).
+                // Only the transverse displacement is physical, so that is what is thresholded --
+                // the same projection that makes the drift velocity meaningful.
+                Vector3 nd = matchingLineDir(A[i], B[j]);
+                FloatType along = 0;
+                if(nd != Vector3::Zero() && useProjection) {
+                    along = std::abs(delta.dot(nd));
+                    delta = delta - delta.dot(nd) * nd;
+                }
                 FloatType dist = delta.length();
                 if(dist > threshold) continue;
+
+                // For a line with real end points, an along-line offset is observable, so a large one
+                // means a genuinely different dislocation lying on the same line rather than an
+                // unwrapping artifact. For a line that closes through the periodic boundary there is
+                // no such information at all — the loop is opened at an arbitrary point — and any
+                // along-line offset must be accepted.
+                if(!usePbcExemption || (!A[i].pbcClosed && !B[j].pbcClosed)) {
+                    FloatType alongSlack = std::max(threshold, FloatType(0.6) * std::max(A[i].length, B[j].length));
+                    if(along > alongSlack) continue;
+                }
+
                 candidates.push_back({dist, i, j});
             }
         }
@@ -492,14 +563,32 @@ void DislocationTrackingModificationNode::buildTracks()
     // NOTE: frame-to-frame displacement is dominated by thermal jitter of the dislocation
     // core and by PBC/segmentation artifacts; the physical glide velocity is the time-averaged
     // drift, computed here as the least-squares slope of the PBC-unwrapped centroid vs time.
-    std::vector<FloatType> trackDrift(_numTracks, FloatType(0));
-    std::vector<char> driftValid(_numTracks, 0);
+    // The per-track results are kept in _trackSummaries so that the velocity of an individual
+    // dislocation stays available downstream (per-segment property, data table, batch export) and
+    // is not only visible through the per-frame mean/median/max aggregates.
+    _trackSummaries.assign(_numTracks, TrackSummary());
     const int minDriftSpan = std::max(5, nFrames / 20);
     for(int tid = 0; tid < _numTracks; tid++) {
         const auto& app = trackAppearances[tid];
         if(app.empty()) continue;
         int firstFrame = app.front().first;
         int lastFrame = app.back().first;
+
+        // Lifetime bookkeeping (filled for every track, even those too short for a drift fit).
+        TrackSummary& summary = _trackSummaries[tid];
+        summary.firstFrame = firstFrame;
+        summary.lastFrame = lastFrame;
+        summary.numAppearances = (int)app.size();
+        FloatType lengthSum = 0, longestLength = -1;
+        for(const auto& a : app) {
+            const SegmentDescriptor& sd = _frameDescriptors[a.first][a.second];
+            lengthSum += sd.length;
+            if(sd.length > longestLength) {   // classify the track by its best-resolved appearance
+                longestLength = sd.length;
+                summary.typeId = sd.typeId;
+            }
+        }
+        summary.meanLength = lengthSum / (FloatType)app.size();
         if(firstFrame > 0) {
             FrameMetrics& mb = _frameMetrics[firstFrame];
             mb.births++;
@@ -516,6 +605,24 @@ void DislocationTrackingModificationNode::buildTracks()
         }
         const int n = (int)app.size();
         if(n < 2 || (lastFrame - firstFrame) < minDriftSpan) continue;
+
+        if(!useDrift) {
+            // Diagnostic alternative: mean frame-to-frame displacement, i.e. what the velocity was
+            // before the drift fit replaced it. Kept for the ablation study; it measures the thermal
+            // jitter of the core rather than its glide.
+            FloatType sumSpeed = 0;
+            int steps = 0;
+            for(int k = 1; k < n; k++) {
+                const Point3& cprev = _frameDescriptors[app[k-1].first][app[k-1].second].centroid;
+                const Point3& ccur  = _frameDescriptors[app[k].first][app[k].second].centroid;
+                Vector3 d = ccur - cprev;
+                if(_frameCells[app[k].first]) d = _frameCells[app[k].first]->wrapVector(d);
+                const int dframes = app[k].first - app[k-1].first;
+                if(dframes > 0) { sumSpeed += d.length() / ((FloatType)dframes * timePerFrame); steps++; }
+            }
+            if(steps > 0) summary.velocity = sumSpeed / (FloatType)steps;
+            continue;
+        }
 
         // Build the PBC-unwrapped centroid trajectory and accumulate least-squares sums.
         Point3 acc = _frameDescriptors[app[0].first][app[0].second].centroid;
@@ -564,8 +671,7 @@ void DislocationTrackingModificationNode::buildTracks()
             }
             if(nd.length() > FloatType(0.5))
                 slope = slope - slope.dot(nd) * nd;
-            trackDrift[tid] = slope.length();
-            driftValid[tid] = 1;
+            summary.velocity = slope.length();
         }
     }
 
@@ -593,9 +699,10 @@ void DislocationTrackingModificationNode::buildTracks()
         // in this frame (drift removes the thermal-jitter/PBC artifacts of frame-to-frame deltas).
         std::vector<FloatType> driftHere;
         driftHere.reserve(presentTracks.size());
-        for(int tid : presentTracks)
-            if(tid >= 0 && tid < (int)trackDrift.size() && driftValid[tid])
-                driftHere.push_back(trackDrift[tid]);
+        for(int tid : presentTracks) {
+            FloatType v = velocityOfTrack(tid);
+            if(v >= 0) driftHere.push_back(v);
+        }
         if(!driftHere.empty()) {
             std::sort(driftHere.begin(), driftHere.end());
             FloatType sum = 0;
@@ -646,6 +753,10 @@ void DislocationTrackingModificationNode::applyTracks(const ModifierEvaluationRe
     for(DislocationSegment* seg : network->segments()) {
         int tid = trackIdOf(currentFrame, seg->id);
         seg->trackId = tid;
+        // Attach the drift velocity of the track to every one of its segments, so the speed of an
+        // individual dislocation can be read off in the data inspector. It is a whole-track value:
+        // the same number appears in every frame the dislocation is present in.
+        seg->trackVelocity = velocityOfTrack(tid);
         if(colorByTrack && tid >= 0)
             seg->customColor = trackColor(tid);
         else
@@ -710,6 +821,58 @@ void DislocationTrackingModificationNode::applyTracks(const ModifierEvaluationRe
             for(QChar ch : _typeNames[t])
                 safe += ch.isLetterOrNumber() ? ch : QChar('_');
             state.setAttribute(QStringLiteral("DislocationTracking.density.%1").arg(safe), QVariant::fromValue(m.densityByType[t]), this);
+        }
+    }
+
+    // ---- Per-track velocity tables. The attributes above only summarise the population
+    // (mean/median/max); these tables carry the speed of each individual dislocation present in the
+    // current frame, are plotted in the data inspector and can be exported via
+    // File > Export File > "Table of Values". Tracks too short-lived for a drift fit are left out.
+    if(currentFrame >= 0 && currentFrame < (int)_trackIds.size()) {
+        std::vector<int> tracksHere;
+        std::unordered_set<int> seenTracks;
+        for(int tid : _trackIds[currentFrame])
+            if(tid >= 0 && velocityOfTrack(tid) >= 0 && seenTracks.insert(tid).second)
+                tracksHere.push_back(tid);
+        std::sort(tracksHere.begin(), tracksHere.end());
+
+        if(!tracksHere.empty()) {
+            PropertyPtr velocityProp = DataTable::OOClass().createUserProperty(DataBuffer::Uninitialized, tracksHere.size(), DataBuffer::FloatDefault, 1, tr("Velocity"));
+            PropertyPtr trackProp = DataTable::OOClass().createUserProperty(DataBuffer::Uninitialized, tracksHere.size(), DataBuffer::Int32, 1, tr("Track"));
+            FloatType maxV = 0;
+            {
+                BufferWriteAccess<FloatType, access_mode::discard_write> vAcc(velocityProp);
+                BufferWriteAccess<int32_t, access_mode::discard_write> tAcc(trackProp);
+                for(size_t i = 0; i < tracksHere.size(); i++) {
+                    FloatType v = velocityOfTrack(tracksHere[i]);
+                    vAcc[i] = v;
+                    tAcc[i] = tracksHere[i];
+                    maxV = std::max(maxV, v);
+                }
+            }
+            DataTable* velTable = state.createObject<DataTable>(QStringLiteral("dislocation-track-velocity"), this,
+                                                                DataTable::Scatter, tr("Dislocation velocity per track"),
+                                                                std::move(velocityProp), std::move(trackProp));
+            velTable->setAxisLabelX(tr("Track ID"));
+            velTable->setAxisLabelY(tr("Drift velocity"));
+
+            // Distribution of those per-dislocation speeds.
+            const int binCount = 32;
+            const FloatType upper = (maxV > 0) ? maxV : FloatType(1);
+            PropertyPtr histoProp = DataTable::OOClass().createUserProperty(DataBuffer::Initialized, binCount, DataBuffer::Int64, 1, tr("Count"));
+            {
+                BufferWriteAccess<int64_t, access_mode::read_write> hAcc(histoProp);
+                for(int tid : tracksHere) {
+                    int bin = (int)(velocityOfTrack(tid) / upper * binCount);
+                    hAcc[std::clamp(bin, 0, binCount - 1)]++;
+                }
+            }
+            DataTable* histoTable = state.createObject<DataTable>(QStringLiteral("dislocation-velocity-histogram"), this,
+                                                                  DataTable::Histogram, tr("Dislocation velocity distribution"),
+                                                                  std::move(histoProp));
+            histoTable->setIntervalStart(0);
+            histoTable->setIntervalEnd(upper);
+            histoTable->setAxisLabelX(tr("Drift velocity"));
         }
     }
 
@@ -818,6 +981,7 @@ void DislocationTrackingModificationNode::invalidateTrackData()
     _trackIds.clear();
     _typeNames.clear();
     _frameMetrics.clear();
+    _trackSummaries.clear();
     _trackingWeakFuture.reset();
 }
 

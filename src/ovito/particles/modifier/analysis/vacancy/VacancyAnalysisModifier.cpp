@@ -194,6 +194,12 @@ std::unique_ptr<ReferenceConfigurationModifier::Engine> VacancyAnalysisModifier:
     const Property* lammpsCentroProperty = particles->getProperty(QStringLiteral("c_centro"));
     const Property* lammpsCoordProperty = particles->getProperty(QStringLiteral("c_coord"));
 
+    // Optional upstream per-atom deformation signals (AtomicStrain / PTM / Voronoi), used to build
+    // the continuous local-context descriptors of each candidate site.
+    const Property* volumetricStrainProperty = particles->getProperty(QStringLiteral("Volumetric Strain"));
+    const Property* rmsdProperty = particles->getProperty(QStringLiteral("RMSD"));
+    const Property* atomicVolumeProperty = particles->getProperty(QStringLiteral("Atomic Volume"));
+
     // Load the learned classifier if the ML mode is enabled. Loading happens here (main thread)
     // so a bad model path surfaces as a modifier error instead of failing inside the engine.
     std::shared_ptr<const VacancyMLModel> mlModel;
@@ -209,6 +215,7 @@ std::unique_ptr<ReferenceConfigurationModifier::Engine> VacancyAnalysisModifier:
             requireFreeVolume(), cavityRadiusRatio(),
             maskDisordered(), maskSignal(), maskThreshold(),
             structureProperty, cspProperty, shearProperty, lammpsCentroProperty, lammpsCoordProperty,
+            volumetricStrainProperty, rmsdProperty, atomicVolumeProperty,
             std::move(mlModel), mlThreshold(),
             request.modificationNode());
 }
@@ -364,13 +371,13 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
         }
         return QString();
     }();
-    auto maskFromScalarSignal = [&](const Property* signalProperty, bool highValuesAreDisordered) {
+    // Reads a single-component per-atom property into a plain float array. Accepts float as well as
+    // integer signals (e.g. a coordination count that was imported or remapped as an integer column).
+    auto toScalarArray = [&](const Property* signalProperty, std::vector<FloatType>& signalValues) {
         if(!signalProperty || signalProperty->componentCount() != 1 || signalProperty->size() != numAtoms)
             return false;
 
-        // Accept float as well as integer per-atom signals (e.g. a coordination count that was
-        // imported or remapped as an integer column).
-        std::vector<FloatType> signalValues(numAtoms);
+        signalValues.resize(numAtoms);
         if(signalProperty->dataType() == Property::FloatDefault) {
             BufferReadAccess<FloatType> signalArray(signalProperty);
             for(size_t i = 0; i < numAtoms; i++) signalValues[i] = signalArray[i];
@@ -384,6 +391,12 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
             for(size_t i = 0; i < numAtoms; i++) signalValues[i] = (FloatType)signalArray[i];
         }
         else
+            return false;
+        return true;
+    };
+    auto maskFromScalarSignal = [&](const Property* signalProperty, bool highValuesAreDisordered) {
+        std::vector<FloatType> signalValues;
+        if(!toScalarArray(signalProperty, signalValues))
             return false;
 
         double sum = 0, sumSq = 0;
@@ -421,6 +434,31 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
             haveDisorderSignal = maskFromScalarSignal(_lammpsCoordProperty, false);
     }
 
+    // --- Continuous per-atom deformation context (used for the local-context descriptors). ---
+    // These are never thresholded: they are averaged over the neighborhood of each candidate site so
+    // that "this empty site sits in a heavily sheared region" becomes a number instead of a binary
+    // mask decision. The atomic volume is normalized by its own mean, making it a dimensionless
+    // free-volume excess that is comparable across materials and cell sizes.
+    std::vector<FloatType> localShearValues, localVolStrainValues, localRmsdValues, localAtomicVolumeValues;
+    const bool haveLocalShear = toScalarArray(_shearProperty, localShearValues);
+    const bool haveLocalVolStrain = toScalarArray(_volumetricStrainProperty, localVolStrainValues);
+    const bool haveLocalRmsd = toScalarArray(_rmsdProperty, localRmsdValues);
+    bool haveLocalAtomicVolume = toScalarArray(_atomicVolumeProperty, localAtomicVolumeValues);
+    if(haveLocalAtomicVolume) {
+        double volumeSum = 0;
+        for(FloatType v : localAtomicVolumeValues) volumeSum += v;
+        const double meanVolume = (numAtoms > 0) ? volumeSum / numAtoms : 0.0;
+        if(meanVolume > 0) {
+            for(FloatType& v : localAtomicVolumeValues) v = (FloatType)(v / meanVolume);
+        }
+        else haveLocalAtomicVolume = false;
+    }
+    QStringList availableLocalSignals;
+    if(haveLocalShear) availableLocalSignals << QStringLiteral("shear_strain");
+    if(haveLocalVolStrain) availableLocalSignals << QStringLiteral("volumetric_strain");
+    if(haveLocalRmsd) availableLocalSignals << QStringLiteral("rmsd");
+    if(haveLocalAtomicVolume) availableLocalSignals << QStringLiteral("atomic_volume");
+
     // Neighbor finder over the current configuration, used for cavity (free-volume) and masking.
     // Sized with the current-frame nn distance so the first shell is captured under deformation.
     const FloatType searchRadius = (FloatType)1.5 * r_nn_cur;
@@ -448,6 +486,20 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
     knnDistances->setComponentNames(QStringList() << QStringLiteral("D1") << QStringLiteral("D2") << QStringLiteral("D3") << QStringLiteral("D4") << QStringLiteral("D5") << QStringLiteral("D6"));
     shellCounts->setComponentNames(QStringList() << QStringLiteral("R0.75") << QStringLiteral("R1.00") << QStringLiteral("R1.25"));
     PropertyPtr mlProbability = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::FloatDefault, 1, QStringLiteral("ML Vacancy Probability"));
+
+    // Local deformation context of each candidate site, aggregated over the current atoms inside the
+    // same shell that defines "Disorder Fraction". This is the continuous counterpart of the binary
+    // structural mask: it is what lets a classifier tell a genuinely empty site apart from a site
+    // that only looks empty because its atom was pushed away by the surrounding deformation.
+    PropertyPtr localShearStrain = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::FloatDefault, 2, QStringLiteral("Local Shear Strain"));
+    PropertyPtr localVolumetricStrain = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::FloatDefault, 1, QStringLiteral("Local Volumetric Strain"));
+    PropertyPtr localRmsd = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::FloatDefault, 1, QStringLiteral("Local RMSD"));
+    PropertyPtr localAtomicVolume = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::FloatDefault, 1, QStringLiteral("Local Atomic Volume"));
+    // Number of current atoms the aggregates above average over. -1 marks a non-candidate site and 0
+    // a candidate with an empty shell, so consumers never have to guess from a sentinel value
+    // (volumetric strain in particular is legitimately negative under compression).
+    PropertyPtr localContextCount = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::Int32, 1, QStringLiteral("Local Context Count"));
+    localShearStrain->setComponentNames(QStringList() << QStringLiteral("Mean") << QStringLiteral("Max"));
 
     // Attach named, colored categories to the Defect Type property so the data inspector shows them
     // as labelled types (and "Color by type" works). The numeric ids are unchanged, so Expression
@@ -485,6 +537,11 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
     BufferWriteAccess<int32_t, access_mode::discard_write> interstitialSurplusNNArray(nearestInterstitialSurplus);
     BufferWriteAccess<int32_t, access_mode::discard_write> interstitialShellArray(interstitialSitesInShell);
     BufferWriteAccess<FloatType, access_mode::discard_write> mlProbabilityArray(mlProbability);
+    BufferWriteAccess<FloatType*, access_mode::discard_write> localShearArray(localShearStrain);
+    BufferWriteAccess<FloatType, access_mode::discard_write> localVolStrainArray(localVolumetricStrain);
+    BufferWriteAccess<FloatType, access_mode::discard_write> localRmsdArray(localRmsd);
+    BufferWriteAccess<FloatType, access_mode::discard_write> localAtomicVolumeArray(localAtomicVolume);
+    BufferWriteAccess<int32_t, access_mode::discard_write> localContextCountArray(localContextCount);
     for(size_t s = 0; s < numSites; s++) {
         int o = occupancy[s].load(std::memory_order_relaxed);
         rawOccupancyArray[s] = o;
@@ -502,6 +559,12 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
         interstitialSurplusNNArray[s] = -1;
         interstitialShellArray[s] = -1;
         mlProbabilityArray[s] = (FloatType)-1;
+        localShearArray.set(s, 0, (FloatType)0);
+        localShearArray.set(s, 1, (FloatType)0);
+        localVolStrainArray[s] = 0;
+        localRmsdArray[s] = 0;
+        localAtomicVolumeArray[s] = 0;
+        localContextCountArray[s] = -1;
     }
 
     // --- ML descriptor pass over the WS candidate sites. ---
@@ -571,6 +634,36 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
                 shellCountsArray.set(vs, 0, c075);
                 shellCountsArray.set(vs, 1, c100);
                 shellCountsArray.set(vs, 2, c125);
+            }
+
+            // Local deformation context: aggregate the continuous per-atom signals over the same
+            // shell the structural mask uses, so every candidate carries a measure of how deformed
+            // its surroundings are, independent of whether the mask happened to reject it.
+            {
+                int contextCount = 0;
+                double shearSum = 0, volStrainSum = 0, rmsdSum = 0, atomicVolumeSum = 0;
+                FloatType shearMax = 0;
+                for(CutoffNeighborFinder::Query q(currentFinder, queryPoint); !q.atEnd(); q.next()) {
+                    const size_t a = q.current();
+                    contextCount++;
+                    if(haveLocalShear) {
+                        shearSum += localShearValues[a];
+                        shearMax = std::max(shearMax, localShearValues[a]);
+                    }
+                    if(haveLocalVolStrain) volStrainSum += localVolStrainValues[a];
+                    if(haveLocalRmsd) rmsdSum += localRmsdValues[a];
+                    if(haveLocalAtomicVolume) atomicVolumeSum += localAtomicVolumeValues[a];
+                }
+                localContextCountArray[vs] = contextCount;
+                if(contextCount > 0) {
+                    if(haveLocalShear) {
+                        localShearArray.set(vs, 0, (FloatType)(shearSum / contextCount));
+                        localShearArray.set(vs, 1, shearMax);
+                    }
+                    if(haveLocalVolStrain) localVolStrainArray[vs] = (FloatType)(volStrainSum / contextCount);
+                    if(haveLocalRmsd) localRmsdArray[vs] = (FloatType)(rmsdSum / contextCount);
+                    if(haveLocalAtomicVolume) localAtomicVolumeArray[vs] = (FloatType)(atomicVolumeSum / contextCount);
+                }
             }
 
             // Clustering of the candidates themselves (cascade cores vs isolated vacancies).
@@ -732,6 +825,11 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
     outParticles->createProperty(nearestInterstitialSurplus);
     outParticles->createProperty(interstitialSitesInShell);
     outParticles->createProperty(mlProbability);
+    outParticles->createProperty(localShearStrain);
+    outParticles->createProperty(localVolumetricStrain);
+    outParticles->createProperty(localRmsd);
+    outParticles->createProperty(localAtomicVolume);
+    outParticles->createProperty(localContextCount);
 
     // --- Global attributes: corrected counts plus the raw Wigner-Seitz counts for comparison. ---
     state.addAttribute(QStringLiteral("VacancyAnalysis.vacancy_count"), QVariant::fromValue(classifiedVacancyCount), _createdByNode);
@@ -747,6 +845,7 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
     state.addAttribute(QStringLiteral("VacancyAnalysis.mask_signal_used"), QVariant::fromValue(haveDisorderSignal), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.mask_signal_name"), QVariant::fromValue(selectedMaskSignalName), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.mask_signal_cutoff"), QVariant::fromValue(haveMaskSignalCutoff ? maskSignalCutoff : (FloatType)-1), _createdByNode);
+    state.addAttribute(QStringLiteral("VacancyAnalysis.local_signals"), QVariant::fromValue(availableLocalSignals.join(QChar(','))), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.ml_used"), QVariant::fromValue(_mlModel != nullptr), _createdByNode);
     if(_mlModel) {
         state.addAttribute(QStringLiteral("VacancyAnalysis.ml_threshold"), QVariant::fromValue(_mlThreshold), _createdByNode);

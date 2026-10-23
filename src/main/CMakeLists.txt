@@ -217,12 +217,45 @@ IF(NOT EMSCRIPTEN)
     ADD_TEST(NAME AmorphousCarbonSelfTest COMMAND Ovito --nogui --carbon-track-selftest)
 ENDIF()
 
-# In-process regression tests for the Time series, Time averaging, Reduce property and Difference between
-# frames modifiers (see AnalysisModifiersSelfTestService in the StdMod plugin). Build real pipelines over a
-# synthetic dump with known attribute values.
+# In-process regression test for the SOM clustering algorithm (see SomSelfTestService in the
+# Particles plugin). Exercises SomAlgorithm's training/inference/id-mapping directly against
+# synthetic, in-memory feature vectors -- no pipeline or GUI involvement. Not run under
+# Emscripten, which cannot execute the resulting binary directly on the host.
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME SomSelfTest COMMAND Ovito --nogui --som-selftest)
+ENDIF()
+
+# In-process regression tests for the Time series, Time averaging and Reduce property modifiers
+# (see AnalysisModifiersSelfTestService in the StdMod plugin). Build real pipelines over a synthetic dump
+# with known attribute values.
 IF(NOT EMSCRIPTEN)
     ADD_TEST(NAME TimeSeriesSelfTest COMMAND Ovito --nogui --time-series-selftest)
     ADD_TEST(NAME TimeAveragingSelfTest COMMAND Ovito --nogui --time-averaging-selftest)
     ADD_TEST(NAME ReducePropertySelfTest COMMAND Ovito --nogui --reduce-property-selftest)
     ADD_TEST(NAME DifferenceBetweenFramesSelfTest COMMAND Ovito --nogui --difference-between-frames-selftest)
+ENDIF()
+
+# In-process regression test for the Spatial binning modifier (see SpatialBinningSelfTestService in
+# the Particles plugin). Bins a synthetic 8-atom dump with known per-bin results.
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME SpatialBinningSelfTest COMMAND Ovito --nogui --spatial-binning-selftest)
+ENDIF()
+
+# In-process regression test for the Identify fcc planar faults modifier (see
+# IdentifyFCCPlanarFaultsSelfTestService in the Particles plugin). Classifies a synthetic fcc stacking
+# sequence with one twin boundary, one intrinsic stacking fault and one three-layer fault.
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME PlanarFaultsSelfTest COMMAND Ovito --nogui --planar-faults-selftest)
+ENDIF()
+
+# In-process regression test for the Calculate local entropy modifier (see
+# CalculateLocalEntropySelfTestService in the Particles plugin). Compares against NumPy reference values.
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME LocalEntropySelfTest COMMAND Ovito --nogui --local-entropy-selftest)
+ENDIF()
+
+# In-process regression test for the Bond analysis modifier (see BondAnalysisSelfTestService in
+# the Particles plugin). Exact histogram counts for a hand-built 4-atom bonded system.
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME BondAnalysisSelfTest COMMAND Ovito --nogui --bond-analysis-selftest)
 ENDIF()

@@ -152,6 +152,11 @@ QVariant DislocationInspectionApplet::DislocationTableModel::data(const QModelIn
                             .arg(QLocale::c().toString(tailLocation.x(), 'f', 4), 7)
                             .arg(QLocale::c().toString(tailLocation.y(), 'f', 4), 7)
                             .arg(QLocale::c().toString(tailLocation.z(), 'f', 4), 7); }
+            // Track identity and velocity, filled in by the Dislocation tracking modifier. Both are
+            // empty when that modifier is not part of the pipeline; the velocity is also empty for a
+            // track that is too short-lived for a drift fit.
+            case 8: return (segment->trackId >= 0) ? QVariant(segment->trackId) : QVariant();
+            case 9: return (segment->trackVelocity >= 0) ? QVariant(QLocale::c().toString(segment->trackVelocity, 'f', 4)) : QVariant();
             }
         }
     }

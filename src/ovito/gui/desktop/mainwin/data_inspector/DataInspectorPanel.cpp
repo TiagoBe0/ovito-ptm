@@ -291,7 +291,7 @@ void DataInspectorPanel::updateTabsList()
     for(int appletIndex = _applets.size()-1; appletIndex >= 0; appletIndex--) {
         if(_appletsToTabs[appletIndex] != -1) {
             DataInspectionApplet* applet = _applets[appletIndex];
-            if(!dataCollection || !applet->appliesTo(*dataCollection)) {
+            if(!applet->alwaysAvailable() && (!dataCollection || !applet->appliesTo(*dataCollection))) {
                 int tabIndex = _appletsToTabs[appletIndex];
                 _appletsToTabs[appletIndex] = -1;
                 // Shift tab indices.
@@ -309,7 +309,7 @@ void DataInspectorPanel::updateTabsList()
     for(int appletIndex = 0; appletIndex < _applets.size(); appletIndex++) {
         if(_appletsToTabs[appletIndex] == -1) {
             DataInspectionApplet* applet = _applets[appletIndex];
-            if(dataCollection && applet->appliesTo(*dataCollection)) {
+            if(applet->alwaysAvailable() || (dataCollection && applet->appliesTo(*dataCollection))) {
                 _appletsToTabs[appletIndex] = tabIndex;
                 // Shift tab indices.
                 for(int i = appletIndex + 1; i < _applets.size(); i++)

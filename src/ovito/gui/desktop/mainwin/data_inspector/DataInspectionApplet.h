@@ -46,6 +46,11 @@ public:
     /// Determines whether the given pipeline data contains data that can be displayed by this applet.
     virtual bool appliesTo(const DataCollection& data);
 
+    /// Returns whether this applet's tab should be shown even when the currently selected pipeline
+    /// produces no data the applet applies to. Applets that are not tied to a particular data object
+    /// (e.g. the AI agent console) return true here.
+    virtual bool alwaysAvailable() const { return false; }
+
     /// Determines the list of data objects that are displayed by the applet.
     virtual std::vector<ConstDataObjectPath> getDataObjectPaths() {
         return currentState().getObjectsRecursive(*_dataObjectClass);

@@ -33,7 +33,7 @@ namespace Ovito {
 /**
  * The container widget for the viewports in OVITO's main window.
  */
-class ViewportsPanel : public QWidget
+class OVITO_GUI_EXPORT ViewportsPanel : public QWidget
 {
     Q_OBJECT
 

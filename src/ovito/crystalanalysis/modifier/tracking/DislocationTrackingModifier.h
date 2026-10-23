@@ -109,6 +109,24 @@ private:
 
     /// The visual element used to render the dislocation trajectory trails.
     DECLARE_MODIFIABLE_REFERENCE_FIELD_FLAGS(OORef<LinesVis>, trailsVis, setTrailsVis, PROPERTY_FIELD_DONT_PROPAGATE_MESSAGES | PROPERTY_FIELD_MEMORIZE | PROPERTY_FIELD_OPEN_SUBEDITOR);
+
+    // ---- Diagnostic switches -------------------------------------------------------------------
+    // These turn off individual ingredients of the matching and velocity algorithms so that each
+    // one's contribution can be measured against a known ground truth (ablation study). They are
+    // deliberately kept out of the GUI panel: every one of them makes the tracker worse, and they
+    // exist only to quantify by how much. All default to the full algorithm.
+
+    /// Measure the matching distance in 3D instead of projecting it perpendicular to the line.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(bool{true}, projectPerpendicular, setProjectPerpendicular);
+
+    /// Accept a Burgers vector match in the spatial frame, not only in the crystal frame.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(bool{true}, matchSpatialBurgers, setMatchSpatialBurgers);
+
+    /// Exempt lines that close through the periodic boundary from the along-line displacement gate.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(bool{true}, pbcClosedExemption, setPbcClosedExemption);
+
+    /// Report the time-averaged drift as the velocity; otherwise the mean frame-to-frame displacement.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(bool{true}, driftVelocity, setDriftVelocity);
 };
 
 /**
@@ -128,6 +146,7 @@ public:
         Vector3 burgersLocal = Vector3::Zero();    ///< Burgers vector in the crystal frame (stable under lattice rotation; used for matching).
         Vector3 lineDir = Vector3::Zero();         ///< Unit line direction (end-to-end); drift is projected perpendicular to it (glide velocity).
         FloatType length = 0;
+        bool pbcClosed = false;                    ///< The line closes on itself through the periodic boundary.
         int structure = -1;
         int typeId = -1;   ///< Index into _typeNames (Burgers vector family), or -1 if unknown.
     };
@@ -147,6 +166,16 @@ public:
         std::vector<FloatType> densityByType;  ///< Density per Burgers vector family (indexed like _typeNames).
     };
 
+    /// Whole-trajectory summary of a single track, i.e. of one physical dislocation followed over time.
+    struct TrackSummary {
+        int firstFrame = -1;         ///< First frame in which the track appears.
+        int lastFrame = -1;          ///< Last frame in which the track appears.
+        int numAppearances = 0;      ///< Number of frames in which the dislocation was actually detected.
+        int typeId = -1;             ///< Burgers vector family (index into _typeNames) of the longest appearance.
+        FloatType meanLength = 0;    ///< Mean line length over the track's lifetime.
+        FloatType velocity = -1;     ///< Glide drift speed, or -1 if the track is too short-lived to fit one.
+    };
+
     /// Returns true if the trajectory has already been scanned and tracks have been assigned.
     bool tracksReady() const { return _tracksComputed; }
 
@@ -155,6 +184,19 @@ public:
 
     /// Returns or creates a dense type ID for the given Burgers vector family name.
     int typeIdForName(const QString& name);
+
+    /// Returns the names of the Burgers vector families encountered (indexed by dense type ID).
+    const std::vector<QString>& typeNames() const { return _typeNames; }
+
+    /// Returns the whole-trajectory summary of every track found (indexed by track ID).
+    const std::vector<TrackSummary>& trackSummaries() const { return _trackSummaries; }
+
+    /// Returns the measured glide drift speed of the given track, or -1 if it was not measured
+    /// (unknown track, or a track too short-lived for a meaningful drift fit).
+    FloatType velocityOfTrack(int trackId) const {
+        if(trackId < 0 || trackId >= (int)_trackSummaries.size()) return FloatType(-1);
+        return _trackSummaries[trackId].velocity;
+    }
 
     /// Returns the persistent track ID for the given segment of the given frame, or -1 if none.
     int trackIdOf(int frame, int segmentIndex) const {
@@ -209,6 +251,9 @@ private:
 
     /// Aggregated metrics for each scanned frame. [frame]
     std::vector<FrameMetrics> _frameMetrics;
+
+    /// Whole-trajectory summary of each track, including its drift velocity. [trackId]
+    std::vector<TrackSummary> _trackSummaries;
 
     /// Working object that collects descriptors for each scanned frame.
     struct FrameCollector {

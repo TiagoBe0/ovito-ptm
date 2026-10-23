@@ -143,6 +143,7 @@ private:
                 bool maskDisordered, MaskSignalType maskSignal, FloatType maskThreshold,
                 ConstPropertyPtr structureProperty, ConstPropertyPtr cspProperty, ConstPropertyPtr shearProperty,
                 ConstPropertyPtr lammpsCentroProperty, ConstPropertyPtr lammpsCoordProperty,
+                ConstPropertyPtr volumetricStrainProperty, ConstPropertyPtr rmsdProperty, ConstPropertyPtr atomicVolumeProperty,
                 std::shared_ptr<const VacancyMLModel> mlModel, FloatType mlThreshold,
                 OOWeakRef<const PipelineNode> createdByNode) :
             Engine(std::move(positions), simCell, std::move(refPositions), simCellRef,
@@ -152,6 +153,8 @@ private:
             _maskDisordered(maskDisordered), _maskSignal(maskSignal), _maskThreshold(maskThreshold),
             _structureProperty(std::move(structureProperty)), _cspProperty(std::move(cspProperty)), _shearProperty(std::move(shearProperty)),
             _lammpsCentroProperty(std::move(lammpsCentroProperty)), _lammpsCoordProperty(std::move(lammpsCoordProperty)),
+            _volumetricStrainProperty(std::move(volumetricStrainProperty)), _rmsdProperty(std::move(rmsdProperty)),
+            _atomicVolumeProperty(std::move(atomicVolumeProperty)),
             _mlModel(std::move(mlModel)), _mlThreshold(mlThreshold),
             _referenceState(std::move(referenceState)),
             _createdByNode(std::move(createdByNode)) {}
@@ -179,6 +182,14 @@ private:
         ConstPropertyPtr _shearProperty;
         ConstPropertyPtr _lammpsCentroProperty;
         ConstPropertyPtr _lammpsCoordProperty;
+
+        // Continuous per-atom deformation context (current configuration); may be null. Unlike the
+        // mask signals above these are never thresholded: they are aggregated over the neighborhood
+        // of each candidate site and emitted as descriptors, so a downstream classifier (the GBDT,
+        // or an unsupervised SOM) sees how deformed the surroundings of a candidate really are.
+        ConstPropertyPtr _volumetricStrainProperty;
+        ConstPropertyPtr _rmsdProperty;
+        ConstPropertyPtr _atomicVolumeProperty;
 
         // Optional learned classifier (ML mode); null = rule-based classification.
         std::shared_ptr<const VacancyMLModel> _mlModel;

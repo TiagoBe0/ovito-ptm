@@ -58,6 +58,16 @@ private:
         QString referencePath;
         QString outputPath;
         QString dumpSitesPath;   ///< Optional CSV with per-reference-site classification (for ground-truth validation).
+        QString multiSomDumpPath; ///< Optional LAMMPS-dump path pattern with the per-site descriptors, for MultiSOM.
+        bool multiSomCandidatesOnly = true; ///< Write only Wigner-Seitz candidate sites (occupancy == 0) to the MultiSOM dump.
+        // Upstream deformation signals the sweep computes itself before the vacancy analysis, so the
+        // local-context descriptors do not depend on the input dump carrying the right LAMMPS computes.
+        bool computePtm = false;
+        bool computeStrain = false;
+        bool computeVoronoi = false;
+        FloatType strainCutoff = 3.0; ///< Neighbor cutoff of the AtomicStrain modifier, in simulation units.
+        QString identifierColumn;    ///< Optional per-atom column promoted to Particle Identifier, so AtomicStrain
+                                     ///< can map atoms to reference sites when the file provides no 'id' column.
         QVector<VacancyAnalysisModifier::MaskSignalType> maskSignals;
         QVector<FloatType> maskThresholds;
         QVector<FloatType> cavityRadiusRatios;
@@ -82,6 +92,7 @@ private:
     static QString statusTypeName(PipelineStatus::StatusType statusType);
     static QString defectTypeName(int defectType);
     static void writeSiteDump(QTextStream& stream, const PipelineFlowState& state, const QStringList& idFields);
+    static void writeMultiSomDump(const QString& path, const PipelineFlowState& state, int timestep, bool candidatesOnly);
     static QString toLocalPath(const QString& path);
     static QString variantToString(const QVariant& value);
     static QString csvField(const QString& value);

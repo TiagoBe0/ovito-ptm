@@ -83,7 +83,7 @@ private:
 
         /// Returns the number of columns.
         virtual int columnCount(const QModelIndex& parent = QModelIndex()) const override {
-            return parent.isValid() ? 0 : 8;
+            return parent.isValid() ? 0 : 10;
         }
 
         /// Returns the data stored under the given 'role' for the item referred to by the 'index'.
@@ -101,6 +101,8 @@ private:
                 case 5: return tr("Crystal structure");
                 case 6: return tr("Head vertex coordinates");
                 case 7: return tr("Tail vertex coordinates");
+                case 8: return tr("Track");
+                case 9: return tr("Velocity");
                 }
             }
             return QAbstractTableModel::headerData(section, orientation, role);

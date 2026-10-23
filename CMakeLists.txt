@@ -89,6 +89,7 @@ OPTION(OVITO_BUILD_PLUGIN_GALAMOST "Build the GALAMOST I/O plugin." "ON")
 OPTION(OVITO_BUILD_PLUGIN_OXDNA "Build the oxDNA I/O plugin." "ON")
 OPTION(OVITO_BUILD_PLUGIN_ML "Build the ML (machine learning) plugin." "ON")
 OPTION(OVITO_BUILD_PLUGIN_MLTRAINING "Build the ML training plugin." "ON")
+OPTION(OVITO_BUILD_PLUGIN_AIAGENT "Build the AI agent integration plugin (embedded coding agent terminal and session bridge)." "ON")
 
 # This is a global list of plugin targets that will be built.
 # It will get populated by the OVITO_PLUGIN function.

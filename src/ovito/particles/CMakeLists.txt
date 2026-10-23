@@ -56,6 +56,17 @@ SET(SourceFiles
     modifier/analysis/amorphous_carbon/AmorphousCarbonTrackingModifier.cpp
     modifier/analysis/amorphous_carbon/AmorphousCarbonTrackingSweepService.cpp
     modifier/analysis/amorphous_carbon/AmorphousCarbonSelfTestService.cpp
+    modifier/analysis/som/SomAlgorithm.cpp
+    modifier/analysis/som/SOMClusteringModifier.cpp
+    modifier/analysis/som/SomSelfTestService.cpp
+    modifier/analysis/binning/SpatialBinningModifier.cpp
+    modifier/analysis/binning/SpatialBinningSelfTestService.cpp
+    modifier/analysis/planar_faults/IdentifyFCCPlanarFaultsModifier.cpp
+    modifier/analysis/planar_faults/IdentifyFCCPlanarFaultsSelfTestService.cpp
+    modifier/analysis/entropy/CalculateLocalEntropyModifier.cpp
+    modifier/analysis/entropy/CalculateLocalEntropySelfTestService.cpp
+    modifier/analysis/bonds/BondAnalysisModifier.cpp
+    modifier/analysis/bonds/BondAnalysisSelfTestService.cpp
     modifier/analysis/wignerseitz/WignerSeitzAnalysisModifier.cpp
     modifier/analysis/vacancy/VacancyAnalysisModifier.cpp
     modifier/analysis/vacancy/VacancyAnalysisSweepService.cpp

@@ -1,0 +1,47 @@
+# =====================================================================
+#  Caso controlado: una unica dislocacion de borde en Au FCC bajo corte.
+#  Sirve de patron para la velocidad del tracker: con una sola dislocacion
+#  la relacion de Orowan v = gammadot / (rho b) da la velocidad de referencia.
+#
+#  Corte gamma_xy: desplazamiento en x que crece con y, es decir en el plano
+#  de deslizamiento (normal y) y a lo largo de b (x). Celda totalmente
+#  periodica + change_box triclinic (la variante con slabs 'p s p' pierde atomos).
+#
+#  erate se elige para una velocidad objetivo v:  gammadot = v * rho * b
+#  con rho = Lz / V. Para esta celda (rho = 1.49e-4 A^-2, b = 2.884 A):
+#  v = 2 A/ps = 200 m/s  ->  erate = 8.6e-4 /ps
+# =====================================================================
+units           metal
+dimension       3
+boundary        p p p
+atom_style      atomic
+
+variable        erate  index 8.6e-4
+variable        temp   index 100.0
+variable        nsteps index 15000
+variable        dstep  index 100
+
+read_data       au_edge.lmp
+
+pair_style      eam/alloy
+pair_coeff      * * /home/santi/Documents/lammps2026/potentials/Au-Grochola-JCP05.eam.alloy Au
+
+change_box      all triclinic
+
+# Relajacion del nucleo: la dislocacion de borde se disocia en dos parciales de Shockley.
+min_style       cg
+minimize        1.0e-8 1.0e-10 10000 100000
+
+timestep        0.001
+velocity        all create ${temp} 12345 mom yes rot no
+fix             1 all nvt temp ${temp} ${temp} 0.1
+
+thermo          500
+thermo_style    custom step temp pe press pxy xy
+
+# Equilibrado termico antes de aplicar el corte.
+run             5000
+
+dump            1 all custom ${dstep} dump.shear_au.lammpstrj id type x y z
+fix             2 all deform 1 xy erate ${erate} remap v
+run             ${nsteps}

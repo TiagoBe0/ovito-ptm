@@ -149,11 +149,14 @@ void AmorphousCarbonTrackingSweepService::applicationStarted()
         qCritical().noquote() << "Amorphous carbon tracking run failed:";
         for(const QString& msg : ex.messages())
             qCritical().noquote() << msg;
-        QCoreApplication::exit(1);
+        // In --nogui mode the Qt event loop is not running at this point, so QCoreApplication::exit()
+        // has no effect and the process exits with 0 regardless. Throwing makes the startup code call
+        // exitWithFatalError(), which shuts the application down and yields exit code 1.
+        throw Exception(tr("Amorphous carbon tracking run failed."));
     }
     catch(const std::exception& ex) {
         qCritical().noquote() << "Amorphous carbon tracking run failed:" << QString::fromLocal8Bit(ex.what());
-        QCoreApplication::exit(1);
+        throw Exception(tr("Amorphous carbon tracking run failed."));
     }
 }
 

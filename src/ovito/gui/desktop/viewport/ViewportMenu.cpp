@@ -31,6 +31,7 @@
 #include <ovito/core/viewport/ViewportWindow.h>
 #include <ovito/core/app/PluginManager.h>
 #include <ovito/gui/desktop/dialogs/AdjustViewDialog.h>
+#include <ovito/gui/desktop/dialogs/CameraPathDialog.h>
 #include <ovito/gui/desktop/mainwin/MainWindow.h>
 #include <ovito/gui/base/actions/ActionManager.h>
 #include "ViewportMenu.h"
@@ -187,6 +188,7 @@ void ViewportMenu::onShowViewTypeMenu()
 
     _viewTypeMenu->addSeparator();
     _viewTypeMenu->addAction(tr("Create Camera"), this, SLOT(onCreateCamera()))->setEnabled(viewport()->viewNode() == nullptr);
+    _viewTypeMenu->addAction(tr("Animate Camera Along Path..."), this, SLOT(onAnimateCameraPath()));
 
     disconnect(_viewTypeMenu, &QMenu::aboutToShow, this, &ViewportMenu::onShowViewTypeMenu);
 }
@@ -309,6 +311,81 @@ void ViewportMenu::onCreateCamera()
             scene->selection()->setNode(cameraSceneNode);
 
         // Set new camera as view node for current viewport.
+        viewport()->setViewNode(cameraSceneNode);
+        OVITO_ASSERT(viewport()->viewType() == Viewport::VIEW_SCENENODE);
+    });
+}
+
+/******************************************************************************
+* Handles the menu item event.
+******************************************************************************/
+void ViewportMenu::onAnimateCameraPath()
+{
+    CameraPathDialog dialog(_viewportWidget);
+    if(dialog.exec() != QDialog::Accepted)
+        return;
+    const std::vector<CameraPathDialog::ControlPoint>& points = dialog.controlPoints();
+    if(points.size() < 2)
+        return;
+
+    performTransaction(tr("Animate camera along path"), [this, &points]() {
+        Scene* scene = viewport()->scene();
+        AnimationSuspender animSuspender(ui());
+
+        // Reuse the viewport's current camera, if it already looks through one; otherwise create a new one.
+        OORef<SceneNode> cameraSceneNode = viewport()->viewNode();
+        AbstractCameraSource* cameraSource = cameraSceneNode ? dynamic_object_cast<AbstractCameraSource>(cameraSceneNode->pipeline()->head()) : nullptr;
+
+        if(!cameraSceneNode || !cameraSource) {
+            UndoSuspender noUndo;
+
+            // Create an instance of the StandardCameraSource class.
+            OvitoClassPtr cameraSourceType = PluginManager::instance().findClass(QStringLiteral("StdObj"), QStringLiteral("StandardCameraSource"));
+            if(!cameraSourceType)
+                throw Exception(tr("OVITO has been built without support for camera objects."));
+
+            OORef<PipelineNode> newCameraSource = static_object_cast<PipelineNode>(cameraSourceType->createInstance());
+            cameraSource = static_object_cast<AbstractCameraSource>(newCameraSource.get());
+
+            // Create a pipeline with a data source for the camera.
+            OORef<Pipeline> cameraPipeline = OORef<Pipeline>::create();
+            cameraPipeline->setHead(std::move(newCameraSource));
+
+            // Create a scene node and give the new scene node a name.
+            cameraSceneNode = OORef<SceneNode>::create();
+            cameraSceneNode->setPipeline(cameraPipeline);
+            cameraSceneNode->setSceneNodeName(scene->makeNameUnique(tr("Camera")));
+
+            // Insert node into scene. The camera must have a parent node before it can be
+            // switched into "target camera" mode below.
+            scene->addChildNode(cameraSceneNode);
+            if(scene->selection()->nodes().empty())
+                scene->selection()->setNode(cameraSceneNode);
+        }
+
+        // Switch the camera into "target camera" mode so its orientation is automatically
+        // derived from a look-at target node, whose position we can then animate just like
+        // the camera's own position.
+        if(!cameraSceneNode->lookatTargetNode()) {
+            if(!cameraSceneNode->parentNode())
+                throw Exception(tr("The current camera is not attached to the scene and cannot be animated."));
+            cameraSource->setIsTargetCamera(true);
+        }
+        SceneNode* targetNode = cameraSceneNode->lookatTargetNode();
+        if(!targetNode)
+            throw Exception(tr("Failed to create the camera's look-at target node."));
+
+        // Write one position keyframe per control point of the user-supplied trajectory,
+        // on both the camera and its target. OVITO's spline position controller (the default
+        // for scene nodes) takes care of interpolating smoothly between them for every frame
+        // of the animation in between.
+        for(const CameraPathDialog::ControlPoint& point : points) {
+            AnimationTime time = AnimationTime::fromFrame(point.frame);
+            cameraSceneNode->transformationController()->setPositionValue(time, point.position, true);
+            targetNode->transformationController()->setPositionValue(time, point.target, true);
+        }
+
+        // Set the camera as the view node for the current viewport, if it isn't already.
         viewport()->setViewNode(cameraSceneNode);
         OVITO_ASSERT(viewport()->viewType() == Viewport::VIEW_SCENENODE);
     });

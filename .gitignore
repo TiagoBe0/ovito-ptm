@@ -17,3 +17,9 @@ research/vacancy_analysis/datasets/generated/
 # Salidas sueltas de barridos
 research/**/_scratch/
 *.lammpstrj
+
+# --- Raíz: build alternativo, repos de terceros y material descargado ---
+build-release/
+MultiSOM-main/
+rea-main/
+AI Agent pro*

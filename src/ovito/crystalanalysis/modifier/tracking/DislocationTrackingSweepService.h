@@ -25,6 +25,7 @@
 
 #include <ovito/crystalanalysis/CrystalAnalysis.h>
 #include <ovito/crystalanalysis/modifier/dxa/StructureAnalysis.h>
+#include <ovito/crystalanalysis/modifier/tracking/DislocationTrackingModifier.h>
 #include <ovito/core/app/ApplicationService.h>
 #include <ovito/core/dataset/pipeline/PipelineStatus.h>
 
@@ -59,7 +60,16 @@ private:
     struct RunParameters {
         QString inputPath;
         QString outputPath;
+        QString tracksOutputPath;        ///< Per-track CSV; empty = derived from outputPath ("<base>_tracks.csv").
+        QString assignmentsOutputPath;   ///< Per-segment assignment CSV; empty = "<base>_assignments.csv".
+        bool skipDxa = false;            ///< Input already contains dislocation lines (.ca): do not run DXA.
+        // Ablation switches; true = the full algorithm.
+        bool projectPerpendicular = true;
+        bool matchSpatialBurgers = true;
+        bool pbcClosedExemption = true;
+        bool driftVelocity = true;
         StructureAnalysis::LatticeStructureType structure = StructureAnalysis::LATTICE_FCC;
+        bool usePTM = true;   ///< PTM (true) or CNA (false) for the structure identification inside DXA.
         FloatType timePerFrame = 1;
         FloatType maxMatchingDistance = 0;   ///< 0 = auto.
         FloatType burgersTolerance = FloatType(0.25);
@@ -80,6 +90,16 @@ private:
     static QString csvField(const QString& value);
     static void writeCsvRow(QTextStream& stream, const QStringList& fields);
     static void runSweep(const RunParameters& params);
+
+    /// Compact description of which algorithm ingredients were disabled, stamped into every CSV row.
+    static QString ablationLabel(const RunParameters& params);
+
+    /// Derives the path of a companion CSV (per-track, per-segment) from the per-frame output path.
+    static QString companionPath(const QString& explicitPath, const QString& metricsPath, const QString& suffix);
+    static QString assignmentsPath(const RunParameters& params, const QString& metricsPath);
+
+    /// Writes one row per track (one physical dislocation) with its lifetime and drift velocity.
+    static void writeTrackTable(const RunParameters& params, const QString& metricsPath, const DislocationTrackingModificationNode* node);
 };
 
 }   // End of namespace

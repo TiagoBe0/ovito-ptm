@@ -78,10 +78,20 @@ void DislocationTrackingSweepService::registerCommandLineOptions(QCommandLinePar
         tr("CSV output path for the per-frame dislocation-tracking metrics."),
         QStringLiteral("path")));
     cmdLineParser.addOption(makeOption(
+        QStringLiteral("dislocation-track-tracks-output"),
+        tr("CSV output path for the per-track table (one row per dislocation, with its drift velocity). "
+           "Defaults to the per-frame output path with a '_tracks' suffix."),
+        QStringLiteral("path")));
+    cmdLineParser.addOption(makeOption(
         QStringLiteral("dislocation-track-structure"),
         tr("Input crystal structure for the DXA analysis: fcc, bcc or hcp."),
         QStringLiteral("type"),
         QStringLiteral("fcc")));
+    cmdLineParser.addOption(makeOption(
+        QStringLiteral("dislocation-track-structure-method"),
+        tr("Local structure identification used inside DXA: ptm (default) or cna."),
+        QStringLiteral("method"),
+        QStringLiteral("ptm")));
     cmdLineParser.addOption(makeOption(
         QStringLiteral("dislocation-track-time-per-frame"),
         tr("Physical time between two consecutive trajectory frames (used to convert drift into velocity)."),
@@ -117,6 +127,29 @@ void DislocationTrackingSweepService::registerCommandLineOptions(QCommandLinePar
         tr("Maximum number of source frames to write to the CSV. Negative means all frames."),
         QStringLiteral("N"),
         QStringLiteral("-1")));
+    // Ablation switches: each disables one ingredient of the algorithm, to quantify its
+    // contribution against a known ground truth. They all make the tracker worse by design.
+    cmdLineParser.addOption(makeOption(
+        QStringLiteral("dislocation-track-ablate-projection"),
+        tr("Ablation: measure the matching distance in 3D instead of perpendicular to the line.")));
+    cmdLineParser.addOption(makeOption(
+        QStringLiteral("dislocation-track-ablate-spatial-burgers"),
+        tr("Ablation: compare Burgers vectors only in the crystal frame, not in the spatial one.")));
+    cmdLineParser.addOption(makeOption(
+        QStringLiteral("dislocation-track-ablate-pbc-exemption"),
+        tr("Ablation: apply the along-line gate also to lines that close through the periodic boundary.")));
+    cmdLineParser.addOption(makeOption(
+        QStringLiteral("dislocation-track-ablate-drift"),
+        tr("Ablation: report the mean frame-to-frame displacement instead of the time-averaged drift.")));
+    cmdLineParser.addOption(makeOption(
+        QStringLiteral("dislocation-track-no-dxa"),
+        tr("Skip the DXA step: the input already contains dislocation lines (e.g. a .ca file). "
+           "Used to feed synthetic ground-truth networks straight to the tracker.")));
+    cmdLineParser.addOption(makeOption(
+        QStringLiteral("dislocation-track-assignments-output"),
+        tr("CSV output path for the per-segment assignment table ((frame, segment) -> track). "
+           "Defaults to the per-frame output path with an '_assignments' suffix."),
+        QStringLiteral("path")));
     cmdLineParser.addOption(makeOption(
         QStringLiteral("dislocation-track-no-sequence-detection"),
         tr("Do not auto-detect numbered file sequences for the input trajectory.")));
@@ -139,11 +172,14 @@ void DislocationTrackingSweepService::applicationStarted()
         qCritical().noquote() << "Dislocation tracking run failed:";
         for(const QString& msg : ex.messages())
             qCritical().noquote() << msg;
-        QCoreApplication::exit(1);
+        // In --nogui mode the Qt event loop is not running at this point, so QCoreApplication::exit()
+        // has no effect and the process exits with 0 regardless. Throwing makes the startup code call
+        // exitWithFatalError(), which shuts the application down and yields exit code 1.
+        throw Exception(tr("Dislocation tracking run failed."));
     }
     catch(const std::exception& ex) {
         qCritical().noquote() << "Dislocation tracking run failed:" << QString::fromLocal8Bit(ex.what());
-        QCoreApplication::exit(1);
+        throw Exception(tr("Dislocation tracking run failed."));
     }
 }
 
@@ -155,12 +191,26 @@ DislocationTrackingSweepService::RunParameters DislocationTrackingSweepService::
     RunParameters params;
     params.inputPath = parser.value(QStringLiteral("dislocation-track-input")).trimmed();
     params.outputPath = parser.value(QStringLiteral("dislocation-track-output")).trimmed();
+    params.tracksOutputPath = parser.value(QStringLiteral("dislocation-track-tracks-output")).trimmed();
+    params.assignmentsOutputPath = parser.value(QStringLiteral("dislocation-track-assignments-output")).trimmed();
+    params.skipDxa = parser.isSet(QStringLiteral("dislocation-track-no-dxa"));
+    params.projectPerpendicular = !parser.isSet(QStringLiteral("dislocation-track-ablate-projection"));
+    params.matchSpatialBurgers = !parser.isSet(QStringLiteral("dislocation-track-ablate-spatial-burgers"));
+    params.pbcClosedExemption = !parser.isSet(QStringLiteral("dislocation-track-ablate-pbc-exemption"));
+    params.driftVelocity = !parser.isSet(QStringLiteral("dislocation-track-ablate-drift"));
     if(params.inputPath.isEmpty())
         throw Exception(QStringLiteral("--dislocation-track-input is required."));
     if(params.outputPath.isEmpty())
         throw Exception(QStringLiteral("--dislocation-track-output is required."));
 
     params.structure = parseStructure(parser.value(QStringLiteral("dislocation-track-structure")));
+
+    // Structure identification method inside DXA. PTM is this fork's addition and the default;
+    // the value is echoed into the CSV so a run can always be traced back to the method used.
+    const QString method = parser.value(QStringLiteral("dislocation-track-structure-method")).trimmed().toLower();
+    if(method == QStringLiteral("ptm")) params.usePTM = true;
+    else if(method == QStringLiteral("cna")) params.usePTM = false;
+    else throw Exception(QStringLiteral("--dislocation-track-structure-method must be 'ptm' or 'cna'."));
 
     bool ok = false;
     params.timePerFrame = (FloatType)QLocale::c().toDouble(parser.value(QStringLiteral("dislocation-track-time-per-frame")), &ok);
@@ -312,6 +362,38 @@ void DislocationTrackingSweepService::writeCsvRow(QTextStream& stream, const QSt
 }
 
 /******************************************************************************
+* Compact description of which algorithm ingredients were disabled, stamped into every CSV row.
+******************************************************************************/
+QString DislocationTrackingSweepService::ablationLabel(const RunParameters& params)
+{
+    QStringList off;
+    if(!params.projectPerpendicular) off << QStringLiteral("projection");
+    if(!params.matchSpatialBurgers) off << QStringLiteral("spatial_burgers");
+    if(!params.pbcClosedExemption) off << QStringLiteral("pbc_exemption");
+    if(!params.driftVelocity) off << QStringLiteral("drift");
+    if(params.maxBridgeGap == 0) off << QStringLiteral("bridging");
+    return off.isEmpty() ? QStringLiteral("none") : off.join(QLatin1Char('+'));
+}
+
+/******************************************************************************
+* Derives the path of a companion CSV from the per-frame output path.
+******************************************************************************/
+QString DislocationTrackingSweepService::companionPath(const QString& explicitPath, const QString& metricsPath, const QString& suffix)
+{
+    if(!explicitPath.isEmpty())
+        return toLocalPath(explicitPath);
+    QFileInfo info(metricsPath);
+    const QString ext = info.suffix();
+    return info.dir().absoluteFilePath(ext.isEmpty() ? info.fileName() + suffix
+                                                     : info.completeBaseName() + suffix + QStringLiteral(".") + ext);
+}
+
+QString DislocationTrackingSweepService::assignmentsPath(const RunParameters& params, const QString& metricsPath)
+{
+    return companionPath(params.assignmentsOutputPath, metricsPath, QStringLiteral("_assignments"));
+}
+
+/******************************************************************************
 * Runs the native dislocation-tracking batch over the trajectory.
 ******************************************************************************/
 void DislocationTrackingSweepService::runSweep(const RunParameters& params)
@@ -319,10 +401,15 @@ void DislocationTrackingSweepService::runSweep(const RunParameters& params)
     qInfo().noquote() << "Dislocation tracking: loading input" << params.inputPath;
     OORef<Pipeline> pipeline = createFilePipeline(params.inputPath, params.autodetectFileSequences);
 
-    // Build the pipeline: FileSource -> Dislocation analysis (DXA) -> Dislocation tracking.
-    OORef<DislocationAnalysisModifier> dxa = OORef<DislocationAnalysisModifier>::create();
-    dxa->setInputCrystalStructure(params.structure);
-    pipeline->applyModifier(AnimationTime::fromFrame(0), false, dxa);
+    // Build the pipeline: FileSource -> [Dislocation analysis (DXA)] -> Dislocation tracking.
+    // The DXA step is skipped when the input file already contains dislocation lines (a .ca file),
+    // which is how synthetic ground-truth networks are fed straight to the tracker.
+    if(!params.skipDxa) {
+        OORef<DislocationAnalysisModifier> dxa = OORef<DislocationAnalysisModifier>::create();
+        dxa->setInputCrystalStructure(params.structure);
+        dxa->setUsePTM(params.usePTM);
+        pipeline->applyModifier(AnimationTime::fromFrame(0), false, dxa);
+    }
 
     OORef<DislocationTrackingModifier> tracker = OORef<DislocationTrackingModifier>::create();
     tracker->setTimePerFrame(params.timePerFrame);
@@ -330,9 +417,15 @@ void DislocationTrackingSweepService::runSweep(const RunParameters& params)
     tracker->setBurgersTolerance(params.burgersTolerance);
     tracker->setMaxBridgeGap(params.maxBridgeGap);
     tracker->setMinTrackLength(params.minTrackLength);
+    tracker->setProjectPerpendicular(params.projectPerpendicular);
+    tracker->setMatchSpatialBurgers(params.matchSpatialBurgers);
+    tracker->setPbcClosedExemption(params.pbcClosedExemption);
+    tracker->setDriftVelocity(params.driftVelocity);
     tracker->setColorByTrack(false);   // No rendering in batch mode.
     tracker->setShowTrails(false);
-    pipeline->applyModifier(AnimationTime::fromFrame(0), false, tracker);
+    // Keep the modification node: it owns the trajectory-wide tracking result, from which the
+    // per-track table (the velocity of each individual dislocation) is written after the scan.
+    ModificationNode* trackerNode = pipeline->applyModifier(AnimationTime::fromFrame(0), false, tracker);
 
     const int sourceFrameCount = pipeline->head()->numberOfSourceFrames();
     if(sourceFrameCount <= 0)
@@ -357,6 +450,8 @@ void DislocationTrackingSweepService::runSweep(const RunParameters& params)
         QStringLiteral("source_frame"),
         QStringLiteral("timestep"),
         QStringLiteral("structure"),
+        QStringLiteral("structure_method"),
+        QStringLiteral("ablation"),
         QStringLiteral("time_per_frame"),
         QStringLiteral("track_count"),
         QStringLiteral("births"),
@@ -375,6 +470,23 @@ void DislocationTrackingSweepService::runSweep(const RunParameters& params)
         QStringLiteral("status_text")
     });
 
+    // Per-segment assignment table: (frame, segment) -> track ID. This is what tracking-accuracy
+    // metrics (IDF1, ID switches, MOTA) are computed from against a known ground truth.
+    QFile assignFile(assignmentsPath(params, outputInfo.absoluteFilePath()));
+    if(!assignFile.open(QIODevice::WriteOnly | QIODevice::Text))
+        throw Exception(QStringLiteral("Could not open assignment CSV file for writing: %1").arg(assignFile.fileName()));
+    QTextStream assignOut(&assignFile);
+    writeCsvRow(assignOut, {
+        QStringLiteral("source_frame"),
+        QStringLiteral("segment_index"),
+        QStringLiteral("track_id"),
+        QStringLiteral("centroid_x"),
+        QStringLiteral("centroid_y"),
+        QStringLiteral("centroid_z"),
+        QStringLiteral("length"),
+        QStringLiteral("velocity")
+    });
+
     qInfo().noquote() << "Dislocation tracking: scanning" << sourceFrameCount
                       << "frames (DXA runs on every frame; this can take a while)...";
 
@@ -389,6 +501,8 @@ void DislocationTrackingSweepService::runSweep(const RunParameters& params)
             QString::number(attr(state, QStringLiteral("SourceFrame"), frame).toInt()),
             attr(state, QStringLiteral("Timestep"), QVariant()).toString(),
             structureName(params.structure),
+            params.usePTM ? QStringLiteral("ptm") : QStringLiteral("cna"),
+            ablationLabel(params),
             QLocale::c().toString((double)params.timePerFrame, 'g', 9),
             variantToString(attr(state, QStringLiteral("DislocationTracking.track_count"))),
             variantToString(attr(state, QStringLiteral("DislocationTracking.births"))),
@@ -406,10 +520,100 @@ void DislocationTrackingSweepService::runSweep(const RunParameters& params)
             statusTypeName(status.type()),
             status.text()
         });
+        if(const DislocationNetwork* network = state.getObject<DislocationNetwork>()) {
+            const int frameIndex = attr(state, QStringLiteral("SourceFrame"), frame).toInt();
+            for(const DislocationSegment* seg : network->segments()) {
+                Point3 c = Point3::Origin();
+                if(!seg->line.empty()) {
+                    Vector3 sum = Vector3::Zero();
+                    for(const Point3& p : seg->line) sum += p - Point3::Origin();
+                    c = Point3::Origin() + sum / (FloatType)seg->line.size();
+                }
+                writeCsvRow(assignOut, {
+                    QString::number(frameIndex),
+                    QString::number(seg->id),
+                    QString::number(seg->trackId),
+                    QLocale::c().toString((double)c.x(), 'g', 9),
+                    QLocale::c().toString((double)c.y(), 'g', 9),
+                    QLocale::c().toString((double)c.z(), 'g', 9),
+                    QLocale::c().toString((double)seg->calculateLength(), 'g', 9),
+                    (seg->trackVelocity >= 0) ? QLocale::c().toString((double)seg->trackVelocity, 'g', 9) : QString()
+                });
+            }
+        }
         rowsWritten++;
     }
 
     qInfo().noquote() << "Dislocation tracking: wrote" << rowsWritten << "rows to" << outputInfo.absoluteFilePath();
+    qInfo().noquote() << "Dislocation tracking: wrote per-segment assignments to" << assignFile.fileName();
+
+    assignOut.flush();
+    assignFile.close();
+    out.flush();
+    file.close();
+
+    // The tracks are complete once the trajectory has been scanned above.
+    writeTrackTable(params, outputInfo.absoluteFilePath(), dynamic_object_cast<DislocationTrackingModificationNode>(trackerNode));
+}
+
+/******************************************************************************
+* Writes one row per track (one physical dislocation) with its lifetime and drift velocity.
+******************************************************************************/
+void DislocationTrackingSweepService::writeTrackTable(const RunParameters& params, const QString& metricsPath, const DislocationTrackingModificationNode* node)
+{
+    if(!node || !node->tracksReady()) {
+        qWarning().noquote() << "Dislocation tracking: no track data available, skipping the per-track table.";
+        return;
+    }
+
+    // Derive the per-track path from the metrics path unless one was given explicitly.
+    QFileInfo outputInfo(companionPath(params.tracksOutputPath, metricsPath, QStringLiteral("_tracks")));
+    if(!outputInfo.dir().exists() && !outputInfo.dir().mkpath(QStringLiteral(".")))
+        throw Exception(QStringLiteral("Could not create output directory: %1").arg(outputInfo.dir().absolutePath()));
+
+    QFile file(outputInfo.absoluteFilePath());
+    if(!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        throw Exception(QStringLiteral("Could not open per-track CSV file for writing: %1").arg(outputInfo.absoluteFilePath()));
+
+    QTextStream out(&file);
+    writeCsvRow(out, {
+        QStringLiteral("track_id"),
+        QStringLiteral("first_frame"),
+        QStringLiteral("last_frame"),
+        QStringLiteral("lifetime_frames"),
+        QStringLiteral("appearances"),
+        QStringLiteral("lifetime_time"),
+        QStringLiteral("burgers_family"),
+        QStringLiteral("mean_length"),
+        QStringLiteral("velocity")
+    });
+
+    const std::vector<QString>& typeNames = node->typeNames();
+    qsizetype measured = 0;
+    const std::vector<DislocationTrackingModificationNode::TrackSummary>& summaries = node->trackSummaries();
+    for(int tid = 0; tid < (int)summaries.size(); tid++) {
+        const auto& s = summaries[tid];
+        if(s.firstFrame < 0)
+            continue;   // track ID never used
+        const int lifetime = s.lastFrame - s.firstFrame + 1;
+        if(s.velocity >= 0)
+            measured++;
+        writeCsvRow(out, {
+            QString::number(tid),
+            QString::number(s.firstFrame),
+            QString::number(s.lastFrame),
+            QString::number(lifetime),
+            QString::number(s.numAppearances),
+            QLocale::c().toString((double)(lifetime - 1) * (double)params.timePerFrame, 'g', 9),
+            (s.typeId >= 0 && s.typeId < (int)typeNames.size()) ? typeNames[s.typeId] : QString(),
+            QLocale::c().toString((double)s.meanLength, 'g', 9),
+            // Empty rather than a misleading number for tracks too short-lived for a drift fit.
+            (s.velocity >= 0) ? QLocale::c().toString((double)s.velocity, 'g', 9) : QString()
+        });
+    }
+
+    qInfo().noquote() << "Dislocation tracking: wrote" << summaries.size() << "tracks ("
+                      << measured << "with a measured velocity) to" << outputInfo.absoluteFilePath();
 }
 
 }   // End of namespace

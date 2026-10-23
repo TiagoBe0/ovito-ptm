@@ -165,7 +165,12 @@ void AmorphousCarbonSelfTestService::applicationStarted()
         qCritical().noquote() << "Amorphous carbon self-test: FAILED with an exception:" << QString::fromLocal8Bit(ex.what());
         ok = false;
     }
-    QCoreApplication::exit(ok ? 0 : 1);
+    // In --nogui mode the Qt event loop is not running at this point, so QCoreApplication::exit()
+    // has no effect and the process exits with 0 regardless. Throwing makes the startup code call
+    // exitWithFatalError(), which shuts the application down and yields exit code 1.
+    if(!ok)
+        throw Exception(tr("Amorphous carbon self-test failed."));
+    QCoreApplication::exit(0);
 }
 
 /******************************************************************************

@@ -45,6 +45,11 @@ OVITO_STANDARD_PLUGIN(ParticlesGui
         modifier/analysis/cluster/ClusterAnalysisModifierEditor.cpp
         modifier/analysis/amorphous_carbon/AmorphousCarbonModifierEditor.cpp
         modifier/analysis/amorphous_carbon/AmorphousCarbonTrackingModifierEditor.cpp
+        modifier/analysis/som/SOMClusteringModifierEditor.cpp
+        modifier/analysis/binning/SpatialBinningModifierEditor.cpp
+        modifier/analysis/planar_faults/IdentifyFCCPlanarFaultsModifierEditor.cpp
+        modifier/analysis/entropy/CalculateLocalEntropyModifierEditor.cpp
+        modifier/analysis/bonds/BondAnalysisModifierEditor.cpp
         modifier/analysis/wignerseitz/WignerSeitzAnalysisModifierEditor.cpp
         modifier/analysis/vacancy/VacancyAnalysisModifierEditor.cpp
         modifier/analysis/ptm/PolyhedralTemplateMatchingModifierEditor.cpp
