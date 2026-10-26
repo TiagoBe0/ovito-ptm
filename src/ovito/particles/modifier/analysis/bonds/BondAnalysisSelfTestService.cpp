@@ -23,6 +23,7 @@
 
 #include <ovito/particles/Particles.h>
 #include <ovito/particles/modifier/analysis/bonds/BondAnalysisModifier.h>
+#include <ovito/particles/modifier/modify/CreateBondsModifier.h>
 #include <ovito/particles/objects/Particles.h>
 #include <ovito/particles/objects/Bonds.h>
 #include <ovito/particles/modifier/selection/ParticlesExpressionSelectionModifierDelegate.h>
@@ -67,6 +68,27 @@ void writeDataFile(const QString& path)
            "1 1 1 2\n"
            "2 2 1 3\n"
            "3 1 4 1\n";
+}
+
+/// 300 particles of two types from a 64-bit LCG, uniform in a periodic 12^3 box.
+void writeRandomDataFile(const QString& path)
+{
+    uint64_t state = 987654321;
+    auto next = [&]() {
+        state = state * 6364136223846793005ULL + 1442695040888963407ULL;
+        return (double)(state >> 11) / (double)(1ULL << 53);
+    };
+    QFile file(path);
+    if(!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        throw Exception(QStringLiteral("Cannot write test data file %1").arg(path));
+    QTextStream out(&file);
+    out << "Bond distributions self-test\n\n300 atoms\n2 atom types\n\n0 12 xlo xhi\n0 12 ylo yhi\n0 12 zlo zhi\n\n"
+           "Masses\n\n1 1.0 # A\n2 1.0 # B\n\nAtoms # atomic\n\n";
+    for(int i = 1; i <= 300; i++) {
+        const int type = next() < 0.5 ? 1 : 2;
+        const double x = 12 * next(), y = 12 * next(), z = 12 * next();
+        out << QString::asprintf("%d %d %.10f %.10f %.10f\n", i, type, x, y, z);
+    }
 }
 
 /// Returns one component of the histogram counts.
@@ -245,6 +267,70 @@ bool BondAnalysisSelfTestService::runTest()
         for(size_t c = 3; c < 6; c++)
             for(double v : counts(state, A, c)) centerTwo += v;
         ok &= check(QStringLiteral("no angles with a type-2 center"), {centerTwo}, {0});
+    }
+
+    // The Bond length/angle distribution modifiers on a random two-species system with bonds from Create bonds
+    // (cutoff 3). Per component: total count and first moment sum(bin * count), compared with OVITO Pro 3.16.1
+    // (BondLengthDistributionModifier / BondAngleDistributionModifier, ovitos, same input and settings).
+    qInfo().noquote() << "Bond analysis self-test: bond length and bond angle distribution modifiers";
+    {
+        const QString randomPath = dir.filePath(QStringLiteral("random.data"));
+        writeRandomDataFile(randomPath);
+        const QUrl randomUrl = QUrl::fromLocalFile(randomPath);
+        auto run = [&](OORef<BondAnalysisModifier> modifier) {
+            OORef<FileSource> src = OORef<FileSource>::create();
+            src->setSource({randomUrl}, dynamic_object_cast<FileSourceImporter>(FileImporter::autodetectFileFormat(randomUrl).blockForResult()), false);
+            (void) src->updateListOfFrames().blockForResult();
+            OORef<Pipeline> p = OORef<Pipeline>::create();
+            p->setHead(src);
+            OORef<CreateBondsModifier> createBonds = OORef<CreateBondsModifier>::create();
+            createBonds->setCutoffMode(CreateBondsModifier::UniformCutoff);
+            createBonds->setUniformCutoff(3.0);
+            createBonds->setOnlyIntraMoleculeBonds(false);
+            p->applyModifier(AnimationTime::fromFrame(0), false, createBonds);
+            p->applyModifier(AnimationTime::fromFrame(0), false, modifier);
+            return p->evaluatePipeline(PipelineEvaluationRequest(AnimationTime::fromFrame(0), true, false)).blockForResult();
+        };
+        auto moments = [&](const PipelineFlowState& state, const char* id) {
+            std::vector<double> m;
+            for(size_t c = 0; c < componentCount(state, id); c++) {
+                double total = 0, first = 0;
+                std::vector<double> v = counts(state, id, c);
+                for(size_t b = 0; b < v.size(); b++) { total += v[b]; first += b * v[b]; }
+                m.push_back(total);
+                m.push_back(first);
+            }
+            return m;
+        };
+        struct Case { bool lengths; BondAnalysisModifier::PartitioningMode partition; bool cosine; std::vector<double> expected; };
+        const Case cases[] = {
+            {true, BondAnalysisModifier::Off, false, {2903, 160952}},
+            {true, BondAnalysisModifier::ByParticleType, false, {707, 39210, 1446, 80554, 750, 41188}},
+            {false, BondAnalysisModifier::Off, false, {56256, 5035612}},
+            {false, BondAnalysisModifier::ByParticleType, true, {6497, 584994, 13530, 1199776, 7417, 668251, 6787, 605411, 14495, 1295768, 7530, 682009}},
+        };
+        for(const Case& c : cases) {
+            OORef<BondAnalysisModifier> modifier;
+            if(c.lengths) modifier = OORef<BondLengthDistributionModifier>::create();
+            else modifier = OORef<BondAngleDistributionModifier>::create();
+            modifier->setBins(c.lengths ? 100 : 180);
+            modifier->setLengthCutoff(4.0);
+            modifier->setUseCosine(c.cosine);
+            modifier->setPartition(c.partition);
+            PipelineFlowState state = run(modifier);
+            const char* own = c.lengths ? L : A;
+            const char* other = c.lengths ? A : L;
+            const QString name = QStringLiteral("%1 partition=%2 cosine=%3").arg(c.lengths ? "lengths" : "angles").arg((int)c.partition).arg(c.cosine);
+            ok &= check(name + QStringLiteral(": only its own table"), {(double)componentCount(state, other)}, {0});
+            std::vector<double> m = moments(state, own);
+            if(qEnvironmentVariableIsSet("OVITO_BA_DUMP")) {
+                QStringList values;
+                for(double v : m) values << QString::number(v, 'g', 17);
+                qInfo().noquote() << "  DUMP" << name << values.join(QStringLiteral(", "));
+            }
+            else
+                ok &= check(name + QStringLiteral(": (total, first moment) per component"), m, c.expected);
+        }
     }
 
     qInfo().noquote() << (ok ? "Bond analysis self-test: ALL PASSED" : "Bond analysis self-test: FAILED");

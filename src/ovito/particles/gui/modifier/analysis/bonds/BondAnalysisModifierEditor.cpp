@@ -35,14 +35,19 @@ namespace Ovito {
 
 IMPLEMENT_CREATABLE_OVITO_CLASS(BondAnalysisModifierEditor);
 SET_OVITO_OBJECT_EDITOR(BondAnalysisModifier, BondAnalysisModifierEditor);
+IMPLEMENT_CREATABLE_OVITO_CLASS(BondLengthDistributionModifierEditor);
+SET_OVITO_OBJECT_EDITOR(BondLengthDistributionModifier, BondLengthDistributionModifierEditor);
+IMPLEMENT_CREATABLE_OVITO_CLASS(BondAngleDistributionModifierEditor);
+SET_OVITO_OBJECT_EDITOR(BondAngleDistributionModifier, BondAngleDistributionModifierEditor);
 
 /******************************************************************************
 * Sets up the UI widgets of the editor.
 ******************************************************************************/
-void BondAnalysisModifierEditor::createUI(const RolloutInsertionParameters& rolloutParams)
+void BondAnalysisModifierEditor::createUI(const RolloutInsertionParameters& rolloutParams, bool lengths, bool angles)
 {
     // Create a rollout.
-    QWidget* rollout = createRollout(tr("Bond analysis"), rolloutParams, "manual:particles.modifiers.bond_analysis");
+    QWidget* rollout = createRollout(lengths && angles ? tr("Bond analysis") : lengths ? tr("Bond length distribution") : tr("Bond angle distribution"),
+        rolloutParams, lengths && angles ? "manual:particles.modifiers.bond_analysis" : lengths ? "manual:particles.modifiers.bond_length_distribution" : "manual:particles.modifiers.bond_angle_distribution");
 
     // Create the rollout contents.
     QVBoxLayout* layout1 = new QVBoxLayout(rollout);
@@ -59,12 +64,16 @@ void BondAnalysisModifierEditor::createUI(const RolloutInsertionParameters& roll
     layout2->addWidget(binsPUI->label(), 0, 0);
     layout2->addLayout(binsPUI->createFieldLayout(), 0, 1);
 
-    FloatParameterUI* cutoffPUI = createParamUI<FloatParameterUI>(PROPERTY_FIELD(BondAnalysisModifier::lengthCutoff));
-    layout2->addWidget(cutoffPUI->label(), 1, 0);
-    layout2->addLayout(cutoffPUI->createFieldLayout(), 1, 1);
+    if(lengths) {
+        FloatParameterUI* cutoffPUI = createParamUI<FloatParameterUI>(PROPERTY_FIELD(BondAnalysisModifier::lengthCutoff));
+        layout2->addWidget(cutoffPUI->label(), 1, 0);
+        layout2->addLayout(cutoffPUI->createFieldLayout(), 1, 1);
+    }
 
-    BooleanParameterUI* useCosinePUI = createParamUI<BooleanParameterUI>(PROPERTY_FIELD(BondAnalysisModifier::useCosine));
-    layout2->addWidget(useCosinePUI->checkBox(), 2, 0, 1, 2);
+    if(angles) {
+        BooleanParameterUI* useCosinePUI = createParamUI<BooleanParameterUI>(PROPERTY_FIELD(BondAnalysisModifier::useCosine));
+        layout2->addWidget(useCosinePUI->checkBox(), 2, 0, 1, 2);
+    }
 
     VariantComboBoxParameterUI* partitionPUI = createParamUI<VariantComboBoxParameterUI>(PROPERTY_FIELD(BondAnalysisModifier::partition));
     partitionPUI->comboBox()->addItem(tr("Off"), QVariant::fromValue((int)BondAnalysisModifier::Off));
@@ -75,7 +84,8 @@ void BondAnalysisModifierEditor::createUI(const RolloutInsertionParameters& roll
     layout2->addWidget(new QLabel(tr("Partitioning:")), 3, 0);
     layout2->addWidget(partitionPUI->comboBox(), 3, 1);
 
-    OpenDataInspectorButton* openDataInspectorBtn = new OpenDataInspectorButton(this, tr("Show in data inspector"), QString::fromLatin1(BondAnalysisModifier::angleTableIdentifier));
+    OpenDataInspectorButton* openDataInspectorBtn = new OpenDataInspectorButton(this, tr("Show in data inspector"),
+        QString::fromLatin1(angles ? BondAnalysisModifier::angleTableIdentifier : BondAnalysisModifier::lengthTableIdentifier));
     layout1->addWidget(openDataInspectorBtn);
 
     // Status label.

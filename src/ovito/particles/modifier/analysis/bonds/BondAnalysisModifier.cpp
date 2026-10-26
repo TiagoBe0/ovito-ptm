@@ -34,8 +34,8 @@ namespace Ovito {
 
 IMPLEMENT_CREATABLE_OVITO_CLASS(BondAnalysisModifier);
 OVITO_CLASSINFO(BondAnalysisModifier, "DisplayName", "Bond analysis");
-OVITO_CLASSINFO(BondAnalysisModifier, "Description", "Compute the bond length and bond angle distributions.");
 OVITO_CLASSINFO(BondAnalysisModifier, "ModifierCategory", "Analysis");
+OVITO_CLASSINFO(BondAnalysisModifier, "Description", "Compute the bond length and bond angle distributions (superseded by the two bond distribution modifiers).");
 DEFINE_PROPERTY_FIELD(BondAnalysisModifier, bins);
 DEFINE_PROPERTY_FIELD(BondAnalysisModifier, useCosine);
 DEFINE_PROPERTY_FIELD(BondAnalysisModifier, lengthCutoff);
@@ -46,6 +46,16 @@ SET_PROPERTY_FIELD_LABEL(BondAnalysisModifier, lengthCutoff, "Bond length cutoff
 SET_PROPERTY_FIELD_LABEL(BondAnalysisModifier, partition, "Partitioning");
 SET_PROPERTY_FIELD_UNITS_AND_RANGE(BondAnalysisModifier, bins, IntegerParameterUnit, 1, 100000);
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(BondAnalysisModifier, lengthCutoff, WorldParameterUnit, 0);
+
+IMPLEMENT_CREATABLE_OVITO_CLASS(BondLengthDistributionModifier);
+OVITO_CLASSINFO(BondLengthDistributionModifier, "DisplayName", "Bond length distribution");
+OVITO_CLASSINFO(BondLengthDistributionModifier, "Description", "Compute the distribution of bond lengths.");
+OVITO_CLASSINFO(BondLengthDistributionModifier, "ModifierCategory", "Analysis");
+
+IMPLEMENT_CREATABLE_OVITO_CLASS(BondAngleDistributionModifier);
+OVITO_CLASSINFO(BondAngleDistributionModifier, "DisplayName", "Bond angle distribution");
+OVITO_CLASSINFO(BondAngleDistributionModifier, "Description", "Compute the distribution of angles between bonds.");
+OVITO_CLASSINFO(BondAngleDistributionModifier, "ModifierCategory", "Analysis");
 
 namespace {
 
@@ -89,6 +99,16 @@ std::vector<size_t> classifyBySelection(const Property* selectionProperty, QStri
 }
 
 }   // End of anonymous namespace
+
+/******************************************************************************
+* Constructor.
+******************************************************************************/
+void BondLengthDistributionModifier::initializeObject(ObjectInitializationFlags flags)
+{
+    BondAnalysisModifier::initializeObject(flags);
+    if(!flags.testFlag(ObjectInitializationFlag::DontInitializeObject))
+        setBins(100);   // Default of OVITO Pro.
+}
 
 /******************************************************************************
 * Asks the modifier whether it can be applied to the given input data.
@@ -200,6 +220,8 @@ Future<PipelineFlowState> BondAnalysisModifier::evaluateModifier(const ModifierE
             numBins = (size_t)bins(),
             useCosine = useCosine(),
             cutoff = lengthCutoff(),
+            withLengths = computesLengths(),
+            withAngles = computesAngles(),
             createdByNode = request.modificationNodeWeak()]() mutable
     {
         TaskProgress progress(this_task::ui());
@@ -220,7 +242,7 @@ Future<PipelineFlowState> BondAnalysisModifier::evaluateModifier(const ModifierE
 
         // Bond length histogram.
         std::vector<int64_t> lengthCounts(numBins * numLengthComponents, 0);
-        for(size_t b = 0; b < topology.size(); b++) {
+        for(size_t b = 0; withLengths && b < topology.size(); b++) {
             size_t i1 = topology[b][0], i2 = topology[b][1];
             if(i1 >= particleCount || i2 >= particleCount)
                 continue;
@@ -242,7 +264,7 @@ Future<PipelineFlowState> BondAnalysisModifier::evaluateModifier(const ModifierE
         progress.setMaximum(particleCount);
         std::vector<Vector3> vectors;
         std::vector<size_t> neighborClasses;
-        for(size_t center = 0; center < particleCount; center++) {
+        for(size_t center = 0; withAngles && center < particleCount; center++) {
             vectors.clear();
             neighborClasses.clear();
             for(const BondWithIndex& bond : bondMap.bondsOfParticle(center)) {
@@ -277,17 +299,20 @@ Future<PipelineFlowState> BondAnalysisModifier::evaluateModifier(const ModifierE
             PropertyPtr y = DataTable::OOClass().createUserProperty(DataBuffer::Uninitialized, numBins, Property::Int64, numComponents,
                 QStringLiteral("Count"), 0, std::move(names));
             std::ranges::copy(counts, BufferWriteAccess<int64_t*, access_mode::discard_write>(y).begin());
-            DataTable* table = state.createObject<DataTable>(QString::fromLatin1(identifier), createdByNode, DataTable::Histogram, title, std::move(y));
+            // Plot mode and axis labels as in OVITO Pro.
+            DataTable* table = state.createObject<DataTable>(QString::fromLatin1(identifier), createdByNode, DataTable::Line, title, std::move(y));
             table->setIntervalStart(xmin);
             table->setIntervalEnd(xmax);
             table->setAxisLabelX(xlabel);
-            table->setAxisLabelY(tr("Count"));
         };
-        outputTable(lengthTableIdentifier, tr("Bond length distribution"), lengthCounts, numLengthComponents, lengthNames, 0, cutoff, tr("Bond length"));
-        if(useCosine)
-            outputTable(angleTableIdentifier, tr("Bond angle distribution"), angleCounts, numAngleComponents, angleNames, -1, 1, tr("cos(angle)"));
-        else
-            outputTable(angleTableIdentifier, tr("Bond angle distribution"), angleCounts, numAngleComponents, angleNames, 0, 180, tr("Angle (degrees)"));
+        if(withLengths)
+            outputTable(lengthTableIdentifier, tr("Bond length distribution"), lengthCounts, numLengthComponents, lengthNames, 0, cutoff, tr("Length"));
+        if(withAngles) {
+            if(useCosine)
+                outputTable(angleTableIdentifier, tr("Bond angle distribution"), angleCounts, numAngleComponents, angleNames, -1, 1, tr("Cosine of angle"));
+            else
+                outputTable(angleTableIdentifier, tr("Bond angle distribution"), angleCounts, numAngleComponents, angleNames, 0, 180, tr("Angle"));
+        }
 
         return std::move(state);
     });

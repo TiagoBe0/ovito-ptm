@@ -39,7 +39,34 @@ class BondAnalysisModifierEditor : public PropertiesEditor
 protected:
 
     /// Creates the user interface controls for the editor.
-    virtual void createUI(const RolloutInsertionParameters& rolloutParams) override;
+    virtual void createUI(const RolloutInsertionParameters& rolloutParams) override { createUI(rolloutParams, true, true); }
+
+    /// Creates the controls for the length and/or angle histogram.
+    void createUI(const RolloutInsertionParameters& rolloutParams, bool lengths, bool angles);
+};
+
+/**
+ * A properties editor for the BondLengthDistributionModifier class.
+ */
+class BondLengthDistributionModifierEditor : public BondAnalysisModifierEditor
+{
+    OVITO_CLASS(BondLengthDistributionModifierEditor)
+
+protected:
+
+    virtual void createUI(const RolloutInsertionParameters& rolloutParams) override { BondAnalysisModifierEditor::createUI(rolloutParams, true, false); }
+};
+
+/**
+ * A properties editor for the BondAngleDistributionModifier class.
+ */
+class BondAngleDistributionModifierEditor : public BondAnalysisModifierEditor
+{
+    OVITO_CLASS(BondAngleDistributionModifierEditor)
+
+protected:
+
+    virtual void createUI(const RolloutInsertionParameters& rolloutParams) override { BondAnalysisModifierEditor::createUI(rolloutParams, false, true); }
 };
 
 }   // End of namespace

@@ -82,6 +82,12 @@ public:
     /// Modifies the input data.
     virtual Future<PipelineFlowState> evaluateModifier(const ModifierEvaluationRequest& request, PipelineFlowState&& state) override;
 
+protected:
+
+    /// Whether the bond length and the bond angle histograms are computed (both for this class).
+    virtual bool computesLengths() const { return true; }
+    virtual bool computesAngles() const { return true; }
+
 private:
 
     /// Number of histogram bins (both histograms).
@@ -95,6 +101,35 @@ private:
 
     /// How the distributions are broken down into partial histograms.
     DECLARE_MODIFIABLE_PROPERTY_FIELD(PartitioningMode{Off}, partition, setPartition);
+};
+
+/**
+ * \brief Computes only the bond length distribution (OVITO 3.15 split of the Bond analysis modifier).
+ */
+class OVITO_PARTICLES_EXPORT BondLengthDistributionModifier : public BondAnalysisModifier
+{
+    OVITO_CLASS(BondLengthDistributionModifier)
+
+public:
+
+    /// Constructor.
+    void initializeObject(ObjectInitializationFlags flags);
+
+protected:
+
+    virtual bool computesAngles() const override { return false; }
+};
+
+/**
+ * \brief Computes only the bond angle distribution (OVITO 3.15 split of the Bond analysis modifier).
+ */
+class OVITO_PARTICLES_EXPORT BondAngleDistributionModifier : public BondAnalysisModifier
+{
+    OVITO_CLASS(BondAngleDistributionModifier)
+
+protected:
+
+    virtual bool computesLengths() const override { return false; }
 };
 
 }   // End of namespace
