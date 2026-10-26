@@ -40,7 +40,7 @@ public:
 
     /// Returns what should happen if the user imports several files of the same kind.
     static FileImporter::MultiFileImportMode multiFileImportMode() {
-#ifdef OVITO_BUILD_PROFESSIONAL
+#ifndef OVITO_BUILD_BASIC
         return QSettings().value("file/multi_file_import_mode", FileImporter::ImportAsTrajectory).value<FileImporter::MultiFileImportMode>();
 #else
         return FileImporter::ImportAsTrajectory;

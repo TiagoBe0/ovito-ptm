@@ -121,7 +121,7 @@ ImportRemoteFileDialog::ImportRemoteFileDialog(MainWindowUI& ui, const std::vect
 #endif
     layout3->addWidget(_libsshMethod, 0, 0, 1, 3);
 #ifndef Q_OS_WIN
-#ifdef OVITO_BUILD_PROFESSIONAL
+#ifndef OVITO_BUILD_BASIC
     _opensshMethod = new QRadioButton(tr("External OpenSSH:"));
     _opensshMethod->setChecked(SshConnection::getSshImplementation() == SshConnection::Openssh);
 #else
@@ -133,7 +133,7 @@ ImportRemoteFileDialog::ImportRemoteFileDialog(MainWindowUI& ui, const std::vect
     _opensshMethod->setEnabled(false);
 #endif
     layout3->addWidget(_opensshMethod, 1, 0);
-#ifdef OVITO_BUILD_PROFESSIONAL
+#ifndef OVITO_BUILD_BASIC
     _sftpPath = new EnterLineEdit();
     _sftpPath->setText(OpensshConnection::getSftpPath());
     _sftpPath->setPlaceholderText(QStringLiteral("sftp"));
@@ -191,7 +191,7 @@ void ImportRemoteFileDialog::onOk()
         if(!url.isValid())
             throw Exception(tr("The entered URL is invalid."));
 
-#ifdef OVITO_BUILD_PROFESSIONAL
+#ifndef OVITO_BUILD_BASIC
         if(_libsshMethod->isChecked()) {
             SshConnection::setSshImplementation(SshConnection::Libssh);
         }

@@ -162,7 +162,7 @@ void RenderSettingsEditor::createUI(const RolloutInsertionParameters& rolloutPar
 
         renderAllViewportsUI = createParamUI<BooleanParameterUI>(PROPERTY_FIELD(RenderSettings::renderAllViewports));
         sublayout->addWidget(renderAllViewportsUI->checkBox());
-#ifndef OVITO_BUILD_PROFESSIONAL
+#ifdef OVITO_BUILD_BASIC
         renderAllViewportsUI->setEnabled(false);
         renderAllViewportsUI->checkBox()->setText(tr("%1 (OVITO Pro)").arg(renderAllViewportsUI->checkBox()->text()));
 #endif

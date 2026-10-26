@@ -258,7 +258,7 @@ bool MainWindowUI::checkLoadedDataset(DataSet* dataset)
     if(!UserInterface::checkLoadedDataset(dataset))
         return false;
 
-#ifndef OVITO_BUILD_PROFESSIONAL
+#ifdef OVITO_BUILD_BASIC
     // Since version 3.8.0, OVITO Basic no longer supports multiple pipelines in the same scene.
     // Check if the state file contains more than one pipeline and inform user by displaying a dialog window.
     // Let the user pick one of the pipelines to be loaded and remove all others from the scene.
@@ -516,7 +516,7 @@ void MainWindowUI::importFiles(const std::vector<QUrl>& urls, const FileImporter
         MessageDialog msgBox(QMessageBox::Question, tr("Import file"),
                 tr("Do you want to reset the existing pipeline?"),
                 QMessageBox::Yes | QMessageBox::Cancel, mainWindow());
-#ifdef OVITO_BUILD_PROFESSIONAL
+#ifndef OVITO_BUILD_BASIC
         msgBox.setInformativeText(tr(
             "<p>Select <b>Yes</b> to start over and discard the existing pipeline before importing the new file.</p>"
             "<p>Select <b>No</b> to keep modifiers in the current pipeline and replace the input data with the selected file.</p>"
@@ -529,7 +529,7 @@ void MainWindowUI::importFiles(const std::vector<QUrl>& urls, const FileImporter
 #endif
         msgBox.addButton(tr("No"), QMessageBox::NoRole);
         QPushButton* addToSceneButton = msgBox.addButton(tr("Add to scene"), QMessageBox::NoRole);
-#ifndef OVITO_BUILD_PROFESSIONAL
+#ifdef OVITO_BUILD_BASIC
         addToSceneButton->setEnabled(false);
 #else
         (void)addToSceneButton;

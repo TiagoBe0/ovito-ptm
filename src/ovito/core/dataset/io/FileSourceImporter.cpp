@@ -176,7 +176,7 @@ Future<OORef<Pipeline>> FileSourceImporter::importFileSet(OORef<Scene> scene, st
         if(scene->children().empty())
             importMode = ResetScene;
         else {
-#ifndef OVITO_BUILD_PROFESSIONAL
+#ifdef OVITO_BUILD_BASIC
             throw Exception(tr("Sorry, this operation cannot be performed in OVITO Basic. Importing multiple datasets into the same scene is supported by <a href=\"https://www.ovito.org/#proFeatures\">OVITO Pro</a>."));
 #endif
         }

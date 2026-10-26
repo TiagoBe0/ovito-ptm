@@ -63,7 +63,7 @@ CopyPipelineItemDialog::CopyPipelineItemDialog(MainWindowUI& ui, QWidget* parent
             if(sceneNode->pipeline() == sourcePipeline)
                 _destinationPipelineList->setCurrentIndex(_destinationPipelineList->count() - 1);
             else {
-#ifndef OVITO_BUILD_PROFESSIONAL
+#ifdef OVITO_BUILD_BASIC
                 QStandardItem* item = static_cast<QStandardItemModel*>(_destinationPipelineList->model())->item(_destinationPipelineList->count() - 1);
                 item->setEnabled(false);
                 item->setText(item->text() + " (requires OVITO Pro)");

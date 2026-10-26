@@ -91,7 +91,7 @@ void GeneralSettingsPage::insertSettingsDialogPage(QTabWidget* tabWidget)
     _importMultipleFilesBehavior->button(ImportFileDialog::multiFileImportMode())->setChecked(true);
     layout2->addWidget(asTrajectoryBtn, 0, 1);
     layout2->addWidget(asSeparateObjectsBtn, 1, 1);
-#ifndef OVITO_BUILD_PROFESSIONAL
+#ifdef OVITO_BUILD_BASIC
     asTrajectoryBtn->setEnabled(false);
     asSeparateObjectsBtn->setEnabled(false);
     asSeparateObjectsBtn->setText(asSeparateObjectsBtn->text() + tr(" (requires OVITO Pro)"));
@@ -129,7 +129,7 @@ void GeneralSettingsPage::saveValues(QTabWidget* tabWidget)
     else
         settings.remove("ui/automatic_dark_mode");
 #endif
-#ifdef OVITO_BUILD_PROFESSIONAL
+#ifndef OVITO_BUILD_BASIC
     ImportFileDialog::setMultiFileImportMode(static_cast<FileImporter::MultiFileImportMode>(_importMultipleFilesBehavior->checkedId()));
 #endif
 

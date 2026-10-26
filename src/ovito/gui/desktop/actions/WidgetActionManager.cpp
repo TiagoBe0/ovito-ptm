@@ -114,7 +114,7 @@ void WidgetActionManager::on_NewPipelineFileSource_triggered()
 
         if(Scene* scene = datasetContainer().activeScene()) {
 
-#ifndef OVITO_BUILD_PROFESSIONAL
+#ifdef OVITO_BUILD_BASIC
             if(!scene->children().empty())
                 throw Exception(tr("OVITO Pro is required to insert more than one pipeline into the scene. Please visit <a href=\"https://www.ovito.org/#proFeatures\">www.ovito.org</a> for more information on the extended version of our software."));
 #endif

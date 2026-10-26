@@ -91,7 +91,7 @@ ActionManager::ActionManager(QObject* parent, UserInterface& ui) : QAbstractList
 
     QAction* createNewPipelineAcion = createCommandAction(ACTION_NEW_PIPELINE_FILESOURCE, tr("External data file"), "edit_create_pipeline", tr("Creates a new pipeline with an external file as data source."));
     QAction* clonePipelineAction = createCommandAction(ACTION_EDIT_CLONE_PIPELINE, tr("Clone Pipeline..."), "edit_clone_pipeline", tr("Duplicate the current pipeline to show multiple datasets side by side."));
-#ifndef OVITO_BUILD_PROFESSIONAL
+#ifdef OVITO_BUILD_BASIC
     createNewPipelineAcion->setText(createNewPipelineAcion->text() + QStringLiteral(" (Pro)"));
     clonePipelineAction->setText(clonePipelineAction->text() + QStringLiteral(" (Pro)"));
 #else

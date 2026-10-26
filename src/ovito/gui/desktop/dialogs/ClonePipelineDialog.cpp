@@ -101,7 +101,7 @@ ClonePipelineDialog::ClonePipelineDialog(MainWindowUI& ui, SceneNode* sceneNode,
     });
     mainLayout->addWidget(buttonBox);
 
-#ifndef OVITO_BUILD_PROFESSIONAL
+#ifdef OVITO_BUILD_BASIC
     buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
     QLabel* noticeWidget = new QLabel(tr("The <i>Clone pipeline</i> function is only available in OVITO Pro &mdash; the complete version of this software. Please visit <a href=\"https://www.ovito.org/#proFeatures\">www.ovito.org</a> for more information."), this);
     noticeWidget->setMargin(4);

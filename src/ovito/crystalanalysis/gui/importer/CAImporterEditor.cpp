@@ -59,7 +59,7 @@ bool CAImporterEditor::referenceEvent(RefTarget* source, const ReferenceEvent& e
     return PropertiesEditor::referenceEvent(source, event);
 }
 
-#ifndef OVITO_BUILD_PROFESSIONAL
+#ifdef OVITO_BUILD_BASIC
 /******************************************************************************
 * This method is called by the FileSource each time a new source
 * file has been selected by the user.
