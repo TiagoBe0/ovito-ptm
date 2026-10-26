@@ -288,3 +288,9 @@ ENDIF()
 IF(NOT EMSCRIPTEN)
     ADD_TEST(NAME RenderLAMMPSRegionsSelfTest COMMAND Ovito --nogui --lammps-regions-selftest)
 ENDIF()
+
+# In-process regression test for the Bader charge integration modifier (see BaderChargeIntegrationSelfTestService in the
+# Particles plugin). Compares with reference values obtained from OVITO Pro for the same input.
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME BaderSelfTest COMMAND Ovito --nogui --bader-selftest)
+ENDIF()

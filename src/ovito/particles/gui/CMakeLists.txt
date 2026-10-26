@@ -53,6 +53,7 @@ OVITO_STANDARD_PLUGIN(ParticlesGui
         modifier/analysis/rings/FindRingsModifierEditor.cpp
         modifier/analysis/structure_factor/StructureFactorModifierEditor.cpp
         modifier/modify/RenderLAMMPSRegionsModifierEditor.cpp
+        modifier/analysis/bader/BaderChargeIntegrationModifierEditor.cpp
         modifier/analysis/wignerseitz/WignerSeitzAnalysisModifierEditor.cpp
         modifier/analysis/vacancy/VacancyAnalysisModifierEditor.cpp
         modifier/analysis/ptm/PolyhedralTemplateMatchingModifierEditor.cpp

@@ -72,6 +72,8 @@ SET(SourceFiles
     modifier/modify/ShrinkWrapBoxSelfTestService.cpp
     modifier/modify/RenderLAMMPSRegionsModifier.cpp
     modifier/modify/RenderLAMMPSRegionsSelfTestService.cpp
+    modifier/analysis/bader/BaderChargeIntegrationModifier.cpp
+    modifier/analysis/bader/BaderChargeIntegrationSelfTestService.cpp
     modifier/analysis/rings/FindRingsModifier.cpp
     modifier/analysis/rings/FindRingsSelfTestService.cpp
     modifier/analysis/structure_factor/StructureFactorModifier.cpp
