@@ -147,6 +147,10 @@ private:
         /// Struct that holds the computeAggregateVolumes output values
         SurfaceMeshBuilder::AggregateVolumes _aggregateVolumes = {};
 
+        /// Volume of the filled regions that lies outside the simulation cell along its non-periodic
+        /// directions (zero for a fully periodic cell).
+        double _filledVolumeOutsideCell = 0;
+
         /// The computed total surface area.
         double _totalSurfaceArea = 0;
 

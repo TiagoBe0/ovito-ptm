@@ -38,7 +38,17 @@ OVITO_CLASSINFO(IdentifyFCCPlanarFaultsModifier, "DisplayName", "Identify fcc pl
 OVITO_CLASSINFO(IdentifyFCCPlanarFaultsModifier, "Description", "Classify hcp-like atoms in fcc crystals as stacking faults or twin boundaries.");
 OVITO_CLASSINFO(IdentifyFCCPlanarFaultsModifier, "ModifierCategory", "Structure identification");
 DEFINE_PROPERTY_FIELD(IdentifyFCCPlanarFaultsModifier, colorParticles);
-SET_PROPERTY_FIELD_LABEL(IdentifyFCCPlanarFaultsModifier, colorParticles, "Color hcp-like atoms by fault type");
+SET_PROPERTY_FIELD_LABEL(IdentifyFCCPlanarFaultsModifier, colorParticles, "Color atoms by fault type");
+DEFINE_PROPERTY_FIELD(IdentifyFCCPlanarFaultsModifier, colorNonHCP);
+DEFINE_PROPERTY_FIELD(IdentifyFCCPlanarFaultsModifier, colorOther);
+DEFINE_PROPERTY_FIELD(IdentifyFCCPlanarFaultsModifier, colorISF);
+DEFINE_PROPERTY_FIELD(IdentifyFCCPlanarFaultsModifier, colorTwin);
+DEFINE_PROPERTY_FIELD(IdentifyFCCPlanarFaultsModifier, colorMulti);
+SET_PROPERTY_FIELD_LABEL(IdentifyFCCPlanarFaultsModifier, colorNonHCP, "Non-hcp");
+SET_PROPERTY_FIELD_LABEL(IdentifyFCCPlanarFaultsModifier, colorOther, "Other hcp-like");
+SET_PROPERTY_FIELD_LABEL(IdentifyFCCPlanarFaultsModifier, colorISF, "Intrinsic stacking fault");
+SET_PROPERTY_FIELD_LABEL(IdentifyFCCPlanarFaultsModifier, colorTwin, "Coherent twin boundary");
+SET_PROPERTY_FIELD_LABEL(IdentifyFCCPlanarFaultsModifier, colorMulti, "Multi-layer stacking fault");
 
 namespace {
 
@@ -184,6 +194,7 @@ Future<PipelineFlowState> IdentifyFCCPlanarFaultsModifier::evaluateModifier(cons
             particles,
             structureProperty,
             colorParticles = colorParticles(),
+            typeColors = std::array<Color, NUM_FAULT_TYPES>{colorNonHCP(), colorOther(), colorISF(), colorTwin(), colorMulti()},
             createdByNode = request.modificationNodeWeak()]() mutable
     {
         TaskProgress progress(this_task::ui());
@@ -252,22 +263,19 @@ Future<PipelineFlowState> IdentifyFCCPlanarFaultsModifier::evaluateModifier(cons
             type->setColor(color);
             property->addElementType(std::move(type));
         };
-        const std::array<std::pair<QString, Color>, NUM_FAULT_TYPES> typeInfo = {{
-            {tr("Non-hcp"),                    Color(0.95, 0.95, 0.95)},
-            {tr("Indeterminate hcp-like"),     Color(0.60, 0.60, 0.60)},
-            {tr("Intrinsic stacking fault"),   Color(0.90, 0.20, 0.20)},
-            {tr("Coherent twin boundary"),     Color(0.20, 0.40, 0.90)},
-            {tr("Multi-layer stacking fault"), Color(0.95, 0.75, 0.10)}}};
+        const std::array<QString, NUM_FAULT_TYPES> typeNames = {
+            tr("Non-hcp"), tr("Indeterminate hcp-like"), tr("Intrinsic stacking fault"), tr("Coherent twin boundary"), tr("Multi-layer stacking fault")};
         for(int t = 0; t < NUM_FAULT_TYPES; t++)
-            addFaultType(faultProperty, t, typeInfo[t].first, typeInfo[t].second);
+            addFaultType(faultProperty, t, typeNames[t], typeColors[t]);
 
         if(colorParticles) {
+            // Non-hcp atoms keep their input colors, as in OVITO Pro (colorNonHCP is only the color of type 0).
             ConstPropertyPtr inputColors = particles->inputParticleColors();
             Property* colorProperty = particles->createProperty(DataBuffer::Uninitialized, Particles::ColorProperty);
             BufferReadAccess<ColorG> inputColorArray(inputColors);
             BufferWriteAccess<ColorG, access_mode::discard_write> colorArray(colorProperty);
             for(size_t i = 0; i < count; i++)
-                colorArray[i] = (faultTypes[i] == NonHCP) ? inputColorArray[i] : typeInfo[faultTypes[i]].second.toDataType<GraphicsFloatType>();
+                colorArray[i] = (faultTypes[i] == NonHCP) ? inputColorArray[i] : typeColors[faultTypes[i]].toDataType<GraphicsFloatType>();
         }
 
         // Bar chart with the atom count of each fault type plus the estimated ISF and TB areas.
@@ -276,7 +284,7 @@ Future<PipelineFlowState> IdentifyFCCPlanarFaultsModifier::evaluateModifier(cons
         PropertyPtr typeColumn = DataTable::OOClass().createUserProperty(DataBuffer::Uninitialized, NUM_FAULT_TYPES, Property::Int32, 1, tr("Planar fault type"));
         boost::algorithm::iota_n(BufferWriteAccess<int32_t, access_mode::discard_write>(typeColumn).begin(), 0, NUM_FAULT_TYPES);
         for(int t = 0; t < NUM_FAULT_TYPES; t++)
-            addFaultType(typeColumn.get(), t, typeInfo[t].first, typeInfo[t].second);
+            addFaultType(typeColumn.get(), t, typeNames[t], typeColors[t]);
         DataTable* table = state.createObject<DataTable>(QStringLiteral("planar-faults"), createdByNode, DataTable::BarChart, tr("Planar fault counts"), std::move(countColumn), std::move(typeColumn));
         Property* areaColumn = table->createProperty(DataBuffer::Initialized, tr("Estimated area"), Property::FloatDefault);
         BufferWriteAccess<FloatType, access_mode::read_write> areas(areaColumn);

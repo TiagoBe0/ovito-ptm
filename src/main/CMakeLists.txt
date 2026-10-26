@@ -259,3 +259,32 @@ ENDIF()
 IF(NOT EMSCRIPTEN)
     ADD_TEST(NAME BondAnalysisSelfTest COMMAND Ovito --nogui --bond-analysis-selftest)
 ENDIF()
+
+# In-process regression test for the region analysis of the Construct surface mesh modifier (see
+# ConstructSurfaceSelfTestService in the Particles plugin). fcc crystal with two spherical pores.
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME ConstructSurfaceSelfTest COMMAND Ovito --nogui --construct-surface-selftest)
+ENDIF()
+
+# In-process regression test for the Shrink-wrap simulation box modifier (see ShrinkWrapBoxSelfTestService
+# in the Particles plugin).
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME ShrinkWrapBoxSelfTest COMMAND Ovito --nogui --shrink-wrap-selftest)
+ENDIF()
+
+# In-process regression test for the Find rings modifier (see FindRingsSelfTestService in the Particles plugin).
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME FindRingsSelfTest COMMAND Ovito --nogui --find-rings-selftest)
+ENDIF()
+
+# In-process regression test for the Structure factor modifier (see StructureFactorSelfTestService in the
+# Particles plugin). Compares with reference values obtained from OVITO Pro for the same input.
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME StructureFactorSelfTest COMMAND Ovito --nogui --structure-factor-selftest)
+ENDIF()
+
+# In-process regression test for the Render LAMMPS regions modifier (see RenderLAMMPSRegionsSelfTestService in the
+# Particles plugin). Compares with reference values obtained from OVITO Pro for the same input.
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME RenderLAMMPSRegionsSelfTest COMMAND Ovito --nogui --lammps-regions-selftest)
+ENDIF()

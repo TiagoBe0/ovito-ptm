@@ -82,6 +82,13 @@ private:
 
     /// Controls whether the hcp-like atoms get colored according to their planar fault type.
     DECLARE_MODIFIABLE_PROPERTY_FIELD(bool{true}, colorParticles, setColorParticles);
+
+    /// Particle colors of the five classes (defaults as in OVITO Pro).
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS((Color{1.0, 1.0, 1.0}), colorNonHCP, setColorNonHCP, PROPERTY_FIELD_MEMORIZE);
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS((Color{1.0, 0.4, 0.4}), colorOther, setColorOther, PROPERTY_FIELD_MEMORIZE);
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS((Color{0.9, 0.7, 0.2}), colorISF, setColorISF, PROPERTY_FIELD_MEMORIZE);
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS((Color{0.4, 0.4, 1.0}), colorTwin, setColorTwin, PROPERTY_FIELD_MEMORIZE);
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS((Color{0.0, 1.0, 0.9}), colorMulti, setColorMulti, PROPERTY_FIELD_MEMORIZE);
 };
 
 }   // End of namespace

@@ -24,6 +24,7 @@
 #include <ovito/particles/gui/ParticlesGui.h>
 #include <ovito/particles/modifier/analysis/planar_faults/IdentifyFCCPlanarFaultsModifier.h>
 #include <ovito/gui/desktop/properties/BooleanParameterUI.h>
+#include <ovito/gui/desktop/properties/ColorParameterUI.h>
 #include <ovito/gui/desktop/properties/ObjectStatusDisplay.h>
 #include <ovito/core/dataset/pipeline/ModificationNode.h>
 #include "IdentifyFCCPlanarFaultsModifierEditor.h"
@@ -53,6 +54,19 @@ void IdentifyFCCPlanarFaultsModifierEditor::createUI(const RolloutInsertionParam
     BooleanParameterUI* colorParticlesUI = createParamUI<BooleanParameterUI>(PROPERTY_FIELD(IdentifyFCCPlanarFaultsModifier::colorParticles));
     layout1->addSpacing(6);
     layout1->addWidget(colorParticlesUI->checkBox());
+
+    QGridLayout* colorsLayout = new QGridLayout();
+    colorsLayout->setContentsMargins(0,0,0,0);
+    colorsLayout->setColumnStretch(1, 1);
+    int row = 0;
+    for(const PropertyFieldDescriptor* field : {PROPERTY_FIELD(IdentifyFCCPlanarFaultsModifier::colorNonHCP), PROPERTY_FIELD(IdentifyFCCPlanarFaultsModifier::colorOther),
+            PROPERTY_FIELD(IdentifyFCCPlanarFaultsModifier::colorISF), PROPERTY_FIELD(IdentifyFCCPlanarFaultsModifier::colorTwin), PROPERTY_FIELD(IdentifyFCCPlanarFaultsModifier::colorMulti)}) {
+        ColorParameterUI* colorUI = createParamUI<ColorParameterUI>(field);
+        colorsLayout->addWidget(colorUI->label(), row, 0);
+        colorsLayout->addWidget(colorUI->colorPicker(), row, 1);
+        row++;
+    }
+    layout1->addLayout(colorsLayout);
 
     _plotWidget = new DataTablePlotWidget();
     _plotWidget->setMinimumHeight(180);

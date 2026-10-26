@@ -909,20 +909,26 @@ void MarchingCubes::processCase(int i, int j, int k, const signed char* triangle
 void MarchingCubes::processRegionsVoxelVertex(int i, int j, int k, signed char vertexRegion, std::array<int, 5>& localRegionMap)
 {
     int vertex{getVertexRegion(i, j, k)};
+    // A grid vertex on an open (non-periodic) boundary of the domain makes its empty region an exterior one.
+    const bool onOpenBoundary = ((i == 0 || i == _size_x) && !_pbcFlags[0]) || ((j == 0 || j == _size_y) && !_pbcFlags[1]) ||
+                                ((k == 0 || k == _size_z) && !_pbcFlags[2]);
     // if vertex and the local region have no ID, create a new one
     if((vertex == -1) && (localRegionMap[vertexRegion] == -1)) {
         setVertexRegion(i, j, k, _maxRegionIndex);
         localRegionMap[vertexRegion] = _maxRegionIndex;
         _regionFilled.push_back(((getFieldValue(i, j, k) - _isolevel) > _epsilon));
-        _regionExterior.push_back(!_regionFilled[_regionFilled.size() - 1] &&
-                                  (((i == 0 || i == _size_x) && !_pbcFlags[0]) || ((j == 0 || j == _size_y) && !_pbcFlags[1]) ||
-                                   ((k == 0 || k == _size_z) && !_pbcFlags[2])));
+        _regionExterior.push_back(!_regionFilled[_regionFilled.size() - 1] && onOpenBoundary);
         _regionVolumes.push_back(0);
         _maxRegionIndex++;
     }
     // if the vertex has no ID but the local regions has one, the vertex is updated with the local ID
     else if((vertex == -1) && (localRegionMap[vertexRegion] != -1)) {
         setVertexRegion(i, j, k, localRegionMap[vertexRegion]);
+        // The region may have been created away from the boundary; it still becomes exterior if it reaches an
+        // open boundary at this vertex. (Previously only the vertex creating a region was checked, so e.g. the
+        // empty layer on one side of a slab with an open z boundary was misclassified as an interior void.)
+        if(onOpenBoundary && !_regionFilled[localRegionMap[vertexRegion]])
+            _regionExterior[localRegionMap[vertexRegion]] = true;
     }
     // if the vertex has an ID but the local regions does not have one, the local regions mapping is updated
     else if((vertex != -1) && (localRegionMap[vertexRegion] == -1)) {

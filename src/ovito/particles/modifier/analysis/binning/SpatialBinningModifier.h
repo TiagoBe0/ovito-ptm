@@ -115,7 +115,7 @@ private:
     DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(ReductionOperation{Mean}, reductionOperation, setReductionOperation, PROPERTY_FIELD_MEMORIZE);
 
     /// The cell vectors to bin along.
-    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(BinDirection{X}, binDirection, setBinDirection, PROPERTY_FIELD_MEMORIZE);
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(BinDirection{Z}, binDirection, setBinDirection, PROPERTY_FIELD_MEMORIZE);
 
     /// Number of bins along the first, second and third cell vector.
     DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(int{50}, numberOfBinsX, setNumberOfBinsX, PROPERTY_FIELD_MEMORIZE);

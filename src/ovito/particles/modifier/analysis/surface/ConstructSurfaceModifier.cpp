@@ -30,6 +30,7 @@
 #include <ovito/grid/modifier/MarchingCubes.h>
 #include <ovito/stdobj/simcell/SimulationCell.h>
 #include <ovito/core/dataset/pipeline/ModificationNode.h>
+#include <boost/container/small_vector.hpp>
 #include <ovito/core/dataset/DataSet.h>
 #include <ovito/core/utilities/units/UnitsManager.h>
 #include <ovito/core/utilities/concurrent/ParallelFor.h>
@@ -73,6 +74,125 @@ SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(ConstructSurfaceModifier, smoothingLevel, I
 SET_PROPERTY_FIELD_UNITS_AND_RANGE(ConstructSurfaceModifier, gridResolution, IntegerParameterUnit, 2, 600);
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(ConstructSurfaceModifier, radiusFactor, PercentParameterUnit, 0);
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(ConstructSurfaceModifier, isoValue, FloatParameterUnit, 0);
+
+namespace {
+
+/******************************************************************************
+ * Computes the part of the filled regions' volume that lies outside the simulation cell
+ * along its non-periodic directions.
+ *
+ * Exact for the mesh, using the divergence theorem in reduced cell coordinates: the volume of the
+ * filled set F beyond a cell face r_d = b is the flux of the field (r_d - b) e_d through the part of
+ * the boundary of F on that side. The field vanishes on the plane r_d = b, so the cut does not need
+ * to be capped, and it is invariant under periodic shifts along the other cell vectors. Parts of F
+ * beyond several faces at once (edges, corners) are handled by inclusion-exclusion, clipping the
+ * boundary against all faces involved. The boundary of F consists of the mesh faces belonging to an
+ * empty region (filled-filled interfaces are excluded).
+ ******************************************************************************/
+FloatType computeFilledVolumeOutsideCell(const SurfaceMeshBuilder& mesh)
+{
+    const SimulationCellData& cell = mesh.domain();
+    std::vector<int> openDims;
+    for(int d = 0; d < 3; d++)
+        if(!cell.hasPbc(d)) openDims.push_back(d);
+    if(openDims.empty())
+        return 0;
+
+    BufferReadAccess<SelectionIntType> isFilled{mesh.expectRegionProperty(SurfaceMeshRegions::IsFilledProperty)};
+    BufferReadAccess<Point3> vertexPositions{mesh.expectVertexProperty(SurfaceMeshVertices::PositionProperty)};
+    BufferReadAccess<SurfaceMesh::region_index> faceRegions{mesh.expectFaceProperty(SurfaceMeshFaces::RegionProperty)};
+    const AffineTransformation& inverse = cell.reciprocalCellMatrix();
+
+    // A half-space beyond one cell face: r_dim < 0 (low side) or r_dim > 1 (high side).
+    struct HalfSpace { int dim; bool high; };
+    using Polygon = boost::container::small_vector<Point3, 8>;
+
+    // Clips a polygon (reduced coordinates) to a half-space.
+    auto clip = [](const Polygon& in, const HalfSpace& h) {
+        Polygon out;
+        auto inside = [&](const Point3& p) { return h.high ? p[h.dim] >= 1 : p[h.dim] <= 0; };
+        const FloatType b = h.high ? 1 : 0;
+        for(size_t i = 0; i < in.size(); i++) {
+            const Point3& p = in[i];
+            const Point3& q = in[(i + 1) % in.size()];
+            if(inside(p)) out.push_back(p);
+            if(inside(p) != inside(q)) {
+                FloatType t = (b - p[h.dim]) / (q[h.dim] - p[h.dim]);
+                out.push_back(p + t * (q - p));
+            }
+        }
+        return out;
+    };
+
+    // Flux of (r_d - b) e_d through a planar polygon, as a fan of triangles.
+    auto flux = [](const Polygon& poly, int d, FloatType b) {
+        FloatType sum = 0;
+        for(size_t i = 1; i + 1 < poly.size(); i++) {
+            Vector3 area = (poly[i] - poly[0]).cross(poly[i + 1] - poly[0]) / 2;
+            sum += area[d] * ((poly[0][d] + poly[i][d] + poly[i + 1][d]) / 3 - b);
+        }
+        return sum;
+    };
+
+    // The boundary of the filled set, as triangles in reduced coordinates (unwrapped along periodic directions).
+    std::vector<std::array<Point3, 3>> boundary;
+    for(SurfaceMesh::edge_index edge : mesh.firstFaceEdges()) {
+        SurfaceMesh::region_index region = faceRegions[mesh.adjacentFace(edge)];
+        if(region < 0 || isFilled[region])
+            continue;
+        SurfaceMesh::edge_index edge2 = mesh.nextFaceEdge(edge);
+        Point3 p0 = vertexPositions[mesh.vertex1(edge)];
+        Point3 p1 = p0 + mesh.edgeVector(edge, vertexPositions);
+        Point3 p2 = p1 + mesh.edgeVector(edge2, vertexPositions);
+        boundary.push_back({inverse * p0, inverse * p1, inverse * p2});
+    }
+
+    // Sign of the face orientation: the unclipped flux equals +/- the enclosed volume.
+    FloatType orientedVolume = 0;
+    for(const auto& tri : boundary)
+        orientedVolume += flux(Polygon(tri.begin(), tri.end()), openDims[0], 0);
+    const FloatType sign = (orientedVolume < 0) ? -1 : 1;
+
+    // Only triangles reaching beyond an open cell face can contribute to the clipped fluxes.
+    std::erase_if(boundary, [&](const std::array<Point3, 3>& tri) {
+        for(int d : openDims)
+            for(const Point3& p : tri)
+                if(p[d] < 0 || p[d] > 1) return false;
+        return true;
+    });
+
+    // Inclusion-exclusion over all combinations of at most one outside half-space per open direction.
+    FloatType outside = 0;
+    std::vector<HalfSpace> subset;
+    std::function<void(size_t)> visit = [&](size_t k) {
+        if(k == openDims.size()) {
+            if(subset.empty()) return;
+            FloatType volume = 0;
+            for(const auto& tri : boundary) {
+                Polygon poly(tri.begin(), tri.end());
+                for(const HalfSpace& h : subset) {
+                    poly = clip(poly, h);
+                    if(poly.size() < 3) break;
+                }
+                if(poly.size() >= 3)
+                    volume += flux(poly, subset.front().dim, subset.front().high ? 1 : 0);
+            }
+            outside += (subset.size() % 2 ? 1 : -1) * sign * volume;
+            return;
+        }
+        visit(k + 1);
+        for(bool high : {false, true}) {
+            subset.push_back({openDims[k], high});
+            visit(k + 1);
+            subset.pop_back();
+        }
+    };
+    visit(0);
+
+    return std::max(outside, FloatType(0)) * std::abs(cell.cellMatrix().determinant());
+}
+
+}   // End of anonymous namespace
 
 /******************************************************************************
 * Constructor.
@@ -479,6 +599,11 @@ void ConstructSurfaceModifier::AlphaShapeEngine::perform()
     meshBuilder.makeManifold();
     progress.nextSubStep();
 
+    // The region volumes stem from the Delaunay tetrahedra, i.e. the unsmoothed mesh. Measure the filled volume
+    // outside the cell on that same mesh, before smoothing moves the vertices.
+    if(identifyRegions())
+        _filledVolumeOutsideCell = computeFilledVolumeOutsideCell(meshBuilder);
+
     meshBuilder.smoothMesh(_smoothingLevel, progress);
     progress.nextSubStep();
 
@@ -766,6 +891,7 @@ void ConstructSurfaceModifier::GaussianDensityEngine::perform()
         meshBuilder.setExternalRegionVolumeInfinityIfNonPeriodic();
         _totalSurfaceArea = meshBuilder.computeSurfaceAreaWithRegions();
         _aggregateVolumes = meshBuilder.computeAggregateVolumes();
+        _filledVolumeOutsideCell = computeFilledVolumeOutsideCell(meshBuilder);
     }
     else {
         _totalSurfaceArea = meshBuilder.computeTotalSurfaceArea();
@@ -819,6 +945,24 @@ void ConstructSurfaceModifier::ConstructSurfaceEngineBase::applyResults(Pipeline
         const SimulationCell* simCell = state.getObject<SimulationCell>();
         bool periodic = simCell && (simCell->pbcX() && simCell->pbcY() && simCell->pbcZ());
         FloatType totalCellVolume = periodic ? simCell->volume3D() : std::numeric_limits<FloatType>::quiet_NaN();
+
+        // Additional attributes (not in OVITO Pro, whose attributes above are infinite or NaN for a non-periodic cell):
+        // the volumes inside the simulation cell. The empty volume in the cell counts the interior voids plus the part
+        // of the infinite exterior region inside the cell, i.e. everything in the cell that is not filled. Filled volume
+        // sticking out of the cell (e.g. a Gaussian density surface around atoms close to an open cell face) is not
+        // subtracted from the cell volume. For a fully periodic cell these equal the standard attributes.
+        if(simCell) {
+            const FloatType boxVolume = simCell->volume3D();
+            const FloatType filledInCell = periodic ? _aggregateVolumes.totalFilledVolume : _aggregateVolumes.totalFilledVolume - _filledVolumeOutsideCell;
+            const FloatType emptyInCell = periodic ? _aggregateVolumes.totalEmptyVolume : std::max(boxVolume - filledInCell, FloatType(0));
+            const FloatType nan = std::numeric_limits<FloatType>::quiet_NaN();
+            state.addAttribute(QStringLiteral("ConstructSurfaceMesh.box_volume"), QVariant::fromValue(boxVolume), _createdByNode);
+            state.addAttribute(QStringLiteral("ConstructSurfaceMesh.filled_volume_in_cell"), QVariant::fromValue(filledInCell), _createdByNode);
+            state.addAttribute(QStringLiteral("ConstructSurfaceMesh.empty_volume_in_cell"), QVariant::fromValue(emptyInCell), _createdByNode);
+            state.addAttribute(QStringLiteral("ConstructSurfaceMesh.filled_fraction_in_cell"), QVariant::fromValue(boxVolume ? filledInCell / boxVolume : nan), _createdByNode);
+            state.addAttribute(QStringLiteral("ConstructSurfaceMesh.empty_fraction_in_cell"), QVariant::fromValue(boxVolume ? emptyInCell / boxVolume : nan), _createdByNode);
+            state.addAttribute(QStringLiteral("ConstructSurfaceMesh.specific_surface_area_in_cell"), QVariant::fromValue(boxVolume ? surfaceArea() / boxVolume : nan), _createdByNode);
+        }
 
         // Output more global attributes.
         state.addAttribute(QStringLiteral("ConstructSurfaceMesh.cell_volume"), QVariant::fromValue(totalCellVolume), _createdByNode);

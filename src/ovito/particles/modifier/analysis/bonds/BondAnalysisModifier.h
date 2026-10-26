@@ -91,7 +91,7 @@ private:
     DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(bool{false}, useCosine, setUseCosine, PROPERTY_FIELD_MEMORIZE);
 
     /// Upper end of the bond length histogram.
-    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(FloatType{3.2}, lengthCutoff, setLengthCutoff, PROPERTY_FIELD_MEMORIZE);
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(FloatType{4.0}, lengthCutoff, setLengthCutoff, PROPERTY_FIELD_MEMORIZE);
 
     /// How the distributions are broken down into partial histograms.
     DECLARE_MODIFIABLE_PROPERTY_FIELD(PartitioningMode{Off}, partition, setPartition);

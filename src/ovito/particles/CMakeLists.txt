@@ -67,6 +67,15 @@ SET(SourceFiles
     modifier/analysis/entropy/CalculateLocalEntropySelfTestService.cpp
     modifier/analysis/bonds/BondAnalysisModifier.cpp
     modifier/analysis/bonds/BondAnalysisSelfTestService.cpp
+    modifier/analysis/surface/ConstructSurfaceSelfTestService.cpp
+    modifier/modify/ShrinkWrapBoxModifier.cpp
+    modifier/modify/ShrinkWrapBoxSelfTestService.cpp
+    modifier/modify/RenderLAMMPSRegionsModifier.cpp
+    modifier/modify/RenderLAMMPSRegionsSelfTestService.cpp
+    modifier/analysis/rings/FindRingsModifier.cpp
+    modifier/analysis/rings/FindRingsSelfTestService.cpp
+    modifier/analysis/structure_factor/StructureFactorModifier.cpp
+    modifier/analysis/structure_factor/StructureFactorSelfTestService.cpp
     modifier/analysis/wignerseitz/WignerSeitzAnalysisModifier.cpp
     modifier/analysis/vacancy/VacancyAnalysisModifier.cpp
     modifier/analysis/vacancy/VacancyAnalysisSweepService.cpp
