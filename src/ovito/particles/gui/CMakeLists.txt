@@ -51,6 +51,7 @@ OVITO_STANDARD_PLUGIN(ParticlesGui
         modifier/analysis/entropy/CalculateLocalEntropyModifierEditor.cpp
         modifier/analysis/bonds/BondAnalysisModifierEditor.cpp
         modifier/analysis/rings/FindRingsModifierEditor.cpp
+        modifier/analysis/bond_order/BondOrderModifierEditor.cpp
         modifier/analysis/structure_factor/StructureFactorModifierEditor.cpp
         modifier/modify/RenderLAMMPSRegionsModifierEditor.cpp
         modifier/analysis/bader/BaderChargeIntegrationModifierEditor.cpp

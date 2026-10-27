@@ -76,6 +76,8 @@ SET(SourceFiles
     modifier/analysis/bader/BaderChargeIntegrationSelfTestService.cpp
     modifier/analysis/rings/FindRingsModifier.cpp
     modifier/analysis/rings/FindRingsSelfTestService.cpp
+    modifier/analysis/bond_order/BondOrderModifier.cpp
+    modifier/analysis/bond_order/BondOrderSelfTestService.cpp
     modifier/analysis/structure_factor/StructureFactorModifier.cpp
     modifier/analysis/structure_factor/StructureFactorSelfTestService.cpp
     modifier/analysis/wignerseitz/WignerSeitzAnalysisModifier.cpp

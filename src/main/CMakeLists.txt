@@ -308,3 +308,9 @@ ENDIF()
 IF(NOT EMSCRIPTEN)
     ADD_TEST(NAME BaderSelfTest COMMAND Ovito --nogui --bader-selftest)
 ENDIF()
+
+# In-process regression test for the Bond order modifier (see BondOrderSelfTestService in the Particles plugin).
+# Compares with reference results obtained from OVITO Pro for the same molecules.
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME BondOrderSelfTest COMMAND Ovito --nogui --bond-order-selftest)
+ENDIF()

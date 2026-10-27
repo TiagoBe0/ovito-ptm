@@ -14,6 +14,7 @@ Cada línea de investigación agrega uno o más modificadores nativos en C++ baj
 | [`vacancy_analysis/`](vacancy_analysis/) | `src/ovito/particles/modifier/analysis/vacancy/VacancyAnalysisModifier` | en desarrollo |
 | [`amorphous_carbon/`](amorphous_carbon/) | `src/ovito/particles/modifier/analysis/amorphous_carbon/` | en desarrollo |
 | [`ml_structure_classifier/`](ml_structure_classifier/) | `src/ovito/ml/MLStructureModifier` | prototipo |
+| [`pro_ports/`](pro_ports/) | modificadores de OVITO Pro en clean-room (`docs/` = cómo se midió cada uno) | Bond order documentado |
 
 ## Convención de carpetas
 
@@ -64,4 +65,9 @@ Cambios del fork sobre modificadores originales de OVITO, cada uno con un ctest 
 | Construct surface mesh | `MarchingCubes::processRegionsVoxelVertex` creaba láminas con "void" falso | arreglado 2026-10-23 | `ConstructSurfaceSelfTest` |
 
 Modificadores de OVITO Pro reimplementados en clean-room: los 13 de la 3.14 más Bond length/angle
-distribution y Bader charge integration (3.15/3.16). Falta **Bond order** (3.15).
+distribution, Bader charge integration y Bond order (3.15/3.16). Bond order (`BondOrderSelfTest`): tabla de
+penalizaciones medida sobre Pro como caja negra (ajuste lineal exacto sobre ~24000 moléculas); mismo puntaje que
+Pro en 24571/24571 moléculas, óptimo exacto por branch and bound (Pro no termina grafeno periódico de 48 átomos
+en 5 min; el fork resuelve 7360 en <1 s). Diferencias deliberadas con Pro en carboxilato y nitro (Pro deja
+átomos con valencia 5), documentadas en `BondOrderModifier.h`; método y datos de la medición en `pro_ports/docs/bond_order.md`. Faltan, fuera del modificador: el modo
+*Covalent radii* de Create bonds y el dibujo de órdenes de enlace en Bonds vis (ambos de Pro 3.15).
