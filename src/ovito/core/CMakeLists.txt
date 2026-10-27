@@ -364,14 +364,21 @@ IF(ZLIB_FOUND AND NOT EMSCRIPTEN)
         # The DLL name differs between distributions (zlib.dll, zlib1.dll, z.dll in recent vcpkg). Try the name of the
         # import library first, then the known alternatives.
         GET_FILENAME_COMPONENT(ZLIB_LIBRARY_NAME_WE "${ZLIB_LIBRARY_LOCATION}" NAME_WE)
-        SET(ZLIB_DLL "${ZLIB_LIBRARY_PATH}/../bin/zlib.dll")
+        # A static zlib (e.g. vcpkg's x64-windows-static-md triplet) has no DLL to deploy.
+        UNSET(ZLIB_DLL)
         FOREACH(_name ${ZLIB_LIBRARY_NAME_WE} zlib zlib1 z)
             IF(EXISTS "${ZLIB_LIBRARY_PATH}/../bin/${_name}.dll")
                 SET(ZLIB_DLL "${ZLIB_LIBRARY_PATH}/../bin/${_name}.dll")
                 BREAK()
             ENDIF()
         ENDFOREACH()
-        OVITO_INSTALL_SHARED_LIB("${ZLIB_DLL}")
+        IF(ZLIB_DLL)
+            OVITO_INSTALL_SHARED_LIB("${ZLIB_DLL}")
+        ELSEIF(NOT EXISTS "${ZLIB_LIBRARY_PATH}/../bin")
+            MESSAGE(STATUS "zlib is linked statically, no DLL to deploy.")
+        ELSE()
+            OVITO_INSTALL_SHARED_LIB("${ZLIB_LIBRARY_PATH}/../bin/zlib.dll")
+        ENDIF()
     ENDIF()
 ENDIF()
 
