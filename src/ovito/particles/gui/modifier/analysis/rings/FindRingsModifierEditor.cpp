@@ -41,7 +41,7 @@ SET_OVITO_OBJECT_EDITOR(FindRingsModifier, FindRingsModifierEditor);
 void FindRingsModifierEditor::createUI(const RolloutInsertionParameters& rolloutParams)
 {
     // Create a rollout.
-    QWidget* rollout = createRollout(tr("Find rings"), rolloutParams, "manual:particles.modifiers.find_rings");
+    QWidget* rollout = createRollout(tr("Find rings (SIMAF)"), rolloutParams, "manual:particles.modifiers.find_rings");
 
     // Create the rollout contents.
     QVBoxLayout* layout1 = new QVBoxLayout(rollout);

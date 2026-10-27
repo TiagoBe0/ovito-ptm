@@ -16,10 +16,12 @@
 #include <QCoreApplication>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <limits>
 #include <map>
 #include <random>
+#include <thread>
 
 namespace Ovito {
 
@@ -193,6 +195,22 @@ void testTwoLayerHierarchy(Checker& c)
         for(size_t j = i + 1; j < results.size(); ++j)
             if(results[i].godelId == results[j].godelId) godelDistinct = false;
     c.check(QStringLiteral("Godel ids are pairwise distinct across the 4 groups"), godelDistinct);
+
+    // classify() runs inside parallelFor(), so nthPrime() must be safe to call concurrently.
+    {
+        const int64_t expectedPrimes[] = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29};
+        std::atomic<bool> primesOk{true};
+        std::vector<std::thread> threads;
+        for(int t = 0; t < 8; ++t) {
+            threads.emplace_back([&]() {
+                for(int rep = 0; rep < 1000; ++rep)
+                    for(int n = 1; n <= 10; ++n)
+                        if(SomAlgorithm::nthPrime(n) != expectedPrimes[n - 1]) primesOk = false;
+            });
+        }
+        for(std::thread& th : threads) th.join();
+        c.check(QStringLiteral("nthPrime() returns the right primes when called from 8 threads at once"), primesOk.load());
+    }
 
     bool linearInRange = true;
     for(const GroupResult& r : results)

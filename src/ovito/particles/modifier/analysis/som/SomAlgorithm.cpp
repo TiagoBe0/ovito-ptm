@@ -429,21 +429,18 @@ SomTreeNode trainTree(
 
 int64_t nthPrime(int n)
 {
-    static std::vector<int64_t> cache{2};
-    while(static_cast<int>(cache.size()) < n) {
-        int64_t candidate = cache.back() + 1;
-        while(true) {
-            bool isPrime = true;
-            for(int64_t p : cache) {
-                if(p * p > candidate) break;
-                if(candidate % p == 0) { isPrime = false; break; }
-            }
-            if(isPrime) break;
-            ++candidate;
+    // Deliberately stateless: classify() calls this from parallelFor() workers, and a shared
+    // static cache grown with push_back() was a data race on the first Godel evaluation.
+    // n is the layer index, so trial division from scratch costs nothing.
+    int count = 0;
+    for(int64_t candidate = 2; ; ++candidate) {
+        bool isPrime = true;
+        for(int64_t d = 2; d * d <= candidate; ++d) {
+            if(candidate % d == 0) { isPrime = false; break; }
         }
-        cache.push_back(candidate);
+        if(isPrime && ++count >= n)
+            return candidate;
     }
-    return cache[static_cast<size_t>(n - 1)];
 }
 
 ClassificationResult classify(

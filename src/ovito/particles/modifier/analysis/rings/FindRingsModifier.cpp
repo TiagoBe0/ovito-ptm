@@ -38,7 +38,7 @@
 namespace Ovito {
 
 IMPLEMENT_CREATABLE_OVITO_CLASS(FindRingsModifier);
-OVITO_CLASSINFO(FindRingsModifier, "DisplayName", "Find rings");
+OVITO_CLASSINFO(FindRingsModifier, "DisplayName", "Find rings (SIMAF)");
 OVITO_CLASSINFO(FindRingsModifier, "Description", "Identify and visualize the shortest-path rings formed by bonds.");
 OVITO_CLASSINFO(FindRingsModifier, "ModifierCategory", "Analysis");
 DEFINE_PROPERTY_FIELD(FindRingsModifier, minRingSize);

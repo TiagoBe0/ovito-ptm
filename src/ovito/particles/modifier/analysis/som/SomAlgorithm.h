@@ -258,7 +258,7 @@ OVITO_PARTICLES_EXPORT QJsonArray layersToJson(const std::vector<LayerConfig>& l
 OVITO_PARTICLES_EXPORT std::vector<LayerConfig> layersFromJson(const QJsonArray& array, QString& errorMessage);
 
 /// Returns the n-th prime, 1-indexed (nthPrime(1) == 2, nthPrime(2) == 3, nthPrime(3) == 5, ...).
-/// Cached; layer counts are always small (<10 in practice) so this never gets hot.
+/// Stateless and thread-safe; layer counts are always small (<10 in practice) so this never gets hot.
 OVITO_PARTICLES_EXPORT int64_t nthPrime(int n);
 
 }   // namespace SomAlgorithm

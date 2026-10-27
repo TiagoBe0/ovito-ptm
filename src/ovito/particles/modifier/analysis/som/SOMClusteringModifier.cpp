@@ -462,7 +462,7 @@ Future<PipelineFlowState> SOMClusteringModifier::evaluateModifier(
         if(invalidFeatureCount > 0) {
             warnings << tr("%1 of %2 atoms carry a non-finite (NaN/inf) value in one of the input features and could not be classified; they were left unassigned (%3). Check the upstream modifiers that produce these features -- many leave NaN on atoms without enough neighbors.")
                 .arg(invalidFeatureCount).arg(particleCount)
-                .arg(useDefault ? tr("id -1 from the offending layer on") : tr("id 0"));
+                .arg(useDefault ? tr("id -1 in every layer") : tr("id 0"));
         }
         if(missingBranchCount > 0) {
             warnings << tr("%1 of %2 atoms fell into an untrained sub-branch of the SOM tree and received a coarser cluster id.")
