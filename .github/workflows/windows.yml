@@ -67,9 +67,10 @@ jobs:
           gh release download -R pal1000/mesa-dist-win --pattern '*-release-msvc.7z' -D mesa
           7z x -omesa/x mesa/*.7z > /dev/null
           EXE_DIR=$(dirname "$(find build -name ovito.exe | head -n 1)")
-          cp mesa/x/x64/*.dll "$EXE_DIR"/
-          mv "$EXE_DIR"/opengl32.dll "$EXE_DIR"/opengl32sw.dll
-          ls "$EXE_DIR"/*.dll | grep -iE 'opengl32|gallium|glapi'
+          # Only the WGL driver: the archive also holds a d3d10warp.dll that would shadow the system's WARP device.
+          cp mesa/x/x64/opengl32.dll "$EXE_DIR"/opengl32sw.dll
+          for f in libgallium_wgl.dll libglapi.dll; do [ -f mesa/x/x64/$f ] && cp mesa/x/x64/$f "$EXE_DIR"/; done
+          ls "$EXE_DIR"/*.dll | grep -iE 'opengl32|gallium|glapi|warp' || true
 
       - name: Test
         shell: bash

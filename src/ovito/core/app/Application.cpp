@@ -297,8 +297,10 @@ bool Application::initialize(int& argc, char** argv)
     if(QCoreApplication::startingUp()) {
         // Enable OpenGL context sharing globally.
         QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
-        // Always use desktop OpenGL (avoid ANGLE on Windows):
-        QCoreApplication::setAttribute(Qt::AA_UseDesktopOpenGL);
+        // Use desktop OpenGL (avoid ANGLE on Windows), unless the user explicitly selected an implementation
+        // through Qt's QT_OPENGL variable, e.g. QT_OPENGL=software on a Windows machine without a GPU driver.
+        if(!qEnvironmentVariableIsSet("QT_OPENGL"))
+            QCoreApplication::setAttribute(Qt::AA_UseDesktopOpenGL);
     }
 
     // Specify default OpenGL surface format.
