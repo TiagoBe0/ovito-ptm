@@ -312,6 +312,12 @@ ENDIF()
 # Generate the build targets that are part of Ovito.
 ADD_SUBDIRECTORY(src)
 
+# On Windows, deploy the Qt DLLs and Qt plugins next to the program, so that the installed tree runs on its own.
+# (The public source tree defines this function but never called it.)
+IF(WIN32 AND OVITO_BUILD_APP AND NOT OVITO_BUILD_CONDA AND NOT OVITO_BUILD_PYPI)
+    OVITO_DEPLOY_QT_FRAMEWORK_FILES()
+ENDIF()
+
 # This allows external CMake projects to inject their customization code into the CMake project:
 IF(OVITO_CMAKE_FILE_INJECTION_PROJECT)
     INCLUDE("${OVITO_CMAKE_FILE_INJECTION_PROJECT}")

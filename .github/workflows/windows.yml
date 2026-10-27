@@ -123,7 +123,7 @@ jobs:
           EXE=$(find pkg -name ovito.exe | head -n 1)
           CLEAN_PATH="/usr/bin:/c/Windows/System32:/c/Windows"
           for t in bond-order-selftest structure-factor-selftest dxa-selftest; do
-            PATH="$CLEAN_PATH" timeout 600 "$EXE" --nogui --$t > /dev/null 2>&1 || { echo "FAILED: --$t"; exit 1; }
+            PATH="$CLEAN_PATH" timeout 600 "$EXE" --nogui --$t > isolated.log 2>&1 || { echo "FAILED: --$t (exit $?)"; tail -n 30 isolated.log; exit 1; }
             echo "ok: --$t"
           done
           PATH="$CLEAN_PATH" QT_OPENGL=software GALLIUM_DRIVER=llvmpipe timeout 600 "$EXE" --gui-editors-selftest particles 2>&1 | tail -n 3
