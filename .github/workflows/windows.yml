@@ -56,11 +56,25 @@ jobs:
           set -o pipefail
           cmake --build build --parallel 4 -- -k 0 2>&1 | tee -a build.log
 
+      # The runner has no GPU, and Windows' own OpenGL 1.1 cannot create the viewport widgets (Qt then crashes in
+      # QOpenGLWidget::resizeEvent). An application-local opengl32.dll from Mesa (llvmpipe) provides OpenGL 4.5.
+      - name: Install Mesa software OpenGL
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download -R pal1000/mesa-dist-win --pattern '*-release-msvc.7z' -D mesa
+          7z x -omesa/x mesa/*.7z > /dev/null
+          EXE_DIR=$(dirname "$(find build -name ovito.exe | head -n 1)")
+          cp mesa/x/x64/*.dll "$EXE_DIR"/
+          ls "$EXE_DIR"/*.dll | grep -iE 'opengl32|gallium|glapi'
+
       - name: Test
         shell: bash
         env:
           # Ovito.exe is a GUI-subsystem program; without this its messages would not reach the log.
           QT_FORCE_STDERR_LOGGING: '1'
+          GALLIUM_DRIVER: llvmpipe
         run: |
           set -o pipefail
           ctest --test-dir build --output-on-failure --timeout 600 2>&1 | tee ctest.log
@@ -71,7 +85,7 @@ jobs:
         shell: bash
         env:
           QT_FORCE_STDERR_LOGGING: '1'
-          QT_OPENGL: software
+          GALLIUM_DRIVER: llvmpipe
         run: |
           CDB="/c/Program Files (x86)/Windows Kits/10/Debuggers/x64/cdb.exe"
           EXE=$(find build -name ovito.exe | head -n 1)
