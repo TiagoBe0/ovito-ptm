@@ -79,6 +79,7 @@ SET(SourceFiles
     modifier/analysis/structure_factor/StructureFactorModifier.cpp
     modifier/analysis/structure_factor/StructureFactorSelfTestService.cpp
     modifier/analysis/wignerseitz/WignerSeitzAnalysisModifier.cpp
+    modifier/analysis/wignerseitz/WignerSeitzSelfTestService.cpp
     modifier/analysis/vacancy/VacancyAnalysisModifier.cpp
     modifier/analysis/vacancy/VacancyAnalysisSweepService.cpp
     modifier/analysis/ptm/PolyhedralTemplateMatchingModifier.cpp

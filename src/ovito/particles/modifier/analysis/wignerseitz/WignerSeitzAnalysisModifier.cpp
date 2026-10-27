@@ -323,7 +323,7 @@ void WignerSeitzAnalysisModifier::WignerSeitzAnalysisEngine::perform(PipelineFlo
                         if(new_mrs < mrs) mrs = new_mrs;
                     }
                 };
-                neighborTree.visitNeighbors(p, powerVisitor);
+                neighborTree.visitNeighbors(p, powerVisitor, /*includeSelf=*/true);
 
                 OVITO_ASSERT(bestSite < occupancyArray.size());
                 occupancyArray[bestSite].fetch_add(1, std::memory_order_relaxed);
@@ -350,7 +350,7 @@ void WignerSeitzAnalysisModifier::WignerSeitzAnalysisEngine::perform(PipelineFlo
                         if(new_mrs < mrs) mrs = new_mrs;
                     }
                 };
-                neighborTree.visitNeighbors(p, powerVisitor);
+                neighborTree.visitNeighbors(p, powerVisitor, /*includeSelf=*/true);
 
                 int offset = particleTypesArray[atomIdx] - typemin;
                 OVITO_ASSERT(bestSite * ncomponents + offset < occupancyArray.size());

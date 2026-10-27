@@ -248,6 +248,20 @@ IF(NOT EMSCRIPTEN)
     ADD_TEST(NAME PlanarFaultsSelfTest COMMAND Ovito --nogui --planar-faults-selftest)
 ENDIF()
 
+# In-process regression test for the Dislocation analysis (DXA) modifier (see
+# DislocationAnalysisSelfTestService in the CrystalAnalysis plugin). Screw dislocations in fcc and cubic
+# diamond and perfect diamond crystals, with CNA and with PTM structure identification.
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME DislocationAnalysisSelfTest COMMAND Ovito --nogui --dxa-selftest)
+ENDIF()
+
+# In-process regression test for the Wigner-Seitz defect analysis modifier (see
+# WignerSeitzSelfTestService in the Particles plugin). Perfect fcc crystal and one Frenkel pair,
+# with the standard and the adaptive Wigner-Seitz cell.
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME WignerSeitzSelfTest COMMAND Ovito --nogui --wigner-seitz-selftest)
+ENDIF()
+
 # In-process regression test for the Calculate local entropy modifier (see
 # CalculateLocalEntropySelfTestService in the Particles plugin). Compares against NumPy reference values.
 IF(NOT EMSCRIPTEN)

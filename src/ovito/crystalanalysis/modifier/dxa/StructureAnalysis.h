@@ -215,6 +215,15 @@ private:
     /// Maps a PTM structure type to a DXA coordination structure type.
     static CoordinationStructureType ptmTypeToCoordType(PTMAlgorithm::StructureType ptmType);
 
+    /// Maximum number of PTM templates per structure type (hexagonal diamond has four).
+    enum { MAX_PTM_TEMPLATES = 4 };
+
+    /// For each DXA neighbor slot of the coordination structure, the PTM template slot (1-based) holding that neighbor.
+    using PTMNeighborMapping = std::array<int, MAX_NEIGHBORS>;
+
+    /// Returns the neighbor mapping for the given PTM structure type and template index, or nullptr if there is none.
+    static const PTMNeighborMapping* ptmNeighborMapping(CoordinationStructureType coordType, int templateIndex);
+
     /// Prepares the list of coordination and lattice structures.
     static void initializeListOfStructures();
 

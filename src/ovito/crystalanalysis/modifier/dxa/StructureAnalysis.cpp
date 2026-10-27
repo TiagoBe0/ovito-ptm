@@ -498,6 +498,97 @@ StructureAnalysis::CoordinationStructureType StructureAnalysis::ptmTypeToCoordTy
 }
 
 /******************************************************************************
+* Returns the mapping from DXA neighbor slots to PTM template slots.
+*
+* PTM returns the neighbors of an atom in the slot order of the template it matched (structures such as
+* hexagonal diamond have several templates). That order generally differs from DXA's lattice vectors, so,
+* like the CNA path, we look for a permutation that maps the template's neighbor bond graph onto the bond
+* graph of DXA's coordination structure. It is computed once per structure type and template.
+******************************************************************************/
+const StructureAnalysis::PTMNeighborMapping* StructureAnalysis::ptmNeighborMapping(CoordinationStructureType coordType, int templateIndex)
+{
+    struct Table {
+        std::array<std::array<PTMNeighborMapping, MAX_PTM_TEMPLATES>, NUM_COORD_TYPES> mappings;
+        std::array<int, NUM_COORD_TYPES> numTemplates{};
+    };
+    static const Table table = [] {
+        Table t;
+        const std::pair<CoordinationStructureType, PTMAlgorithm::StructureType> types[] = {
+            {COORD_FCC, PTMAlgorithm::FCC}, {COORD_HCP, PTMAlgorithm::HCP}, {COORD_BCC, PTMAlgorithm::BCC},
+            {COORD_CUBIC_DIAMOND, PTMAlgorithm::CUBIC_DIAMOND}, {COORD_HEX_DIAMOND, PTMAlgorithm::HEX_DIAMOND}};
+        const FloatType diamondFirstShellCutoff = (sqrt(3.0)*0.25+sqrt(0.5))/2;
+        for(const auto& [coord, ptmType] : types) {
+            const CoordinationStructure& cs = _coordinationStructures[coord];
+            const int nn = cs.numNeighbors;
+            const bool diamond = (coord == COORD_CUBIC_DIAMOND || coord == COORD_HEX_DIAMOND);
+
+            // The bond criteria used by initializeListOfStructures() to build the coordination structures.
+            auto bonded = [&](const Vector3& v1, const Vector3& v2) -> bool {
+                if(diamond) {
+                    bool firstShell1 = v1.length() < diamondFirstShellCutoff;
+                    bool firstShell2 = v2.length() < diamondFirstShellCutoff;
+                    if(firstShell1 && firstShell2) return false;
+                    return (v1 - v2).length() < ((firstShell1 || firstShell2) ? diamondFirstShellCutoff : (1.0+sqrt(0.5))/2);
+                }
+                if(coord == COORD_BCC)
+                    return (v1 - v2).length() < (FloatType(1)+sqrt(FloatType(2)))*FloatType(0.5);
+                return (v1 - v2).length() < (std::sqrt(0.5)+1.0)*0.5;
+            };
+            for(int i = 0; i < nn; i++)
+                for(int j = i + 1; j < nn; j++)
+                    if(bonded(cs.latticeVectors[i], cs.latticeVectors[j]) != cs.neighborArray.neighborBond(i, j))
+                        throw Exception(QStringLiteral("DXA: inconsistent bond criterion for coordination structure %1.").arg((int)coord));
+
+            const int numTemplates = (coord == COORD_HEX_DIAMOND) ? 4 : (coord == COORD_HCP || coord == COORD_CUBIC_DIAMOND) ? 2 : 1;
+            t.numTemplates[coord] = numTemplates;
+            for(int ti = 0; ti < numTemplates; ti++) {
+                // Template neighbor vectors (slot 0 is the central atom), rescaled to DXA's lattice units.
+                const double (*points)[3] = PTMAlgorithm::get_template(ptmType, ti);
+                FloatType dxaLength = 0, templateLength = 0;
+                for(int i = 0; i < nn; i++) {
+                    dxaLength += cs.latticeVectors[i].length();
+                    templateLength += Vector3(points[i+1][0], points[i+1][1], points[i+1][2]).length();
+                }
+                std::vector<Vector3> templateVectors(nn);
+                for(int i = 0; i < nn; i++)
+                    templateVectors[i] = Vector3(points[i+1][0], points[i+1][1], points[i+1][2]) * (dxaLength / templateLength);
+                std::vector<std::vector<bool>> templateBonds(nn, std::vector<bool>(nn, false));
+                for(int i = 0; i < nn; i++)
+                    for(int j = 0; j < nn; j++)
+                        templateBonds[i][j] = (i != j) && bonded(templateVectors[i], templateVectors[j]);
+
+                // Depth-first search for a graph isomorphism (DXA slot k -> template slot mapping[k]).
+                PTMNeighborMapping& mapping = t.mappings[coord][ti];
+                std::vector<bool> used(nn, false);
+                auto search = [&](auto&& self, int k) -> bool {
+                    if(k == nn) return true;
+                    for(int m = 0; m < nn; m++) {
+                        if(used[m]) continue;
+                        int k2;
+                        for(k2 = 0; k2 < k; k2++)
+                            if(cs.neighborArray.neighborBond(k, k2) != templateBonds[m][mapping[k2]]) break;
+                        if(k2 != k) continue;
+                        used[m] = true;
+                        mapping[k] = m;
+                        if(self(self, k + 1)) return true;
+                        used[m] = false;
+                    }
+                    return false;
+                };
+                if(!search(search, 0))
+                    throw Exception(QStringLiteral("DXA: PTM template %1 of coordination structure %2 does not match DXA's neighbor graph.").arg(ti).arg((int)coord));
+                for(int k = 0; k < nn; k++)
+                    mapping[k] += 1;    // Skip the central atom.
+            }
+        }
+        return t;
+    }();
+    if(templateIndex < 0 || templateIndex >= table.numTemplates[coordType])
+        return nullptr;
+    return &table.mappings[coordType][templateIndex];
+}
+
+/******************************************************************************
 * Identifies atomic structures using PTM instead of CNA.
 ******************************************************************************/
 void StructureAnalysis::identifyStructuresPTM(TaskProgress& progress, const SimulationCell* simulationCell)
@@ -591,10 +682,15 @@ void StructureAnalysis::identifyStructuresPTM(TaskProgress& progress, const Simu
         if(env.num < numNeighbors + 1)
             return;
 
-        // Fill the neighbor list in template order and compute the maximum neighbor distance.
+        // The environment is in the slot order of the matched PTM template, not in DXA's.
+        const PTMNeighborMapping* mapping = ptmNeighborMapping(coordType, kernel.templateIndex());
+        if(!mapping)
+            return;
+
+        // Fill the neighbor list in DXA's slot order and compute the maximum neighbor distance.
         FloatType maxNeighborDist = 0;
         for(int slot = 0; slot < numNeighbors; slot++) {
-            int envIdx = slot + 1;  // template position: 0=center, 1..N=neighbors
+            int envIdx = (*mapping)[slot];
 
             Vector3 neighborVector(
                 (FloatType)env.points[envIdx][0],
