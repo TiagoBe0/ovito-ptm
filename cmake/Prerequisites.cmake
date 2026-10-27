@@ -201,6 +201,9 @@ FUNCTION(OVITO_DEPLOY_QT_FRAMEWORK_FILES)
             LIST(APPEND OVITO_REQUIRED_QT_COMPONENTS ${CMAKE_MATCH_1})
         ENDIF()
     ENDFOREACH()
+    # The dependency scan does not necessarily report the basic modules; the Windows deployment below also takes
+    # the location of the Qt binaries from the Core module.
+    LIST(PREPEND OVITO_REQUIRED_QT_COMPONENTS Core Gui Widgets)
     LIST(REMOVE_DUPLICATES OVITO_REQUIRED_QT_COMPONENTS)
 
     # Amend Qt modules list with indirect dependencies.
