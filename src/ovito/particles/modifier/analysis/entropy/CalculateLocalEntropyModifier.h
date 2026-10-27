@@ -33,10 +33,11 @@ namespace Ovito {
  * \brief Computes the local pair entropy fingerprint of each particle (Piaggi & Parrinello,
  *        J. Chem. Phys. 147, 114112 (2017)).
  *
- * Uses the same discretization as LAMMPS' compute entropy/atom (bins of width sigma, Gaussian kernel
- * truncated to +/-3 bins, trapezoidal integration), so the parameters have the same meaning. The one
- * deliberate difference: the local density is the neighbor count within the cutoff divided by the
- * cutoff sphere volume, instead of LAMMPS' neighbor-list radius (force cutoff + skin).
+ * The discretization reproduces OVITO Pro 3.16.1 (measured as a black box): g(r) on int(cutoff/sigma)+1
+ * equidistant points from 0 to the cutoff, untruncated Gaussian kernel, trapezoidal integration, neighbors
+ * with r <= cutoff. The local density is the neighbor count within the cutoff divided by the cutoff sphere
+ * volume. The parameters have the same meaning as in LAMMPS' compute entropy/atom, whose discretization
+ * (bins of width sigma, kernel truncated to +/-3 bins) gives slightly different values.
  * Particle types are ignored; the model is treated as a single-component system.
  */
 class OVITO_PARTICLES_EXPORT CalculateLocalEntropyModifier : public Modifier

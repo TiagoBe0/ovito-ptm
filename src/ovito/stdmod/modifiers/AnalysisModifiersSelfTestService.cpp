@@ -220,7 +220,6 @@ bool AnalysisModifiersSelfTestService::runTimeSeriesTest()
         return table;
     };
 
-    const double nan = std::numeric_limits<double>::quiet_NaN();
     bool ok = true;
 
     qInfo().noquote() << "Time series self-test: default frame axis, two attributes";
@@ -230,6 +229,9 @@ bool AnalysisModifiersSelfTestService::runTimeSeriesTest()
         ok &= check(QStringLiteral("x = frame"), column(table->x(), 0), {0, 1, 2, 3, 4});
         ok &= check(QStringLiteral("y[count]"), column(table->y(), 0), {1, 2, 3, 4, 4});
         ok &= check(QStringLiteral("y[Timestep]"), column(table->y(), 1), {0, 100, 200, 300, 400});
+        // Column names as in OVITO Pro.
+        ok &= check(QStringLiteral("x column named 'Animation frame'"), {table->x()->name() == QStringLiteral("Animation frame") ? 1.0 : 0.0}, {1});
+        ok &= check(QStringLiteral("y column named 'Attribute value'"), {table->y()->name() == QStringLiteral("Attribute value") ? 1.0 : 0.0}, {1});
     }
 
     qInfo().noquote() << "Time series self-test: Timestep axis, every 2nd frame";
@@ -254,12 +256,20 @@ bool AnalysisModifiersSelfTestService::runTimeSeriesTest()
         ok &= check(QStringLiteral("y[count]"), column(table->y(), 0), {2, 3, 4});
     }
 
-    qInfo().noquote() << "Time series self-test: missing attribute yields NaN";
+    // Like OVITO Pro, a missing or non-numeric attribute is an error.
+    qInfo().noquote() << "Time series self-test: missing and non-numeric attributes";
     timeSeries->setUseCustomInterval(false);
-    timeSeries->setSourceAttributes({QStringLiteral("NoSuchAttribute")});
-    {
-        auto table = evaluate();
-        ok &= check(QStringLiteral("y[missing]"), column(table->y(), 0), {nan, nan, nan, nan, nan});
+    for(const QString& name : {QStringLiteral("NoSuchAttribute"), QStringLiteral("SourceFile")}) {
+        timeSeries->setSourceAttributes({name});
+        bool raised = false;
+        try {
+            PipelineFlowState state = pipeline->evaluatePipeline(PipelineEvaluationRequest(AnimationTime::fromFrame(numFrames - 1), true, false)).blockForResult();
+            raised = state.status().type() == PipelineStatus::Error;
+        }
+        catch(const Exception&) {
+            raised = true;
+        }
+        ok &= check(QStringLiteral("error for attribute '%1'").arg(name), {raised ? 1.0 : 0.0}, {1});
     }
 
     qInfo().noquote() << (ok ? "Time series self-test: ALL PASSED" : "Time series self-test: FAILED");
@@ -322,13 +332,14 @@ bool AnalysisModifiersSelfTestService::runTimeAveragingTest()
     qInfo().noquote() << "Time averaging self-test: create new values";
     {
         PipelineFlowState state = evaluate();
-        ok &= checkValue(QStringLiteral("ExpressionSelection.count Average"), state.getAttributeValue(QStringLiteral("ExpressionSelection.count Average")), 2.8);
-        ok &= checkValue(QStringLiteral("Timestep Average"), state.getAttributeValue(QStringLiteral("Timestep Average")), 200);
+        ok &= checkValue(QStringLiteral("ExpressionSelection.count (Average)"), state.getAttributeValue(QStringLiteral("ExpressionSelection.count (Average)")), 2.8);
+        ok &= checkValue(QStringLiteral("Timestep (Average)"), state.getAttributeValue(QStringLiteral("Timestep (Average)")), 200);
         ok &= check(QStringLiteral("Position Average.X (current order, by ID)"), particleColumn(state, QStringLiteral("Position Average"), 0), {5, 4, 3, 2});
         ok &= check(QStringLiteral("Position Average.Y"), particleColumn(state, QStringLiteral("Position Average"), 1), {1, 1, 1, 1});
         ok &= check(QStringLiteral("Position.X unchanged"), particleColumn(state, QStringLiteral("Position"), 0), {6, 5, 4, 3});
-        ok &= check(QStringLiteral("histogram average"), column(table(state, QStringLiteral("histogram[Position.X]-average"))->y(), 0), {0.6, 1.4, 1.4, 0.6, 0});
-        ok &= check(QStringLiteral("cell average (vector 1)"), column(table(state, QStringLiteral("cell-average"))->y(), 0), {22, 0, 0, 0});
+        ok &= check(QStringLiteral("histogram average"), column(table(state, QStringLiteral("histogram[Position.X][average]"))->y(), 0), {0.6, 1.4, 1.4, 0.6, 0});
+        Vector3 cellVector = state.getAttributeValue(QStringLiteral("Cell vector 1 (Average)")).value<Vector3>();
+        ok &= check(QStringLiteral("Cell vector 1 (Average)"), {cellVector.x(), cellVector.y(), cellVector.z()}, {22, 0, 0});
     }
 
     qInfo().noquote() << "Time averaging self-test: replace original values";
@@ -337,7 +348,8 @@ bool AnalysisModifiersSelfTestService::runTimeAveragingTest()
         PipelineFlowState state = evaluate();
         ok &= checkValue(QStringLiteral("Timestep"), state.getAttributeValue(QStringLiteral("Timestep")), 200);
         ok &= check(QStringLiteral("Position.X (current order, by ID)"), particleColumn(state, QStringLiteral("Position"), 0), {5, 4, 3, 2});
-        ok &= check(QStringLiteral("histogram counts (rounded integers)"), column(table(state, QStringLiteral("histogram[Position.X]"))->y(), 0), {1, 1, 1, 1, 0});
+        // As in OVITO Pro, averaged table columns become floating-point (not rounded).
+        ok &= check(QStringLiteral("histogram counts (floating-point)"), column(table(state, QStringLiteral("histogram[Position.X]"))->y(), 0), {0.6, 1.4, 1.4, 0.6, 0});
         const SimulationCell* cell = state.getObject<SimulationCell>();
         ok &= check(QStringLiteral("cell length X"), {cell ? (double)cell->cellMatrix()(0, 0) : -1.0}, {22});
     }
@@ -347,7 +359,7 @@ bool AnalysisModifiersSelfTestService::runTimeAveragingTest()
     averaging->setSamplingFrequency(2);
     {
         PipelineFlowState state = evaluate();
-        ok &= checkValue(QStringLiteral("ExpressionSelection.count Average"), state.getAttributeValue(QStringLiteral("ExpressionSelection.count Average")), 8.0 / 3.0);
+        ok &= checkValue(QStringLiteral("ExpressionSelection.count (Average)"), state.getAttributeValue(QStringLiteral("ExpressionSelection.count (Average)")), 8.0 / 3.0);
     }
 
     // With an automatic range the histogram covers [min x, max x] = [f, f + 3] at frame f: the averaged
@@ -357,7 +369,7 @@ bool AnalysisModifiersSelfTestService::runTimeAveragingTest()
     histogram->setFixXAxisRange(false);
     {
         PipelineFlowState state = evaluate();
-        const DataTable* averaged = table(state, QStringLiteral("histogram[Position.X]-average"));
+        const DataTable* averaged = table(state, QStringLiteral("histogram[Position.X][average]"));
         ok &= check(QStringLiteral("averaged x range"), {(double)averaged->intervalStart(), (double)averaged->intervalEnd()}, {2, 5});
         ok &= check(QStringLiteral("warning status"), {state.status().type() == PipelineStatus::Warning ? 1.0 : 0.0}, {1});
     }
@@ -402,13 +414,13 @@ bool AnalysisModifiersSelfTestService::runReducePropertyTest()
     for(const auto& [op, expected] : expectedX) {
         reduce->setOperation(op);
         PipelineFlowState state = evaluate(3);
-        QString name = QStringLiteral("Position.X.") + ReducePropertyModifier::operationKey(op);
+        QString name = ReducePropertyModifier::attributeName(QStringLiteral("particles"), op, QStringLiteral("Position.X"));
         ok &= checkValue(name, state.getAttributeValue(name), expected);
     }
     reduce->setOperation(ReducePropertyModifier::Mean);
     {
         PipelineFlowState state = evaluate(3);
-        ok &= checkValue(QStringLiteral("Position.Y.mean"), state.getAttributeValue(QStringLiteral("Position.Y.mean")), 1);
+        ok &= checkValue(QStringLiteral("ReduceProperty.particles.Mean.Position.Y"), state.getAttributeValue(QStringLiteral("ReduceProperty.particles.Mean.Position.Y")), 1);
     }
 
     qInfo().noquote() << "Reduce property self-test: single component";
@@ -416,8 +428,8 @@ bool AnalysisModifiersSelfTestService::runReducePropertyTest()
     reduce->setOperation(ReducePropertyModifier::Max);
     {
         PipelineFlowState state = evaluate(3);
-        ok &= checkValue(QStringLiteral("Position.X.max"), state.getAttributeValue(QStringLiteral("Position.X.max")), 6);
-        ok &= check(QStringLiteral("no Position.Y attribute"), {state.getAttributeValue(QStringLiteral("Position.Y.max")).isValid() ? 1.0 : 0.0}, {0});
+        ok &= checkValue(QStringLiteral("ReduceProperty.particles.Max.Position.X"), state.getAttributeValue(QStringLiteral("ReduceProperty.particles.Max.Position.X")), 6);
+        ok &= check(QStringLiteral("no Position.Y attribute"), {state.getAttributeValue(QStringLiteral("ReduceProperty.particles.Max.Position.Y")).isValid() ? 1.0 : 0.0}, {0});
     }
 
     qInfo().noquote() << "Reduce property self-test: only selected elements (frame 0, X = 0 1 2 3)";
@@ -426,17 +438,45 @@ bool AnalysisModifiersSelfTestService::runReducePropertyTest()
     {
         PipelineFlowState state = evaluate(0);
         // Only the atom at x = 3 (index 3) is selected; argmax indexes into the full list.
-        ok &= checkValue(QStringLiteral("Position.X.argmax"), state.getAttributeValue(QStringLiteral("Position.X.argmax")), 3);
+        ok &= checkValue(QStringLiteral("ReduceProperty.particles.ArgMax.Position.X"), state.getAttributeValue(QStringLiteral("ReduceProperty.particles.ArgMax.Position.X")), 3);
     }
     selection->setExpression(QStringLiteral("Position.X > 0.5"));
     reduce->setOperation(ReducePropertyModifier::Median);
     {
         PipelineFlowState state = evaluate(0);
-        ok &= checkValue(QStringLiteral("Position.X.median (selected 1 2 3)"), state.getAttributeValue(QStringLiteral("Position.X.median")), 2);
+        ok &= checkValue(QStringLiteral("Median of selected 1 2 3"), state.getAttributeValue(QStringLiteral("ReduceProperty.particles.Median.Position.X")), 2);
+    }
+    // OVITO Pro refuses an empty selection, and a sample variance of a single value.
+    auto expectReduceError = [&](const QString& name) {
+        bool raised = false;
+        try {
+            raised = evaluate(0).status().type() == PipelineStatus::Error;
+        }
+        catch(const Exception&) {
+            raised = true;
+        }
+        return check(name, {raised ? 1.0 : 0.0}, {1});
+    };
+    selection->setExpression(QStringLiteral("Position.X > 100"));
+    reduce->setOperation(ReducePropertyModifier::Sum);
+    ok &= expectReduceError(QStringLiteral("error for an empty selection"));
+    selection->setExpression(QStringLiteral("Position.X > 2.5"));
+    reduce->setOperation(ReducePropertyModifier::Variance);
+    ok &= expectReduceError(QStringLiteral("error for the variance of one value"));
+
+    // Min, max and sum of an integer property are integers (Particle Type = 1 1 1 1).
+    reduce->setOnlySelectedElements(false);
+    reduce->setSourceProperty(PropertyReference(QStringLiteral("Particle Type")));
+    reduce->setOperation(ReducePropertyModifier::Sum);
+    {
+        QVariant sum = evaluate(0).getAttributeValue(QStringLiteral("ReduceProperty.particles.Sum.Particle Type"));
+        ok &= checkValue(QStringLiteral("Sum of Particle Type"), sum, 4);
+        ok &= check(QStringLiteral("Sum of Particle Type is an integer"), {sum.metaType().id() == QMetaType::LongLong ? 1.0 : 0.0}, {1});
     }
 
-    // A property with a NaN: sqrt(X - 4) at frame 3 (X = 6 5 4 3) is sqrt(2) 1 0 NaN.
-    qInfo().noquote() << "Reduce property self-test: NaN values (NumPy semantics)";
+    // A property with a NaN: sqrt(X - 4) at frame 3 (X = 6 5 4 3) is sqrt(2) 1 0 NaN. The expected values
+    // were measured in OVITO Pro 3.16.1: min/max/argmin/argmax and the nonzero count skip NaN.
+    qInfo().noquote() << "Reduce property self-test: NaN values (OVITO Pro semantics)";
     OORef<Pipeline> nanPipeline = createPipeline(dumpPath);
     OORef<ComputePropertyModifier> compute = OORef<ComputePropertyModifier>::create();
     compute->setOutputProperty(PropertyReference(QStringLiteral("Root")));
@@ -448,12 +488,12 @@ bool AnalysisModifiersSelfTestService::runReducePropertyTest()
     pipeline = nanPipeline;
     const double nan = std::numeric_limits<double>::quiet_NaN();
     for(const auto& [op, expected] : std::vector<std::pair<ReducePropertyModifier::ReductionOperation, double>>{
-            {ReducePropertyModifier::Min, nan}, {ReducePropertyModifier::Max, nan}, {ReducePropertyModifier::Median, nan},
-            {ReducePropertyModifier::Mean, nan}, {ReducePropertyModifier::Argmin, 3}, {ReducePropertyModifier::Argmax, 3},
-            {ReducePropertyModifier::NonzeroCount, 3}}) {
+            {ReducePropertyModifier::Min, 0}, {ReducePropertyModifier::Max, std::sqrt(2.0)}, {ReducePropertyModifier::Median, nan},
+            {ReducePropertyModifier::Mean, nan}, {ReducePropertyModifier::Sum, nan}, {ReducePropertyModifier::Variance, nan},
+            {ReducePropertyModifier::Argmin, 2}, {ReducePropertyModifier::Argmax, 0}, {ReducePropertyModifier::NonzeroCount, 2}}) {
         reduce->setOperation(op);
         PipelineFlowState state = evaluate(3);
-        QString name = QStringLiteral("Root.") + ReducePropertyModifier::operationKey(op);
+        QString name = ReducePropertyModifier::attributeName(QStringLiteral("particles"), op, QStringLiteral("Root"));
         ok &= checkValue(name, state.getAttributeValue(name), expected);
     }
 
@@ -504,7 +544,7 @@ bool AnalysisModifiersSelfTestService::runDifferenceBetweenFramesTest()
         return column(particles->getProperty(name), component);
     };
     auto histogramColumn = [](const PipelineFlowState& state, const QString& name) {
-        const DataTable* table = static_object_cast<DataTable>(state.data()->getObject(DataTable::OOClass(), QStringLiteral("histogram[Position.X]")).back());
+        const DataTable* table = static_object_cast<DataTable>(state.data()->getObject(DataTable::OOClass(), QStringLiteral("histogram[Position.X][diff]")).back());
         return column(table->getProperty(name), 0);
     };
     auto expectError = [&](const QString& name, int frame) {
@@ -532,11 +572,13 @@ bool AnalysisModifiersSelfTestService::runDifferenceBetweenFramesTest()
         ok &= checkValue(QStringLiteral("ExpressionSelection.count (Difference)"), state.getAttributeValue(QStringLiteral("ExpressionSelection.count (Difference)")), 3);
         QVariant timestep = state.getAttributeValue(QStringLiteral("Timestep (Difference)"));
         ok &= checkValue(QStringLiteral("Timestep (Difference)"), timestep, 300);
-        ok &= check(QStringLiteral("Timestep (Difference) is an integer"), {timestep.metaType().id() == QMetaType::LongLong ? 1.0 : 0.0}, {1});
+        // As in OVITO Pro, attribute differences are floating-point even for integer attributes.
+        ok &= check(QStringLiteral("Timestep (Difference) is floating-point"), {timestep.metaType().id() == QMetaType::Double ? 1.0 : 0.0}, {1});
         ok &= check(QStringLiteral("Position (Difference).X (matched by ID)"), particleColumn(state, QStringLiteral("Position (Difference)"), 0), {3, 3, 3, 3});
         ok &= check(QStringLiteral("Position (Difference).Y"), particleColumn(state, QStringLiteral("Position (Difference)"), 1), {0, 0, 0, 0});
         ok &= check(QStringLiteral("Position.X unchanged"), particleColumn(state, QStringLiteral("Position"), 0), {6, 5, 4, 3});
         ok &= check(QStringLiteral("histogram Count (Difference)"), histogramColumn(state, QStringLiteral("Count (Difference)")), {-2, -1, 2, 1, 0});
+        ok &= check(QStringLiteral("input histogram unchanged"), column(static_object_cast<DataTable>(state.data()->getObject(DataTable::OOClass(), QStringLiteral("histogram[Position.X]")).back())->y(), 0), {0, 1, 2, 1, 0});
     }
 
     qInfo().noquote() << "Difference between frames self-test: constant reference frame 4, evaluated at frame 1";
@@ -544,6 +586,8 @@ bool AnalysisModifiersSelfTestService::runDifferenceBetweenFramesTest()
     {
         PipelineFlowState state = evaluate(1);
         ok &= checkValue(QStringLiteral("Timestep (Difference)"), state.getAttributeValue(QStringLiteral("Timestep (Difference)")), -300);
+        ok &= checkValue(QStringLiteral("ExpressionSelection.count (Difference)"), state.getAttributeValue(QStringLiteral("ExpressionSelection.count (Difference)")), -2);
+        ok &= check(QStringLiteral("histogram Count (Difference)"), histogramColumn(state, QStringLiteral("Count (Difference)")), {1, 2, -1, -2, 0});
         ok &= check(QStringLiteral("Position (Difference).X"), particleColumn(state, QStringLiteral("Position (Difference)"), 0), {-3, -3, -3, -3});
     }
 

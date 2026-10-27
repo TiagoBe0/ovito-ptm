@@ -170,29 +170,26 @@ void TimeSeriesModificationNode::FrameSampler::operator()(int frame, const Pipel
     if(_generation != _node->_generation)
         return;
 
-    // Converts an attribute value to a number; NaN if the attribute is missing or not numeric.
-    auto numericValue = [](const QVariant& v) {
-        bool ok = false;
-        double x = v.toDouble(&ok);
-        return (v.isValid() && ok) ? x : std::numeric_limits<double>::quiet_NaN();
-    };
-
     QVariantMap attributes = state.data() ? state.data()->buildAttributesMap() : QVariantMap{};
+
+    // Like OVITO Pro, a missing or non-numeric attribute is an error (strings are not parsed as numbers).
+    auto numericValue = [&](const QString& name) {
+        auto iter = attributes.constFind(name);
+        if(iter == attributes.constEnd())
+            throw Exception(tr("Cannot sample attribute '%1' to generate time series. The attribute is not defined at trajectory frame %2.").arg(name).arg(frame));
+        bool ok = false;
+        double x = iter.value().toDouble(&ok);
+        if(!ok || iter.value().typeId() == QMetaType::QString)
+            throw Exception(tr("Cannot sample attribute '%1' to generate time series. This attribute does not have a numeric value.").arg(name));
+        return x;
+    };
 
     Sample sample;
     sample.frame = frame;
-    if(_timeAttribute.isEmpty()) {
-        sample.time = frame;
-    }
-    else {
-        auto iter = attributes.constFind(_timeAttribute);
-        if(iter == attributes.constEnd())
-            throw Exception(tr("Time series: The time axis attribute '%1' does not exist at trajectory frame %2.").arg(_timeAttribute).arg(frame));
-        sample.time = numericValue(iter.value());
-    }
+    sample.time = _timeAttribute.isEmpty() ? frame : numericValue(_timeAttribute);
     sample.values.reserve(_sourceAttributes.size());
     for(const QString& name : _sourceAttributes)
-        sample.values.push_back(numericValue(attributes.value(name)));
+        sample.values.push_back(numericValue(name));
 
     _node->_samples.push_back(std::move(sample));
     _progress->incrementValue();
@@ -209,9 +206,9 @@ void TimeSeriesModificationNode::outputTable(const ModifierEvaluationRequest& re
     const size_t componentCount = names.size();
 
     PropertyPtr y = DataTable::OOClass().createUserProperty(DataBuffer::Uninitialized, rowCount, Property::FloatDefault, componentCount,
-        componentCount == 1 ? names.front() : tr("Value"), 0, componentCount == 1 ? QStringList{} : names);
+        componentCount == 1 ? names.front() : tr("Attribute value"), 0, componentCount == 1 ? QStringList{} : names);
     PropertyPtr x = DataTable::OOClass().createUserProperty(DataBuffer::Uninitialized, rowCount, Property::FloatDefault, 1,
-        mod->timeAttribute().isEmpty() ? tr("Frame") : mod->timeAttribute());
+        mod->timeAttribute().isEmpty() ? tr("Animation frame") : mod->timeAttribute());
     {
         BufferWriteAccess<FloatType*, access_mode::discard_write> yAcc(y);
         BufferWriteAccess<FloatType, access_mode::discard_write> xAcc(x);

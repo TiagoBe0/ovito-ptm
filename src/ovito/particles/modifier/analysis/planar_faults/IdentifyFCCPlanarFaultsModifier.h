@@ -38,7 +38,10 @@ namespace Ovito {
  * the 12 nearest neighbors are split into the 6 basal-plane neighbors (the ones that have an
  * antipodal partner, v_i + v_j = 0) and 3 + 3 out-of-plane neighbors on either side of the basal
  * plane. The number of adjacent hcp-like layers then follows from how many out-of-plane neighbors
- * are hcp-like on each side. Unlike Pro, no lattice orientations are needed.
+ * are hcp-like on each side; a single hcp-like layer is a twin boundary only if both neighboring layers
+ * are fcc. Hcp-like atoms left undetermined take the type of their planar defect by a flood fill through
+ * the basal planes. Unlike Pro, no lattice orientations are needed, and the result does not depend on
+ * the order of the atoms (Pro propagates types in a single sweep in index order).
  */
 class OVITO_PARTICLES_EXPORT IdentifyFCCPlanarFaultsModifier : public Modifier
 {

@@ -89,7 +89,7 @@ public:
     struct Sample {
         int frame;
         double time;                ///< Value of the time axis at this frame.
-        std::vector<double> values; ///< One value per source attribute (NaN if missing or not numeric).
+        std::vector<double> values; ///< One value per source attribute.
     };
 
     /// Indicates whether all frames of the sampling interval have been processed.

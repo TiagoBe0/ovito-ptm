@@ -51,9 +51,9 @@ DEFINE_REFERENCE_FIELD(SpatialBinningModifier, voxelGridVis);
 SET_PROPERTY_FIELD_LABEL(SpatialBinningModifier, sourceProperty, "Input property");
 SET_PROPERTY_FIELD_LABEL(SpatialBinningModifier, reductionOperation, "Reduction operation");
 SET_PROPERTY_FIELD_LABEL(SpatialBinningModifier, binDirection, "Binning direction");
-SET_PROPERTY_FIELD_LABEL(SpatialBinningModifier, numberOfBinsX, "Number of bins (1st vector)");
-SET_PROPERTY_FIELD_LABEL(SpatialBinningModifier, numberOfBinsY, "Number of bins (2nd vector)");
-SET_PROPERTY_FIELD_LABEL(SpatialBinningModifier, numberOfBinsZ, "Number of bins (3rd vector)");
+SET_PROPERTY_FIELD_LABEL(SpatialBinningModifier, numberOfBinsX, "Number of bins (1st binned dimension)");
+SET_PROPERTY_FIELD_LABEL(SpatialBinningModifier, numberOfBinsY, "Number of bins (2nd binned dimension)");
+SET_PROPERTY_FIELD_LABEL(SpatialBinningModifier, numberOfBinsZ, "Number of bins (3rd binned dimension)");
 SET_PROPERTY_FIELD_LABEL(SpatialBinningModifier, firstDerivative, "Compute first derivative");
 SET_PROPERTY_FIELD_LABEL(SpatialBinningModifier, onlySelectedElements, "Use only selected elements");
 SET_PROPERTY_FIELD_LABEL(SpatialBinningModifier, fixPropertyAxisRange, "Fix property axis range");
@@ -173,13 +173,22 @@ Future<PipelineFlowState> SpatialBinningModifier::evaluateModifier(const Modifie
     const int ndim = dimensionality(direction);
     if(ndim == 0)
         throw Exception(tr("No binning direction selected."));
-    if(firstDerivative() && ndim != 1)
-        throw Exception(tr("The first derivative can only be computed for 1D binning."));
 
+    // As in OVITO Pro, the binned cell vectors are mapped in order onto the grid axes, and the bin counts
+    // apply to the grid axes: a 1D binning along Y uses numberOfBinsX(), an XZ binning yields an
+    // (numberOfBinsX() x numberOfBinsY() x 1) grid. binDims[k] is the cell vector of grid axis k.
+    std::array<int, 3> binDims = {0, 1, 2};
+    {
+        int k = 0;
+        for(int d = 0; d < 3; d++)
+            if(isBinned(direction, d)) binDims[k++] = d;
+        for(int d = 0; d < 3; d++)
+            if(!isBinned(direction, d)) binDims[k++] = d;
+    }
     const int requestedBins[3] = { numberOfBinsX(), numberOfBinsY(), numberOfBinsZ() };
     VoxelGrid::GridDimensions shape;
-    for(int d = 0; d < 3; d++)
-        shape[d] = isBinned(direction, d) ? (size_t)std::max(1, requestedBins[d]) : 1;
+    for(int k = 0; k < 3; k++)
+        shape[k] = (k < ndim) ? (size_t)std::max(1, requestedBins[k]) : 1;
 
     QString outputName = property ? property->nameWithComponent(vecComponent) : QStringLiteral("Count");
     QStringList componentNames = (property && vecComponent < 0) ? property->componentNames() : QStringList();
@@ -188,18 +197,36 @@ Future<PipelineFlowState> SpatialBinningModifier::evaluateModifier(const Modifie
     // Create the output object on the main thread; the worker only fills it.
     DataTable* table = nullptr;
     VoxelGrid* grid = nullptr;
-    int binnedDim = isBinned(direction, 0) ? 0 : (isBinned(direction, 1) ? 1 : 2);
+    const int binnedDim = binDims[0];
+    // The first derivative is only defined for a 1D profile; OVITO Pro ignores the option otherwise.
+    const bool derivative = firstDerivative() && ndim == 1;
+    if(derivative)
+        outputName = QStringLiteral("d(%1)/d(Position)").arg(outputName);
     if(ndim == 1) {
-        table = state.createObject<DataTable>(QStringLiteral("binning"), request.modificationNode(), DataTable::Line, tr("Binned %1").arg(outputName));
-        const char* axisNames = "XYZ";
-        table->setAxisLabelX(tr("Position (%1)").arg(QChar(axisNames[binnedDim])));
-        table->setAxisLabelY(outputName);
+        // Title, plot mode and axis label as in OVITO Pro.
+        table = state.createObject<DataTable>(QStringLiteral("binning"), request.modificationNode(), DataTable::Histogram,
+            property ? property->nameWithComponent(vecComponent) : QStringLiteral("Count"));
+        table->setAxisLabelX(tr("Position"));
         table->setIntervalStart(cell->matrix()(binnedDim, 3));
         table->setIntervalEnd(cell->matrix()(binnedDim, 3) + cell->matrix()(binnedDim, binnedDim));
     }
     else {
-        grid = state.createObjectWithVis<VoxelGrid>(QStringLiteral("binning"), request.modificationNode(), voxelGridVis(), tr("Binning grid"));
-        grid->setDomain(cell);
+        grid = state.createObjectWithVis<VoxelGrid>(QStringLiteral("binning"), request.modificationNode(), voxelGridVis(),
+            tr("Binning (%1)").arg(property ? property->nameWithComponent(vecComponent) : QStringLiteral("Count")));
+        if(ndim == 3) {
+            grid->setDomain(cell);
+        }
+        else {
+            // A 2D grid spans the two binned cell vectors; the third domain vector is a unit placeholder, as in OVITO Pro.
+            AffineTransformation domain = AffineTransformation::Identity();
+            domain.column(0) = cell->matrix().column(binDims[0]);
+            domain.column(1) = cell->matrix().column(binDims[1]);
+            domain.column(2) = Vector3(0, 0, 1);
+            domain.column(3) = cell->matrix().column(3);
+            DataOORef<SimulationCell> domainCell = DataOORef<SimulationCell>::create(ObjectInitializationFlag::DontCreateVisElement, domain,
+                cell->hasPbcCorrected(binDims[0]), cell->hasPbcCorrected(binDims[1]), false, true);
+            grid->setDomain(std::move(domainCell));
+        }
         grid->setShape(shape);
     }
 
@@ -209,13 +236,12 @@ Future<PipelineFlowState> SpatialBinningModifier::evaluateModifier(const Modifie
             property = std::move(property),
             inputSelection = std::move(inputSelection),
             vecComponent, componentCount, componentNames, outputName,
-            shape, direction, binnedDim, table, grid,
+            shape, ndim, binDims, binnedDim, table, grid, derivative,
             inverseMatrix = cell->inverseMatrix(),
             pbc = cell->pbcFlagsCorrected(),
             binLength = cell->matrix()(binnedDim, binnedDim),
             binVolume = cell->volume3D() / (shape[0] * shape[1] * shape[2]),
-            op = reductionOperation(),
-            derivative = firstDerivative()]() mutable
+            op = reductionOperation()]() mutable
     {
         const size_t numBins = shape[0] * shape[1] * shape[2];
         const size_t numParticles = positions->size();
@@ -245,10 +271,9 @@ Future<PipelineFlowState> SpatialBinningModifier::evaluateModifier(const Modifie
             const Point3 reduced = inverseMatrix * posAcc[i];
             std::array<size_t, 3> coords = {0, 0, 0};
             bool inside = true;
-            for(int d = 0; d < 3 && inside; d++) {
-                // Axes that are not binned do not restrict which particles are counted.
-                if(!isBinned(direction, d))
-                    continue;
+            // Axes that are not binned do not restrict which particles are counted.
+            for(int k = 0; k < ndim && inside; k++) {
+                const int d = binDims[k];
                 double f = reduced[d];
                 if(pbc[d])
                     f -= std::floor(f);
@@ -258,7 +283,7 @@ Future<PipelineFlowState> SpatialBinningModifier::evaluateModifier(const Modifie
                     continue;
                 }
                 // f can be exactly 1.0 (on the upper boundary, or after wrapping a tiny negative value).
-                coords[d] = std::min((size_t)(f * (double)shape[d]), shape[d] - 1);
+                coords[k] = std::min((size_t)(f * (double)shape[k]), shape[k] - 1);
             }
             if(!inside)
                 continue;

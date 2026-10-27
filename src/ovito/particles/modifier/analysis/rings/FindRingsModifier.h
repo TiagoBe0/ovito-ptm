@@ -35,11 +35,13 @@ namespace Ovito {
  *
  * Clean-room implementation written from the user manual. A ring is a closed path of bonds without
  * shortcuts: the shortest path between any two of its particles runs along the ring (shortest-path rings,
- * Franzblau, Phys. Rev. B 44, 4925 (1991)). Periodic images are tracked, so a path that closes only by
- * wrapping around a periodic cell is not a ring, and shortcuts are measured between the actual images.
+ * Franzblau, Phys. Rev. B 44, 4925 (1991)). By default (includeWrappingRings, as in OVITO Pro) the rings are
+ * those of the bond graph without periodic images, so cycles that wrap around the periodic cell count too.
+ * Otherwise periodic images are tracked: a path that closes only by wrapping around the cell is not a ring,
+ * and shortcuts are measured between the actual images.
  *
  * Outputs a data table "N-rings" for each ring size N in [minRingSize, maxRingSize], one row per ring with
- * the 0-based indices of its particles in ring order; a ring size histogram ("ring-histogram"); the
+ * the 0-based indices of its particles in ring order; a ring size histogram ("ring-size-histogram"); the
  * attribute "FindRings.count"; and a surface mesh "rings" with one polygon per ring and the face property
  * "Ring Size".
  */
@@ -65,7 +67,7 @@ public:
     static constexpr int MaxSupportedRingSize = 36;
 
     /// Identifier of the ring size histogram table.
-    static constexpr const char* histogramTableIdentifier = "ring-histogram";
+    static constexpr const char* histogramTableIdentifier = "ring-size-histogram";
 
     /// One ring: particle indices in ring order.
     using Ring = std::vector<size_t>;
@@ -94,6 +96,10 @@ private:
 
     /// Largest ring size to find (inclusive, at most MaxSupportedRingSize).
     DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(int{8}, maxRingSize, setMaxRingSize, PROPERTY_FIELD_MEMORIZE);
+
+    /// Whether cycles that wrap around periodic boundaries count as rings, as in OVITO Pro. If not, only rings
+    /// that close inside the periodic cell (zero net image shift) are reported.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(bool{true}, includeWrappingRings, setIncludeWrappingRings, PROPERTY_FIELD_MEMORIZE);
 
     /// The vis element rendering the ring polygons.
     DECLARE_MODIFIABLE_REFERENCE_FIELD_FLAGS(OORef<SurfaceMeshVis>, ringsVis, setRingsVis, PROPERTY_FIELD_DONT_PROPAGATE_MESSAGES | PROPERTY_FIELD_MEMORIZE | PROPERTY_FIELD_OPEN_SUBEDITOR);

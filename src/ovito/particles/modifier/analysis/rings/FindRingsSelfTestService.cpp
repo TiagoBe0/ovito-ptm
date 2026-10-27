@@ -37,6 +37,9 @@
 #include <ovito/core/utilities/Exception.h>
 #include "FindRingsSelfTestService.h"
 #include <QCommandLineParser>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QCoreApplication>
 #include <QTemporaryDir>
 #include <QTextStream>
@@ -162,7 +165,7 @@ bool FindRingsSelfTestService::runTest()
     // Full pipelines over periodic crystals.
     QTemporaryDir dir;
     auto runCrystal = [&](const QString& name, const std::vector<std::array<double, 3>>& basis, const std::array<double, 3>& cellSize,
-                          const std::array<int, 3>& repeat, FloatType bondCutoff, int ringSize, size_t expectedRings) {
+                          const std::array<int, 3>& repeat, FloatType bondCutoff, int ringSize, size_t expectedRings, bool includeWrapping = false) {
         qInfo().noquote() << "Find rings self-test:" << name;
         const QString path = dir.filePath(name + QStringLiteral(".dump"));
         writeCrystal(path, basis, cellSize, repeat);
@@ -180,6 +183,7 @@ bool FindRingsSelfTestService::runTest()
         OORef<FindRingsModifier> findRings = OORef<FindRingsModifier>::create();
         findRings->setMinRingSize(3);
         findRings->setMaxRingSize(12);
+        findRings->setIncludeWrappingRings(includeWrapping);
         pipeline->applyModifier(AnimationTime::fromFrame(0), false, findRings);
         PipelineFlowState state = pipeline->evaluatePipeline(PipelineEvaluationRequest(AnimationTime::fromFrame(0), true, false)).blockForResult();
 
@@ -218,6 +222,67 @@ bool FindRingsSelfTestService::runTest()
     runCrystal(QStringLiteral("graphene"),
         {{0, 0, 0}, {1.0/3, 0, 0}, {0.5, 0.5, 0}, {5.0/6, 0.5, 0}},
         {3 * a, std::sqrt(3.0) * a, 10}, {6, 8, 1}, 1.6, 6, 6 * 8 * 4 / 2);
+    // The graphene sheet is wide enough that no cycle of up to 12 bonds wraps around the cell: same result.
+    runCrystal(QStringLiteral("graphene, wrapping rings included"),
+        {{0, 0, 0}, {1.0/3, 0, 0}, {0.5, 0.5, 0}, {5.0/6, 0.5, 0}},
+        {3 * a, std::sqrt(3.0) * a, 10}, {6, 8, 1}, 1.6, 6, 6 * 8 * 4 / 2, true);
+
+    // Optional comparison with ring size histograms exported from OVITO Pro: a JSON file with the input file,
+    // the bond cutoff, the ring size range and, per frame, the histogram {"size": count}.
+    const QString referencePath = qEnvironmentVariable("OVITO_FIND_RINGS_REFERENCE");
+    if(!referencePath.isEmpty()) {
+        QFile referenceFile(referencePath);
+        if(!referenceFile.open(QIODevice::ReadOnly))
+            throw Exception(QStringLiteral("Cannot read %1").arg(referencePath));
+        const QJsonObject reference = QJsonDocument::fromJson(referenceFile.readAll()).object();
+        qInfo().noquote() << "Find rings self-test: comparison with OVITO Pro histograms from" << referencePath;
+        QUrl url = QUrl::fromLocalFile(reference.value(QStringLiteral("file")).toString());
+        OORef<FileSourceImporter> importer = dynamic_object_cast<FileSourceImporter>(FileImporter::autodetectFileFormat(url).blockForResult());
+        if(!importer)
+            throw Exception(QStringLiteral("Could not detect the format of %1").arg(url.toLocalFile()));
+        importer->setMultiTimestepFile(true);
+        OORef<FileSource> source = OORef<FileSource>::create();
+        source->setSource({url}, std::move(importer), false);
+        (void) source->updateListOfFrames().blockForResult();
+        OORef<Pipeline> pipeline = OORef<Pipeline>::create();
+        pipeline->setHead(source);
+        OORef<CreateBondsModifier> createBonds = OORef<CreateBondsModifier>::create();
+        createBonds->setCutoffMode(CreateBondsModifier::UniformCutoff);
+        createBonds->setUniformCutoff(reference.value(QStringLiteral("cutoff")).toDouble());
+        pipeline->applyModifier(AnimationTime::fromFrame(0), false, createBonds);
+        OORef<FindRingsModifier> findRings = OORef<FindRingsModifier>::create();
+        findRings->setIncludeWrappingRings(false);
+        findRings->setMinRingSize(reference.value(QStringLiteral("min")).toInt());
+        findRings->setMaxRingSize(reference.value(QStringLiteral("max")).toInt());
+        ModificationNode* node = pipeline->applyModifier(AnimationTime::fromFrame(0), false, findRings);
+        // "hist": Pro's rings that close inside the cell. With wrapping rings included, the expected histogram is
+        // "hist_quotient", the shortest-path rings of the bond graph without periodic images enumerated by brute
+        // force: Pro's rings ("hist_pro_all") are always a subset of it, but Pro misses some of the larger odd
+        // wrapping rings, and which ones changes between frames with the same bond topology.
+        for(bool includeWrapping : {false, true}) {
+            findRings->setIncludeWrappingRings(includeWrapping);
+            for(const QJsonValue& entry : reference.value(QStringLiteral("frames")).toArray()) {
+                const int frame = entry.toObject().value(QStringLiteral("frame")).toInt();
+                const QJsonObject expected = entry.toObject().value(includeWrapping ? QStringLiteral("hist_quotient") : QStringLiteral("hist")).toObject();
+                PipelineFlowState state = pipeline->evaluatePipeline(PipelineEvaluationRequest(AnimationTime::fromFrame(frame), true, false)).blockForResult();
+                const DataTable* histogram = state.getObjectBy<DataTable>(node, QString::fromLatin1(FindRingsModifier::histogramTableIdentifier));
+                if(!histogram)
+                    throw Exception(QStringLiteral("Ring histogram missing at frame %1: %2").arg(frame).arg(state.status().text()));
+                std::vector<int64_t> sizes(histogram->elementCount()), counts(histogram->elementCount());
+                histogram->x()->copyTo(sizes.begin());
+                histogram->y()->copyTo(counts.begin());
+                QStringList actualText, expectedText;
+                bool same = (qsizetype)sizes.size() == expected.size();
+                for(size_t i = 0; i < sizes.size(); i++) {
+                    const int64_t e = expected.value(QString::number(sizes[i])).toInteger(-1);
+                    same &= (e == counts[i]);
+                    actualText << QString::number(counts[i]);
+                    expectedText << QString::number(e);
+                }
+                ok &= check(QStringLiteral("frame %1%2").arg(frame).arg(includeWrapping ? QStringLiteral(" (wrapping rings included)") : QString()), same, QStringLiteral("fork [%1] reference [%2]").arg(actualText.join(' '), expectedText.join(' ')));
+            }
+        }
+    }
 
     qInfo().noquote() << (ok ? "Find rings self-test: ALL PASSED" : "Find rings self-test: FAILED");
     return ok;

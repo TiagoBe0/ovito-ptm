@@ -97,16 +97,6 @@ void outputDifference(PropertyContainer* container, const Property* current, con
     });
 }
 
-bool isIntegerVariant(const QVariant& v)
-{
-    switch(v.metaType().id()) {
-    case QMetaType::Int: case QMetaType::UInt: case QMetaType::LongLong: case QMetaType::ULongLong:
-        return true;
-    default:
-        return false;
-    }
-}
-
 }   // End of anonymous namespace
 
 /******************************************************************************
@@ -234,18 +224,12 @@ void DifferenceBetweenFramesModifier::computeDifferences(const ModifierEvaluatio
                 throw Exception(tr("Difference between frames: Attribute '%1' does not exist in the current frame.").arg(name));
             if(!reference.isValid())
                 throw Exception(tr("Difference between frames: Attribute '%1' does not exist in the reference frame.").arg(name));
-            QVariant difference;
-            if(isIntegerVariant(current) && isIntegerVariant(reference)) {
-                difference = QVariant::fromValue(current.toLongLong() - reference.toLongLong());
-            }
-            else {
-                bool ok1 = false, ok2 = false;
-                double x = current.toDouble(&ok1) - reference.toDouble(&ok2);
-                if(!ok1 || !ok2)
-                    throw Exception(tr("Difference between frames: Attribute '%1' is not numeric.").arg(name));
-                difference = QVariant::fromValue(x);
-            }
-            state.setAttribute(name + differenceSuffix, std::move(difference), request.modificationNode());
+            // Like OVITO Pro, the difference of two attributes is always a floating-point value.
+            bool ok1 = false, ok2 = false;
+            double difference = current.toDouble(&ok1) - reference.toDouble(&ok2);
+            if(!ok1 || !ok2)
+                throw Exception(tr("Difference between frames: Attribute '%1' is not numeric.").arg(name));
+            state.setAttribute(name + differenceSuffix, QVariant::fromValue(difference), request.modificationNode());
         }
 
         else if(key.startsWith(QStringLiteral("table:"))) {
@@ -254,10 +238,10 @@ void DifferenceBetweenFramesModifier::computeDifferences(const ModifierEvaluatio
             if(referencePath.empty())
                 throw Exception(tr("Difference between frames: Data table '%1' does not exist in the reference frame.").arg(identifier));
             const DataTable* referenceTable = static_object_cast<DataTable>(referencePath.back());
-            DataObjectPath currentPath = state.getMutableObject(DataTable::OOClass(), identifier);
+            ConstDataObjectPath currentPath = state.data()->getObject(DataTable::OOClass(), identifier);
             if(currentPath.empty())
                 throw Exception(tr("Difference between frames: Data table '%1' does not exist in the current frame.").arg(identifier));
-            DataTable* table = static_object_cast<DataTable>(currentPath.back());
+            DataOORef<const DataTable> table = static_object_cast<DataTable>(currentPath.back());
 
             if(table->elementCount() != referenceTable->elementCount())
                 throw Exception(tr("Difference between frames: The number of rows of data table '%1' differs between the current and the reference frame.").arg(identifier));
@@ -278,16 +262,29 @@ void DifferenceBetweenFramesModifier::computeDifferences(const ModifierEvaluatio
                     "Use a fixed range in the modifier that generates the table.").arg(identifier));
             }
 
+            // Like OVITO Pro, the differences go into a new table "<identifier>[diff]" that keeps the x column and the plot settings.
+            DataTable* output = state.createObject<DataTable>(identifier + QStringLiteral("[diff]"), request.modificationNode(), table->plotMode(), table->title());
+            output->setAxisLabelX(table->axisLabelX());
+            output->setAxisLabelY(table->axisLabelY());
+            output->setIntervalStart(table->intervalStart());
+            output->setIntervalEnd(table->intervalEnd());
+            output->setElementCount(table->elementCount());
+            if(table->x()) {
+                output->addProperty(table->x());
+                output->setX(table->x());
+            }
+
             std::vector<size_t> identity(table->elementCount());
             std::iota(identity.begin(), identity.end(), size_t(0));
-            std::vector<const Property*> columns(table->properties().begin(), table->properties().end());
-            for(const Property* column : columns) {
+            for(const Property* column : table->properties()) {
                 if(column == table->x())
                     continue;
                 const Property* referenceColumn = referenceTable->getProperty(column->name());
                 if(!referenceColumn)
                     throw Exception(tr("Difference between frames: Column '%1' of data table '%2' does not exist in the reference frame.").arg(column->name()).arg(identifier));
-                outputDifference(table, column, referenceColumn, identity);
+                outputDifference(output, column, referenceColumn, identity);
+                if(column == table->y())
+                    output->setY(output->getProperty(column->name() + differenceSuffix));
             }
         }
 

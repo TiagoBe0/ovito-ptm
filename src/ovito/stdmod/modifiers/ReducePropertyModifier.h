@@ -33,8 +33,9 @@ namespace Ovito {
  * \brief Reduces a property to a single value per vector component (min, max, sum, mean, ...)
  *        and outputs the result as a global attribute.
  *
- * The attribute is named "<property>.<operation>", e.g. "Potential Energy.mean" or, for each
- * component of a vector property, "Velocity.X.max".
+ * The attribute is named like in OVITO Pro, "ReduceProperty.<container>.<Operation>.<property>", e.g.
+ * "ReduceProperty.particles.Mean.Potential Energy" or, for each component of a vector property,
+ * "ReduceProperty.particles.Max.Velocity.X".
  */
 class OVITO_STDMOD_EXPORT ReducePropertyModifier : public GenericPropertyModifier
 {
@@ -57,11 +58,14 @@ public:
     };
     Q_ENUM(ReductionOperation);
 
-    /// Returns the short name of an operation, used as suffix of the output attribute.
+    /// Returns the short name of an operation, used in the output attribute name.
     static QString operationKey(ReductionOperation op);
 
-    /// Applies a reduction operation to a list of (index, value) samples. Returns NaN for an empty list
-    /// (except for Sum and NonzeroCount, which return 0).
+    /// Returns the name of the output attribute for the given container path (e.g. "particles/bonds"), operation and property.
+    static QString attributeName(const QString& containerPath, ReductionOperation op, const QString& propertyName);
+
+    /// Applies a reduction operation to a list of (index, value) samples. Throws for an empty list
+    /// and, for the variance and standard deviation, for fewer than two samples.
     static double reduce(ReductionOperation op, std::vector<std::pair<size_t, double>> samples);
 
     /// Constructor.

@@ -31,6 +31,9 @@
 #include <ovito/core/utilities/concurrent/ParallelFor.h>
 #include "IdentifyFCCPlanarFaultsModifier.h"
 
+#include <deque>
+#include <numeric>
+
 namespace Ovito {
 
 IMPLEMENT_CREATABLE_OVITO_CLASS(IdentifyFCCPlanarFaultsModifier);
@@ -48,11 +51,12 @@ SET_PROPERTY_FIELD_LABEL(IdentifyFCCPlanarFaultsModifier, colorNonHCP, "Non-hcp"
 SET_PROPERTY_FIELD_LABEL(IdentifyFCCPlanarFaultsModifier, colorOther, "Other hcp-like");
 SET_PROPERTY_FIELD_LABEL(IdentifyFCCPlanarFaultsModifier, colorISF, "Intrinsic stacking fault");
 SET_PROPERTY_FIELD_LABEL(IdentifyFCCPlanarFaultsModifier, colorTwin, "Coherent twin boundary");
-SET_PROPERTY_FIELD_LABEL(IdentifyFCCPlanarFaultsModifier, colorMulti, "Multi-layer stacking fault");
+SET_PROPERTY_FIELD_LABEL(IdentifyFCCPlanarFaultsModifier, colorMulti, "Multilayer stacking fault");
 
 namespace {
 
-/// Numeric id of the hcp structure type, identical in the PTM and CNA modifiers.
+/// Numeric ids of the fcc and hcp structure types, identical in the PTM and CNA modifiers.
+constexpr int32_t FCC = 1;
 constexpr int32_t HCP = 2;
 
 /// Bits stored per hcp-like atom after the first pass.
@@ -61,14 +65,21 @@ enum : uint8_t {
     UpperHCP = 1 << 1,      ///< The neighboring layer on one side is hcp-like
     LowerHCP = 1 << 2,      ///< The neighboring layer on the other side is hcp-like
     BasalHCP = 1 << 3,      ///< The atom's own layer is hcp-like around it
+    TwinSides = 1 << 4,     ///< The neighboring layers on both sides are fcc, without any hcp-like atom
 };
 
 /// At least this many of the 3 out-of-plane neighbors on one side must be hcp-like to call the adjacent
-/// layer hcp-like. Majority vote, so a single misclassified neighbor near a partial dislocation does not count.
-constexpr int MIN_HCP_OUT_OF_PLANE = 2;
+/// layer hcp-like. A single one is enough: compared with OVITO Pro on thermally perturbed stackings, a majority
+/// vote leaves twice as many atoms in disagreement, and gives the same result on a stacking fault ribbon.
+constexpr int MIN_HCP_OUT_OF_PLANE = 1;
 
 /// At least this many of the 6 basal neighbors must be hcp-like for a single layer to count as a twin boundary.
 constexpr int MIN_HCP_IN_PLANE = 2;
+
+/// At least this many of the 3 out-of-plane neighbors on each side must be fcc (and none hcp-like) for a single
+/// hcp-like layer to count as a twin boundary. As in OVITO Pro, a single hcp-like layer next to a disordered
+/// layer is not a twin, and neither is an atom at the edge of a stacking fault with a single hcp-like neighbor across.
+constexpr int MIN_FCC_OUT_OF_PLANE = 2;
 
 /// The local geometry of a single hcp-like atom.
 struct LocalEnvironment
@@ -76,13 +87,17 @@ struct LocalEnvironment
     bool valid = false;
     int basalHCP = 0;
     int sideHCP[2] = {0, 0};
+    int sideFCC[2] = {0, 0};
+    size_t basal[6];
     size_t outOfPlane[6];
     int side[6];
     FloatType basalArea = 0;
 };
 
 /// Splits the 12 nearest neighbors of an hcp-like atom into basal-plane and out-of-plane neighbors.
-LocalEnvironment analyzeEnvironment(const NearestNeighborFinder& finder, size_t index, const BufferReadAccess<int32_t>& structures)
+/// If the PTM lattice orientation of the atom is given, its hcp c axis defines the basal plane; otherwise
+/// (e.g. with CNA) the plane is found from the geometry of the neighbors, which is less robust to thermal noise.
+LocalEnvironment analyzeEnvironment(const NearestNeighborFinder& finder, size_t index, const BufferReadAccess<int32_t>& structures, const QuaternionG* orientation)
 {
     LocalEnvironment env;
     NearestNeighborFinder::Query<12> query(finder);
@@ -91,35 +106,58 @@ LocalEnvironment analyzeEnvironment(const NearestNeighborFinder& finder, size_t 
     if(nbs.size() != 12)
         return env;
 
-    // In hcp the 6 basal neighbors come in antipodal pairs, the 6 out-of-plane neighbors do not:
-    // the best partner of an out-of-plane vector leaves a residual of at least a/sqrt(3).
-    std::array<FloatType, 12> residual;
-    for(int i = 0; i < 12; i++) {
-        residual[i] = std::numeric_limits<FloatType>::max();
-        for(int j = 0; j < 12; j++)
-            if(j != i)
-                residual[i] = std::min(residual[i], (nbs[i].delta + nbs[j].delta).squaredLength());
-    }
     std::array<int, 12> order;
     std::iota(order.begin(), order.end(), 0);
-    std::sort(order.begin(), order.end(), [&](int a, int b) { return residual[a] < residual[b]; });
-
-    // Basal-plane normal from the most perpendicular pair of basal neighbors.
     Vector3 normal = Vector3::Zero();
-    FloatType meanSquaredLength = 0;
-    for(int a = 0; a < 6; a++) {
-        const Vector3& va = nbs[order[a]].delta;
-        meanSquaredLength += va.squaredLength() / 6;
-        if(structures[nbs[order[a]].index] == HCP)
-            env.basalHCP++;
-        for(int b = a + 1; b < 6; b++) {
-            Vector3 c = va.cross(nbs[order[b]].delta);
-            if(c.squaredLength() > normal.squaredLength())
+
+    if(orientation) {
+        // In the PTM hcp template the c axis is the z axis. The basal neighbors are perpendicular to it, the
+        // out-of-plane ones are inclined by ~35 degrees (|cos| = sqrt(2/3)). An orientation that does not split the
+        // neighbors this way (e.g. an unrelated Orientation property) is ignored.
+        const Quaternion q(orientation->x(), orientation->y(), orientation->z(), orientation->w());
+        if(q.dot(q) > FLOATTYPE_EPSILON) {
+            const Vector3 c = (q.normalized() * Vector3(0, 0, 1)).normalized();
+            std::array<FloatType, 12> cosine;
+            for(int i = 0; i < 12; i++)
+                cosine[i] = std::abs(c.dot(nbs[i].delta)) / nbs[i].delta.length();
+            std::sort(order.begin(), order.end(), [&](int a, int b) { return cosine[a] < cosine[b]; });
+            if(cosine[order[5]] < FloatType(0.4) && cosine[order[6]] > FloatType(0.4))
                 normal = c;
+            else
+                std::iota(order.begin(), order.end(), 0);
         }
     }
-    if(normal == Vector3::Zero())
-        return env;
+
+    if(normal == Vector3::Zero()) {
+        // In hcp the 6 basal neighbors come in antipodal pairs, the 6 out-of-plane neighbors do not:
+        // the best partner of an out-of-plane vector leaves a residual of at least a/sqrt(3).
+        std::array<FloatType, 12> residual;
+        for(int i = 0; i < 12; i++) {
+            residual[i] = std::numeric_limits<FloatType>::max();
+            for(int j = 0; j < 12; j++)
+                if(j != i)
+                    residual[i] = std::min(residual[i], (nbs[i].delta + nbs[j].delta).squaredLength());
+        }
+        std::sort(order.begin(), order.end(), [&](int a, int b) { return residual[a] < residual[b]; });
+
+        // Basal-plane normal from the most perpendicular pair of basal neighbors.
+        for(int a = 0; a < 6; a++)
+            for(int b = a + 1; b < 6; b++) {
+                Vector3 c = nbs[order[a]].delta.cross(nbs[order[b]].delta);
+                if(c.squaredLength() > normal.squaredLength())
+                    normal = c;
+            }
+        if(normal == Vector3::Zero())
+            return env;
+    }
+
+    FloatType meanSquaredLength = 0;
+    for(int a = 0; a < 6; a++) {
+        meanSquaredLength += nbs[order[a]].delta.squaredLength() / 6;
+        env.basal[a] = nbs[order[a]].index;
+        if(structures[nbs[order[a]].index] == HCP)
+            env.basalHCP++;
+    }
 
     int sideCount[2] = {0, 0};
     for(int k = 0; k < 6; k++) {
@@ -129,6 +167,8 @@ LocalEnvironment analyzeEnvironment(const NearestNeighborFinder& finder, size_t 
         sideCount[env.side[k]]++;
         if(structures[nb.index] == HCP)
             env.sideHCP[env.side[k]]++;
+        else if(structures[nb.index] == FCC)
+            env.sideFCC[env.side[k]]++;
     }
     env.valid = (sideCount[0] == 3 && sideCount[1] == 3);
 
@@ -177,7 +217,7 @@ Future<PipelineFlowState> IdentifyFCCPlanarFaultsModifier::evaluateModifier(cons
                     adopted.push_back(cachedParticles->getProperty(Particles::ColorProperty));
                 particles->tryToAdoptProperties(cachedParticles, adopted, {particles});
             }
-            if(const DataTable* cachedTable = cachedState.getObjectBy<DataTable>(request.modificationNode(), QStringLiteral("planar-faults")))
+            if(const DataTable* cachedTable = cachedState.getObjectBy<DataTable>(request.modificationNode(), QStringLiteral("planar_faults")))
                 state.addObject(cachedTable);
             state.adoptAttributesFrom(cachedState, request.modificationNode());
         }
@@ -193,6 +233,7 @@ Future<PipelineFlowState> IdentifyFCCPlanarFaultsModifier::evaluateModifier(cons
             state = std::move(state),
             particles,
             structureProperty,
+            orientationProperty = particles->getProperty(Particles::OrientationProperty),
             colorParticles = colorParticles(),
             typeColors = std::array<Color, NUM_FAULT_TYPES>{colorNonHCP(), colorOther(), colorISF(), colorTwin(), colorMulti()},
             createdByNode = request.modificationNodeWeak()]() mutable
@@ -203,6 +244,7 @@ Future<PipelineFlowState> IdentifyFCCPlanarFaultsModifier::evaluateModifier(cons
         const size_t count = particles->elementCount();
         NearestNeighborFinder neighFinder(12, particles->expectProperty(Particles::PositionProperty), state.getObject<SimulationCell>(), nullptr);
         BufferReadAccess<int32_t> structures(structureProperty);
+        BufferReadAccess<QuaternionG> orientations(orientationProperty);
 
         // First pass: which neighboring layers of every hcp-like atom are hcp-like too.
         std::vector<uint8_t> flags(count, 0);
@@ -210,13 +252,15 @@ Future<PipelineFlowState> IdentifyFCCPlanarFaultsModifier::evaluateModifier(cons
         parallelFor(count, 4096, progress, [&](size_t i) {
             if(structures[i] != HCP)
                 return;
-            LocalEnvironment env = analyzeEnvironment(neighFinder, i, structures);
+            LocalEnvironment env = analyzeEnvironment(neighFinder, i, structures, orientations ? &orientations[i] : nullptr);
             if(!env.valid)
                 return;
             uint8_t f = EnvValid;
             if(env.sideHCP[0] >= MIN_HCP_OUT_OF_PLANE) f |= UpperHCP;
             if(env.sideHCP[1] >= MIN_HCP_OUT_OF_PLANE) f |= LowerHCP;
             if(env.basalHCP >= MIN_HCP_IN_PLANE) f |= BasalHCP;
+            if(env.sideFCC[0] >= MIN_FCC_OUT_OF_PLANE && env.sideFCC[1] >= MIN_FCC_OUT_OF_PLANE && env.sideHCP[0] == 0 && env.sideHCP[1] == 0)
+                f |= TwinSides;
             flags[i] = f;
             basalAreas[i] = env.basalArea;
         });
@@ -236,7 +280,7 @@ Future<PipelineFlowState> IdentifyFCCPlanarFaultsModifier::evaluateModifier(cons
             else if((f & BothSides) == BothSides)
                 faultTypes[i] = MultiLayerStackingFault;
             else if(f & BothSides) {
-                LocalEnvironment env = analyzeEnvironment(neighFinder, i, structures);
+                LocalEnvironment env = analyzeEnvironment(neighFinder, i, structures, orientations ? &orientations[i] : nullptr);
                 const int hcpSide = (f & UpperHCP) ? 0 : 1;
                 bool thickStack = false;
                 for(int k = 0; k < 6 && !thickStack; k++)
@@ -244,8 +288,35 @@ Future<PipelineFlowState> IdentifyFCCPlanarFaultsModifier::evaluateModifier(cons
                 faultTypes[i] = thickStack ? MultiLayerStackingFault : IntrinsicStackingFault;
             }
             else
-                faultTypes[i] = (f & BasalHCP) ? CoherentTwinBoundary : Indeterminate;
+                faultTypes[i] = ((f & BasalHCP) && (f & TwinSides)) ? CoherentTwinBoundary : Indeterminate;
         });
+
+        // Third pass: hcp-like atoms that could not be classified from their own neighbors (e.g. at the edge of a
+        // stacking fault ribbon next to a partial dislocation core, where the adjacent hcp layer is disordered)
+        // take the type of the planar defect they are part of, by a breadth-first flood fill through the basal
+        // planes starting from all classified atoms. OVITO Pro also propagates the type within a plane, but in a
+        // single sweep in atom index order, so that its result depends on the order of the atoms; this
+        // multi-source flood fill does not.
+        {
+            std::deque<size_t> queue;
+            for(size_t i = 0; i < count; i++)
+                if(faultTypes[i] == IntrinsicStackingFault || faultTypes[i] == CoherentTwinBoundary || faultTypes[i] == MultiLayerStackingFault)
+                    queue.push_back(i);
+            while(!queue.empty()) {
+                this_task::throwIfCanceled();
+                const size_t i = queue.front();
+                queue.pop_front();
+                LocalEnvironment env = analyzeEnvironment(neighFinder, i, structures, orientations ? &orientations[i] : nullptr);
+                if(!env.valid)
+                    continue;
+                for(size_t n : env.basal) {
+                    if(structures[n] == HCP && faultTypes[n] == Indeterminate && (flags[n] & EnvValid)) {
+                        faultTypes[n] = faultTypes[i];
+                        queue.push_back(n);
+                    }
+                }
+            }
+        }
 
         // Aggregate counts and areas. The area of a defect is the basal area of its atoms divided by the number of layers.
         std::array<int64_t, NUM_FAULT_TYPES> typeCounts{};
@@ -264,7 +335,7 @@ Future<PipelineFlowState> IdentifyFCCPlanarFaultsModifier::evaluateModifier(cons
             property->addElementType(std::move(type));
         };
         const std::array<QString, NUM_FAULT_TYPES> typeNames = {
-            tr("Non-hcp"), tr("Indeterminate hcp-like"), tr("Intrinsic stacking fault"), tr("Coherent twin boundary"), tr("Multi-layer stacking fault")};
+            tr("Non-hcp"), tr("Indeterminate hcp-like"), tr("Intrinsic stacking fault"), tr("Coherent twin boundary"), tr("Multilayer stacking fault")};
         for(int t = 0; t < NUM_FAULT_TYPES; t++)
             addFaultType(faultProperty, t, typeNames[t], typeColors[t]);
 
@@ -278,14 +349,24 @@ Future<PipelineFlowState> IdentifyFCCPlanarFaultsModifier::evaluateModifier(cons
                 colorArray[i] = (faultTypes[i] == NonHCP) ? inputColorArray[i] : typeColors[faultTypes[i]].toDataType<GraphicsFloatType>();
         }
 
-        // Bar chart with the atom count of each fault type plus the estimated ISF and TB areas.
-        PropertyPtr countColumn = DataTable::OOClass().createUserProperty(DataBuffer::Uninitialized, NUM_FAULT_TYPES, Property::Int64, 1, tr("Count"));
-        std::ranges::copy(typeCounts, BufferWriteAccess<int64_t, access_mode::discard_write>(countColumn).begin());
-        PropertyPtr typeColumn = DataTable::OOClass().createUserProperty(DataBuffer::Uninitialized, NUM_FAULT_TYPES, Property::Int32, 1, tr("Planar fault type"));
+        // Bar chart with the atom count of each fault type, as in OVITO Pro: the non-hcp row is 0 and has no
+        // element type, and the fractions are relative to all hcp-like atoms. The estimated ISF and TB areas are extra.
+        std::array<int64_t, NUM_FAULT_TYPES> tableCounts = typeCounts;
+        tableCounts[NonHCP] = 0;
+        const int64_t hcpCount = std::accumulate(tableCounts.begin(), tableCounts.end(), int64_t(0));
+        PropertyPtr countColumn = DataTable::OOClass().createUserProperty(DataBuffer::Uninitialized, NUM_FAULT_TYPES, Property::Int64, 1, QStringLiteral("Atom Count"));
+        std::ranges::copy(tableCounts, BufferWriteAccess<int64_t, access_mode::discard_write>(countColumn).begin());
+        PropertyPtr typeColumn = DataTable::OOClass().createUserProperty(DataBuffer::Uninitialized, NUM_FAULT_TYPES, Property::Int32, 1, QStringLiteral("Planar Fault Type"));
         boost::algorithm::iota_n(BufferWriteAccess<int32_t, access_mode::discard_write>(typeColumn).begin(), 0, NUM_FAULT_TYPES);
-        for(int t = 0; t < NUM_FAULT_TYPES; t++)
+        for(int t = 1; t < NUM_FAULT_TYPES; t++)
             addFaultType(typeColumn.get(), t, typeNames[t], typeColors[t]);
-        DataTable* table = state.createObject<DataTable>(QStringLiteral("planar-faults"), createdByNode, DataTable::BarChart, tr("Planar fault counts"), std::move(countColumn), std::move(typeColumn));
+        DataTable* table = state.createObject<DataTable>(QStringLiteral("planar_faults"), createdByNode, DataTable::BarChart, tr("Planar fault atoms"), std::move(countColumn), std::move(typeColumn));
+        {
+            Property* fractionColumn = table->createProperty(DataBuffer::Uninitialized, QStringLiteral("Atom Fraction"), Property::FloatDefault);
+            BufferWriteAccess<FloatType, access_mode::discard_write> fractions(fractionColumn);
+            for(int t = 0; t < NUM_FAULT_TYPES; t++)
+                fractions[t] = hcpCount ? FloatType(tableCounts[t]) / hcpCount : FloatType(0);
+        }
         Property* areaColumn = table->createProperty(DataBuffer::Initialized, tr("Estimated area"), Property::FloatDefault);
         BufferWriteAccess<FloatType, access_mode::read_write> areas(areaColumn);
         areas[IntrinsicStackingFault] = isfArea;

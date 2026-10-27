@@ -39,9 +39,10 @@ namespace Ovito {
  *   - "cell"                             the simulation cell matrix
  *
  * Element-wise properties are matched across frames by their unique identifiers when the container
- * has them (e.g. particle IDs), otherwise by index. Averages are output as new quantities with the
- * suffix " Average" (tables: identifier suffix "-average"; cell: a "cell-average" table), or they
- * overwrite the original values if overwrite() is set (integers are then rounded).
+ * has them (e.g. particle IDs), otherwise by index. Outputs follow OVITO Pro: attributes "<name> (Average)",
+ * properties "<name> Average", tables "<identifier>[average]" and the cell as the vector attributes
+ * "Cell vector 1..3 (Average)" and "Cell origin (Average)". If overwrite() is set, the original values
+ * are replaced instead (integer properties are rounded, table columns become floating-point).
  */
 class OVITO_STDMOD_EXPORT TimeAveragingModifier : public Modifier
 {

@@ -26,6 +26,7 @@
 #include <ovito/particles/modifier/analysis/ptm/PolyhedralTemplateMatchingModifier.h>
 #include <ovito/particles/modifier/analysis/cna/CommonNeighborAnalysisModifier.h>
 #include <ovito/particles/objects/Particles.h>
+#include <ovito/stdobj/table/DataTable.h>
 #include <ovito/core/app/StandaloneApplication.h>
 #include <ovito/core/dataset/io/FileImporter.h>
 #include <ovito/core/dataset/io/FileSource.h>
@@ -36,6 +37,7 @@
 #include <ovito/core/utilities/Exception.h>
 #include "IdentifyFCCPlanarFaultsSelfTestService.h"
 #include <QCommandLineParser>
+#include <QFileInfo>
 #include <QCoreApplication>
 #include <QTemporaryDir>
 #include <QTextStream>
@@ -158,6 +160,22 @@ bool checkCase(const QString& label, const QUrl& url, OORef<Modifier> structureM
         QStringLiteral("%1 mismatches; counts %2 %3 %4 %5 %6%7").arg(mismatches)
             .arg(counts[0]).arg(counts[1]).arg(counts[2]).arg(counts[3]).arg(counts[4]).arg(firstMismatch));
 
+    // Output table as in OVITO Pro: the non-hcp row is 0 and the fractions are relative to the hcp-like atoms
+    // (2 ISF layers, 1 TB layer and 3 multilayer layers of the 6 hcp-like layers).
+    const DataTable* table = state.getObjectBy<DataTable>(node, QStringLiteral("planar_faults"));
+    const Property* countColumn = table ? table->getProperty(QStringLiteral("Atom Count")) : nullptr;
+    const Property* fractionColumn = table ? table->getProperty(QStringLiteral("Atom Fraction")) : nullptr;
+    if(!countColumn || !fractionColumn)
+        throw Exception(QStringLiteral("The planar_faults table or its Atom Count / Atom Fraction columns are missing."));
+    std::vector<double> tableCounts(countColumn->size()), fractions(fractionColumn->size());
+    countColumn->copyTo(tableCounts.begin());
+    fractionColumn->copyTo(fractions.begin());
+    const std::vector<double> expectedFractions = {0, 0, 2.0 / 6, 1.0 / 6, 3.0 / 6};
+    bool tableOk = tableCounts.size() == 5 && tableCounts[0] == 0 && fractions.size() == 5;
+    for(size_t t = 0; tableOk && t < 5; t++)
+        tableOk = std::abs(fractions[t] - expectedFractions[t]) < 1e-12;
+    ok &= check(QStringLiteral("planar_faults table"), tableOk, QStringLiteral("fractions %1").arg([&] { QStringList l; for(double f : fractions) l << QString::number(f); return l.join(' '); }()));
+
     // One ISF and one TB, each spanning the full cell cross-section.
     const double crossSection = cellX() * cellY();
     const double tolerance = (frame == 0) ? 1e-6 : 0.02;
@@ -168,6 +186,55 @@ bool checkCase(const QString& label, const QUrl& url, OORef<Modifier> structureM
             QStringLiteral("%1 (expected %2, tolerance %3)").arg(area).arg(crossSection).arg(tolerance));
     }
     return ok;
+}
+
+/// Compares the per-atom classification with a reference computed by OVITO Pro (PTM + Identify fcc planar faults),
+/// stored in the "ProFaultType" column of a LAMMPS dump. Atoms are matched by their identifiers.
+bool checkReference(const QString& path)
+{
+    const QUrl url = QUrl::fromLocalFile(path);
+    OORef<FileSourceImporter> importer = dynamic_object_cast<FileSourceImporter>(FileImporter::autodetectFileFormat(url).blockForResult());
+    if(!importer)
+        throw Exception(QStringLiteral("Could not detect the format of the reference file %1.").arg(path));
+    OORef<FileSource> source = OORef<FileSource>::create();
+    source->setSource({url}, std::move(importer), false);
+    (void) source->updateListOfFrames().blockForResult();
+    OORef<Pipeline> pipeline = OORef<Pipeline>::create();
+    pipeline->setHead(source);
+    OORef<PolyhedralTemplateMatchingModifier> ptm = OORef<PolyhedralTemplateMatchingModifier>::create();
+    ptm->setOutputOrientation(true);  // As required by OVITO Pro.
+    OORef<IdentifyFCCPlanarFaultsModifier> faults = OORef<IdentifyFCCPlanarFaultsModifier>::create();
+    pipeline->applyModifier(AnimationTime::fromFrame(0), false, ptm);
+    pipeline->applyModifier(AnimationTime::fromFrame(0), false, faults);
+
+    PipelineFlowState state = pipeline->evaluatePipeline(PipelineEvaluationRequest(AnimationTime::fromFrame(0), true, false)).blockForResult();
+    const Particles* particles = state.getObject<Particles>();
+    const Property* faultProperty = particles ? particles->getProperty(QStringLiteral("Planar Fault Type")) : nullptr;
+    // The LAMMPS dump importer lowercases the names of non-standard columns.
+    const Property* referenceProperty = particles ? particles->getProperty(QStringLiteral("profaulttype")) : nullptr;
+    if(!faultProperty || !referenceProperty)
+        throw Exception(QStringLiteral("Missing Planar Fault Type or reference ProFaultType column in %1: %2").arg(path).arg(state.status().text()));
+
+    std::vector<int> actual(faultProperty->size()), expected(referenceProperty->size());
+    faultProperty->copyTo(actual.begin());
+    referenceProperty->copyTo(expected.begin());
+    constexpr int N = IdentifyFCCPlanarFaultsModifier::NUM_FAULT_TYPES;
+    std::array<std::array<int64_t, N>, N> confusion{};
+    size_t mismatches = 0;
+    for(size_t i = 0; i < actual.size(); i++) {
+        if(actual[i] < 0 || actual[i] >= N || expected[i] < 0 || expected[i] >= N)
+            throw Exception(QStringLiteral("Invalid planar fault type in %1.").arg(path));
+        confusion[expected[i]][actual[i]]++;
+        if(actual[i] != expected[i]) mismatches++;
+    }
+    QStringList rows;
+    for(int e = 0; e < N; e++) {
+        QStringList row;
+        for(int a = 0; a < N; a++) row << QString::number(confusion[e][a]);
+        rows << row.join(' ');
+    }
+    return check(QStringLiteral("reference %1").arg(QFileInfo(path).fileName()), mismatches == 0,
+        QStringLiteral("%1 of %2 atoms differ; confusion (rows = OVITO Pro, columns = fork): [%3]").arg(mismatches).arg(actual.size()).arg(rows.join(" | ")));
 }
 
 }   // End of anonymous namespace
@@ -230,6 +297,14 @@ bool IdentifyFCCPlanarFaultsSelfTestService::runTest()
         const QString lattice = frame == 0 ? QStringLiteral("ideal lattice") : QStringLiteral("random displacements");
         ok &= checkCase(QStringLiteral("PTM, %1").arg(lattice), url, OORef<PolyhedralTemplateMatchingModifier>::create(), frame);
         ok &= checkCase(QStringLiteral("adaptive CNA, %1").arg(lattice), url, OORef<CommonNeighborAnalysisModifier>::create(), frame);
+    }
+
+    // Optional comparison with classifications exported from OVITO Pro (comma-separated list of LAMMPS dumps).
+    const QString references = qEnvironmentVariable("OVITO_PLANAR_FAULTS_REFERENCE");
+    if(!references.isEmpty()) {
+        qInfo().noquote() << "Planar faults self-test: comparison with OVITO Pro references";
+        for(const QString& path : references.split(QChar(','), Qt::SkipEmptyParts))
+            ok &= checkReference(path);
     }
 
     qInfo().noquote() << (ok ? "Planar faults self-test: ALL PASSED" : "Planar faults self-test: FAILED");

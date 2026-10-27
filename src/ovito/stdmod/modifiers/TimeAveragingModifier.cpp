@@ -379,7 +379,7 @@ void TimeAveragingModificationNode::outputAverages(const ModifierEvaluationReque
         switch(acc.kind) {
 
         case Accumulator::Attribute:
-            state.setAttribute(overwrite ? acc.name : acc.name + QStringLiteral(" Average"), QVariant::fromValue(means[0]), request.modificationNode());
+            state.setAttribute(overwrite ? acc.name : acc.name + QStringLiteral(" (Average)"), QVariant::fromValue(means[0]), request.modificationNode());
             break;
 
         case Accumulator::Cell: {
@@ -391,11 +391,11 @@ void TimeAveragingModificationNode::outputAverages(const ModifierEvaluationReque
                 state.expectMutableObject<SimulationCell>()->setCellMatrix(cellMatrix);
             }
             else {
-                // One row per cell vector, plus the cell origin.
-                PropertyPtr values = DataTable::OOClass().createUserProperty(DataBuffer::Uninitialized, 4, Property::FloatDefault, 3,
-                    tr("Average cell"), 0, QStringList{QStringLiteral("X"), QStringLiteral("Y"), QStringLiteral("Z")});
-                writeValues(values, means);
-                state.createObject<DataTable>(QStringLiteral("cell-average"), request.modificationNode(), DataTable::None, tr("Average simulation cell (cell vectors 1-3, origin)"), std::move(values));
+                // Same output as OVITO Pro: one vector attribute per cell vector, plus the cell origin.
+                for(size_t col = 0; col < 4; col++) {
+                    QString name = (col < 3) ? QStringLiteral("Cell vector %1 (Average)").arg(col + 1) : QStringLiteral("Cell origin (Average)");
+                    state.setAttribute(name, QVariant::fromValue(cellMatrix.column(col)), request.modificationNode());
+                }
             }
             break;
         }
@@ -411,15 +411,22 @@ void TimeAveragingModificationNode::outputAverages(const ModifierEvaluationReque
                     size_t end = (c + 1 < acc.columns.size()) ? acc.columns[c + 1].second : means.size();
                     if(!column || column->size() * column->componentCount() != end - acc.columns[c].second)
                         throw Exception(tr("Time averaging: The size of data table '%1' in the current frame differs from the averaged frames.").arg(acc.name));
-                    writeValues(table->makePropertyMutable(column, DataBuffer::Uninitialized),
-                        std::vector<double>(means.begin() + acc.columns[c].second, means.begin() + end));
+                    // Like OVITO Pro, the averaged columns become floating-point (histogram counts are not rounded).
+                    PropertyPtr averaged = DataTable::OOClass().createUserProperty(DataBuffer::Uninitialized, column->size(), Property::FloatDefault,
+                        column->componentCount(), column->name(), 0, column->componentNames());
+                    writeValues(averaged.get(), std::vector<double>(means.begin() + acc.columns[c].second, means.begin() + end));
+                    const bool isX = table->x() == column, isY = table->y() == column;
+                    table->removeProperty(column);
+                    table->addProperty(averaged);
+                    if(isX) table->setX(averaged);
+                    if(isY) table->setY(averaged);
                 }
                 table->setIntervalStart(acc.intervalChanged ? acc.intervalStartSum / acc.sampleCount : acc.firstIntervalStart);
                 table->setIntervalEnd(acc.intervalChanged ? acc.intervalEndSum / acc.sampleCount : acc.firstIntervalEnd);
             }
             else {
-                DataTable* table = state.createObject<DataTable>(acc.name + QStringLiteral("-average"), request.modificationNode(),
-                    input->plotMode(), tr("%1 (time average)").arg(input->title().isEmpty() ? acc.name : input->title()));
+                DataTable* table = state.createObject<DataTable>(acc.name + QStringLiteral("[average]"), request.modificationNode(),
+                    input->plotMode(), input->title());
                 table->setAxisLabelX(input->axisLabelX());
                 table->setAxisLabelY(input->axisLabelY());
                 table->setIntervalStart(acc.intervalChanged ? acc.intervalStartSum / acc.sampleCount : acc.firstIntervalStart);

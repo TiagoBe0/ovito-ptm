@@ -33,6 +33,8 @@
 #include <boost/container/small_vector.hpp>
 #include "FindRingsModifier.h"
 
+#include <set>
+
 namespace Ovito {
 
 IMPLEMENT_CREATABLE_OVITO_CLASS(FindRingsModifier);
@@ -41,9 +43,11 @@ OVITO_CLASSINFO(FindRingsModifier, "Description", "Identify and visualize the sh
 OVITO_CLASSINFO(FindRingsModifier, "ModifierCategory", "Analysis");
 DEFINE_PROPERTY_FIELD(FindRingsModifier, minRingSize);
 DEFINE_PROPERTY_FIELD(FindRingsModifier, maxRingSize);
+DEFINE_PROPERTY_FIELD(FindRingsModifier, includeWrappingRings);
 DEFINE_REFERENCE_FIELD(FindRingsModifier, ringsVis);
 SET_PROPERTY_FIELD_LABEL(FindRingsModifier, minRingSize, "Minimum ring size");
 SET_PROPERTY_FIELD_LABEL(FindRingsModifier, maxRingSize, "Maximum ring size");
+SET_PROPERTY_FIELD_LABEL(FindRingsModifier, includeWrappingRings, "Include rings wrapping around periodic boundaries");
 SET_PROPERTY_FIELD_LABEL(FindRingsModifier, ringsVis, "Rings");
 SET_PROPERTY_FIELD_UNITS_AND_RANGE(FindRingsModifier, minRingSize, IntegerParameterUnit, 3, FindRingsModifier::MaxSupportedRingSize);
 SET_PROPERTY_FIELD_UNITS_AND_RANGE(FindRingsModifier, maxRingSize, IntegerParameterUnit, 3, FindRingsModifier::MaxSupportedRingSize);
@@ -320,6 +324,7 @@ Future<PipelineFlowState> FindRingsModifier::evaluateModifier(const ModifierEval
             bonds,
             minSize = minRingSize(),
             maxSize = maxRingSize(),
+            includeWrapping = includeWrappingRings(),
             vis = OORef<SurfaceMeshVis>(ringsVis()),
             createdByNode = request.modificationNodeWeak()]() mutable
     {
@@ -332,7 +337,21 @@ Future<PipelineFlowState> FindRingsModifier::evaluateModifier(const ModifierEval
             for(size_t b = 0; b < topology.size(); b++)
                 bondList.emplace_back((size_t)topology[b][0], (size_t)topology[b][1], images ? images[b] : Vector3I::Zero());
         }
-        std::vector<Ring> rings = findRings(particles->elementCount(), bondList, minSize, maxSize);
+        std::vector<Ring> rings;
+        if(includeWrapping) {
+            // As in OVITO Pro, rings are cycles of the bond graph regardless of periodic images: dropping the image
+            // shifts turns cycles that wrap around the cell into ordinary cycles. A pair bonded through several
+            // images becomes a single edge.
+            std::vector<std::tuple<size_t, size_t, Vector3I>> graph;
+            std::set<std::pair<size_t, size_t>> seen;
+            for(const auto& [a, b, shift] : bondList)
+                if(a != b && seen.emplace(std::min(a, b), std::max(a, b)).second)
+                    graph.emplace_back(a, b, Vector3I::Zero());
+            rings = findRings(particles->elementCount(), graph, minSize, maxSize);
+        }
+        else {
+            rings = findRings(particles->elementCount(), bondList, minSize, maxSize);
+        }
 
         // One table per ring size, listing the particle indices of each ring.
         std::vector<int64_t> histogram(maxSize - minSize + 1, 0);
@@ -349,11 +368,11 @@ Future<PipelineFlowState> FindRingsModifier::evaluateModifier(const ModifierEval
                         access.set(r, i, (int64_t)rings[offset + r][i]);
             }
             offset += count;
-            state.createObject<DataTable>(QStringLiteral("%1-rings").arg(n), createdByNode, DataTable::None, tr("%1-rings").arg(n), std::move(indices));
+            state.createObject<DataTable>(QStringLiteral("%1-rings").arg(n), createdByNode, DataTable::None, tr("%1-Rings").arg(n), std::move(indices));
         }
 
         // Ring size histogram.
-        PropertyPtr sizes = DataTable::OOClass().createUserProperty(DataBuffer::Uninitialized, histogram.size(), Property::Int32, 1, tr("Ring size"));
+        PropertyPtr sizes = DataTable::OOClass().createUserProperty(DataBuffer::Uninitialized, histogram.size(), Property::Int32, 1, QStringLiteral("Ring Size"));
         {
             BufferWriteAccess<int32_t, access_mode::discard_write> access(sizes);
             std::iota(access.begin(), access.end(), minSize);
@@ -361,7 +380,7 @@ Future<PipelineFlowState> FindRingsModifier::evaluateModifier(const ModifierEval
         PropertyPtr counts = DataTable::OOClass().createUserProperty(DataBuffer::Uninitialized, histogram.size(), Property::Int64, 1, tr("Count"));
         std::ranges::copy(histogram, BufferWriteAccess<int64_t, access_mode::discard_write>(counts).begin());
         DataTable* histogramTable = state.createObject<DataTable>(QString::fromLatin1(histogramTableIdentifier), createdByNode, DataTable::BarChart,
-            tr("Ring size distribution"), std::move(counts), std::move(sizes));
+            tr("Ring size histogram"), std::move(counts), std::move(sizes));
         histogramTable->setAxisLabelX(tr("Ring size"));
         histogramTable->setAxisLabelY(tr("Count"));
 

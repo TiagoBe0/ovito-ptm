@@ -80,13 +80,13 @@ void ShrinkWrapBoxSelfTestService::applicationStarted()
     pipeline->applyModifier(AnimationTime::fromFrame(0), false, modifier);
     PipelineFlowState state = pipeline->evaluatePipeline(PipelineEvaluationRequest(AnimationTime::fromFrame(0), true, false)).blockForResult();
 
-    // Expected: origin (1.5, -1, -3), extents 2.5 x 8.25 x 8, no off-diagonal elements, pbc = (1, 1, 0).
+    // Expected (as in OVITO Pro): origin (1.5, -1, -3), extents 2.5 x 8.25 x 8, no off-diagonal elements, no pbc.
     const SimulationCell* cell = state.expectObject<SimulationCell>();
     const AffineTransformation& m = cell->cellMatrix();
     const AffineTransformation expected(2.5, 0, 0, 1.5,
                                         0, 8.25, 0, -1,
                                         0, 0, 8, -3);
-    bool ok = m.equals(expected, 1e-12) && cell->pbcX() && cell->pbcY() && !cell->pbcZ();
+    bool ok = m.equals(expected, 1e-12) && !cell->pbcX() && !cell->pbcY() && !cell->pbcZ();
     if(ok)
         qInfo().noquote() << "Shrink-wrap self-test: ALL PASSED";
     else

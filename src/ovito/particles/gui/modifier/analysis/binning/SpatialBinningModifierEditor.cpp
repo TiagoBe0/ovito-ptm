@@ -130,10 +130,12 @@ void SpatialBinningModifierEditor::createUI(const RolloutInsertionParameters& ro
     auto updateEnabled = [=](RefTarget* editObject) {
         SpatialBinningModifier* mod = static_object_cast<SpatialBinningModifier>(editObject);
         if(!mod) return;
-        binsXUI->setEnabled(SpatialBinningModifier::isBinned(mod->binDirection(), 0));
-        binsYUI->setEnabled(SpatialBinningModifier::isBinned(mod->binDirection(), 1));
-        binsZUI->setEnabled(SpatialBinningModifier::isBinned(mod->binDirection(), 2));
-        derivativeUI->setEnabled(SpatialBinningModifier::dimensionality(mod->binDirection()) == 1);
+        // The bin counts apply to the binned dimensions in order (a 1D binning along Y uses the first count).
+        const int ndim = SpatialBinningModifier::dimensionality(mod->binDirection());
+        binsXUI->setEnabled(ndim >= 1);
+        binsYUI->setEnabled(ndim >= 2);
+        binsZUI->setEnabled(ndim >= 3);
+        derivativeUI->setEnabled(ndim == 1);
     };
     connect(this, &PropertiesEditor::contentsChanged, this, updateEnabled);
     connect(this, &PropertiesEditor::contentsReplaced, this, updateEnabled);

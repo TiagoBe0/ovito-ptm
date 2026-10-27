@@ -93,7 +93,7 @@ void IdentifyFCCPlanarFaultsModifierEditor::updateResults()
 {
     handleExceptions([&]() {
         const PipelineFlowState& state = getPipelineOutput();
-        _plotWidget->setTable(state ? state.getObjectBy<DataTable>(modificationNode(), QStringLiteral("planar-faults")) : nullptr);
+        _plotWidget->setTable(state ? state.getObjectBy<DataTable>(modificationNode(), QStringLiteral("planar_faults")) : nullptr);
         if(state && state.getAttributeValue(modificationNode(), QStringLiteral("PlanarFaults.isf_area")).isValid()) {
             _areaLabel->setText(tr("ISF area: %1\nTB area: %2")
                 .arg(state.getAttributeValue(modificationNode(), QStringLiteral("PlanarFaults.isf_area")).toDouble(), 0, 'g', 6)

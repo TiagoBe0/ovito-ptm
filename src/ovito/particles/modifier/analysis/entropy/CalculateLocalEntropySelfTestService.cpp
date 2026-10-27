@@ -173,36 +173,37 @@ bool CalculateLocalEntropySelfTestService::runTest()
     auto spread = [](const std::vector<double>& v) { auto [lo, hi] = std::ranges::minmax(v); return hi - lo; };
     auto sum = [](const std::vector<double>& v) { return std::accumulate(v.begin(), v.end(), 0.0); };
 
+    // Expected values measured with OVITO Pro 3.16.1 (Calculate local entropy) on the same dump.
     bool ok = true;
 
     qInfo().noquote() << "Local entropy self-test: ideal fcc, global density";
     std::vector<double> s = evaluate(0);
-    ok &= check(QStringLiteral("atom 1"), s[0], -8.360190779024357);
+    ok &= check(QStringLiteral("atom 1"), s[0], -8.556850321982283);
     ok &= check(QStringLiteral("spread over atoms"), spread(s), 0);
 
     qInfo().noquote() << "Local entropy self-test: ideal fcc, local density";
     entropy->setUseLocalDensity(true);
     s = evaluate(0);
-    ok &= check(QStringLiteral("atom 1"), s[0], -8.31879273166005);
+    ok &= check(QStringLiteral("atom 1"), s[0], -8.509461565970561);
     ok &= check(QStringLiteral("spread over atoms"), spread(s), 0);
 
     qInfo().noquote() << "Local entropy self-test: displaced fcc, global density";
     entropy->setUseLocalDensity(false);
     s = evaluate(1);
-    ok &= check(QStringLiteral("sum"), sum(s), -2031.5435047233987);
-    ok &= check(QStringLiteral("atom 1"), s[0], -7.93292064083236);
-    ok &= check(QStringLiteral("atom 50"), s[49], -7.793527178039807);
-    ok &= check(QStringLiteral("atom 200"), s[199], -8.127221616205265);
+    ok &= check(QStringLiteral("sum"), sum(s), -2076.0219615823294);
+    ok &= check(QStringLiteral("atom 1"), s[0], -8.105013805586802);
+    ok &= check(QStringLiteral("atom 50"), s[49], -7.96212737930723);
+    ok &= check(QStringLiteral("atom 200"), s[199], -8.312648536840088);
 
     qInfo().noquote() << "Local entropy self-test: displaced fcc, local density, average within 3.5";
     entropy->setUseLocalDensity(true);
     entropy->setComputeAverage(true);
     entropy->setAverageCutoff(3.5);
     s = evaluate(1);
-    ok &= check(QStringLiteral("sum"), sum(s), -2023.8540383522413);
-    ok &= check(QStringLiteral("atom 1"), s[0], -7.894200657312689);
-    ok &= check(QStringLiteral("atom 50"), s[49], -7.940207133905085);
-    ok &= check(QStringLiteral("atom 200"), s[199], -7.887067396755831);
+    ok &= check(QStringLiteral("sum"), sum(s), -2066.3132075454505);
+    ok &= check(QStringLiteral("atom 1"), s[0], -8.058364663061672);
+    ok &= check(QStringLiteral("atom 50"), s[49], -8.105867126347809);
+    ok &= check(QStringLiteral("atom 200"), s[199], -8.051878638175898);
 
     qInfo().noquote() << (ok ? "Local entropy self-test: ALL PASSED" : "Local entropy self-test: FAILED");
     return ok;

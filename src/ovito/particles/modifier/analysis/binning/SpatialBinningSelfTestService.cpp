@@ -241,8 +241,29 @@ bool SpatialBinningSelfTestService::runTest()
     ok &= check(QStringLiteral("mean profile"), table(0).second, {2, 5, 3, 6, 8});
     binning->setFirstDerivative(true);
     ok &= check(QStringLiteral("derivative"), table(0).second, {-0.75, 0.25, 0.25, 1.25, -1});
+    // Non-periodic x (frame 1): one-sided differences at the ends. Values measured in OVITO Pro 3.16.1.
+    ok &= check(QStringLiteral("derivative (non-periodic)"), table(1).second, {1.5, 0.25, 0.25, 1.0, 0.5});
+    {
+        PipelineFlowState state = evaluate(0);
+        const DataTable* t = state.getObjectBy<DataTable>(node, QStringLiteral("binning"));
+        ok &= check(QStringLiteral("derivative column named as in Pro"), {t && t->y()->name() == QStringLiteral("d(Velocity.X)/d(Position)") ? 1.0 : 0.0}, {1});
+    }
     binning->setFirstDerivative(false);
+    {
+        PipelineFlowState state = evaluate(0);
+        const DataTable* t = state.getObjectBy<DataTable>(node, QStringLiteral("binning"));
+        ok &= check(QStringLiteral("table title and x label as in Pro"),
+            {t && t->title() == QStringLiteral("Velocity.X") && t->axisLabelX() == QStringLiteral("Position") && t->plotMode() == DataTable::Histogram ? 1.0 : 0.0}, {1});
+    }
     binning->setNumberOfBinsX(2);
+
+    // As in OVITO Pro, a 1D binning along Y takes its bin count from the first field (2 bins, not 4).
+    qInfo().noquote() << "Spatial binning self-test: 1D along Y uses the first bin count";
+    binning->setBinDirection(SpatialBinningModifier::Y);
+    binning->setNumberOfBinsY(4);
+    ok &= check(QStringLiteral("Y mean (2 bins)"), table(0).second, {29.0 / 6.0, 4});
+    binning->setNumberOfBinsY(2);
+    binning->setBinDirection(SpatialBinningModifier::X);
 
     // Voxel index = z*4 + y*2 + x.
     qInfo().noquote() << "Spatial binning self-test: 2D (XY) max and 3D count";
@@ -260,6 +281,30 @@ bool SpatialBinningSelfTestService::runTest()
         auto [shape, values] = grid(0);
         ok &= check(QStringLiteral("3D shape"), shape, {2, 2, 2});
         ok &= check(QStringLiteral("3D count"), values, {3, 2, 1, 1, 0, 1, 0, 0});
+    }
+
+    // XZ with bin counts (2, 4, 3): the grid is 2 x 4 x 1 (x along the first axis, z along the second),
+    // the derivative option is ignored, and the domain is a 2D cell. Values measured in OVITO Pro 3.16.1.
+    qInfo().noquote() << "Spatial binning self-test: 2D (XZ) grid layout as in OVITO Pro";
+    binning->setBinDirection(SpatialBinningModifier::XZ);
+    binning->setSourceProperty(PropertyReference(QStringLiteral("Velocity.X")));
+    binning->setNumberOfBinsY(4);
+    binning->setNumberOfBinsZ(3);
+    binning->setFirstDerivative(true);
+    for(const auto& [op, values] : std::vector<std::pair<SpatialBinningModifier::ReductionOperation, std::vector<double>>>{
+            {SpatialBinningModifier::Min, {1, 6, 2, 0, 0, 0, 0, 4}},
+            {SpatialBinningModifier::Mean, {3, 22.0 / 3.0, 2, 0, 0, 0, 0, 4}},
+            {SpatialBinningModifier::Sum, {9, 22, 2, 0, 0, 0, 0, 4}}}) {
+        binning->setReductionOperation(op);
+        auto [shape, actual] = grid(0);
+        ok &= check(QStringLiteral("XZ shape"), shape, {2, 4, 1});
+        ok &= check(QStringLiteral("XZ op %1").arg((int)op), actual, values);
+    }
+    {
+        PipelineFlowState state = evaluate(0);
+        const VoxelGrid* g = state.getObjectBy<VoxelGrid>(node, QStringLiteral("binning"));
+        const AffineTransformation& m = g->domain()->cellMatrix();
+        ok &= check(QStringLiteral("XZ domain vectors"), {m(0, 0), m(2, 1), m(2, 2), g->domain()->is2D() ? 1.0 : 0.0}, {10, 10, 1, 1});
     }
 
     qInfo().noquote() << (ok ? "Spatial binning self-test: ALL PASSED" : "Spatial binning self-test: FAILED");

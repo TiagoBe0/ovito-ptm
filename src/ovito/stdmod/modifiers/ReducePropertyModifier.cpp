@@ -79,18 +79,27 @@ void ReducePropertyModifier::initializeModifier(const ModifierInitializationRequ
 QString ReducePropertyModifier::operationKey(ReductionOperation op)
 {
     switch(op) {
-    case Min: return QStringLiteral("min");
-    case Max: return QStringLiteral("max");
-    case Sum: return QStringLiteral("sum");
-    case NonzeroCount: return QStringLiteral("nonzero_count");
-    case Mean: return QStringLiteral("mean");
-    case Median: return QStringLiteral("median");
-    case Variance: return QStringLiteral("var");
-    case StdDev: return QStringLiteral("std");
-    case Argmin: return QStringLiteral("argmin");
-    case Argmax: return QStringLiteral("argmax");
+    case Min: return QStringLiteral("Min");
+    case Max: return QStringLiteral("Max");
+    case Sum: return QStringLiteral("Sum");
+    case NonzeroCount: return QStringLiteral("Nonzero");
+    case Mean: return QStringLiteral("Mean");
+    case Median: return QStringLiteral("Median");
+    case Variance: return QStringLiteral("Variance");
+    case StdDev: return QStringLiteral("StdDev");
+    case Argmin: return QStringLiteral("ArgMin");
+    case Argmax: return QStringLiteral("ArgMax");
     }
     return {};
+}
+
+/******************************************************************************
+* Returns the name of the output attribute, "ReduceProperty.<container path>.<operation>.<property>",
+* with the container path in dotted form (e.g. "particles.bonds"), as in OVITO Pro.
+******************************************************************************/
+QString ReducePropertyModifier::attributeName(const QString& containerPath, ReductionOperation op, const QString& propertyName)
+{
+    return QStringLiteral("ReduceProperty.%1.%2.%3").arg(QString(containerPath).replace(QChar('/'), QChar('.')), operationKey(op), propertyName);
 }
 
 /******************************************************************************
@@ -100,35 +109,42 @@ double ReducePropertyModifier::reduce(ReductionOperation op, std::vector<std::pa
 {
     const double nan = std::numeric_limits<double>::quiet_NaN();
     const size_t n = samples.size();
-    auto byValue = [](const auto& a, const auto& b) { return a.second < b.second; };
+    if(n == 0)
+        throw Exception(tr("Reduction over 0 input elements is not possible."));
 
-    // NaN values break the ordering required by the comparison-based operations (undefined behavior in
-    // std::nth_element). Like NumPy, min/max/median become NaN and argmin/argmax point to the first NaN.
-    if(op == Min || op == Max || op == Median || op == Argmin || op == Argmax) {
-        auto firstNaN = std::find_if(samples.begin(), samples.end(), [](const auto& s) { return std::isnan(s.second); });
-        if(firstNaN != samples.end())
-            return (op == Argmin || op == Argmax) ? (double)firstNaN->first : nan;
-    }
-
+    // NaN handling follows OVITO Pro: min/max and argmin/argmax skip NaN values (the extremes start
+    // at +/-DBL_MAX and index 0, so an all-NaN list yields those), the nonzero count ignores NaN,
+    // and sum, mean, median and variance become NaN.
     switch(op) {
     case Sum:
     case Mean: {
         double sum = 0;
         for(const auto& s : samples) sum += s.second;
-        return (op == Sum) ? sum : (n ? sum / n : nan);
+        return (op == Sum) ? sum : sum / n;
     }
     case NonzeroCount:
-        return (double)std::count_if(samples.begin(), samples.end(), [](const auto& s) { return s.second != 0; });
+        return (double)std::count_if(samples.begin(), samples.end(), [](const auto& s) { return s.second < 0 || s.second > 0; });
     case Min:
-        return n ? std::min_element(samples.begin(), samples.end(), byValue)->second : nan;
+    case Argmin: {
+        double best = std::numeric_limits<double>::max();
+        size_t index = 0;
+        for(const auto& s : samples)
+            if(s.second < best) { best = s.second; index = s.first; }
+        return (op == Min) ? best : (double)index;
+    }
     case Max:
-        return n ? std::max_element(samples.begin(), samples.end(), byValue)->second : nan;
-    case Argmin:
-        return n ? (double)std::min_element(samples.begin(), samples.end(), byValue)->first : nan;
-    case Argmax:
-        return n ? (double)std::max_element(samples.begin(), samples.end(), byValue)->first : nan;
+    case Argmax: {
+        double best = std::numeric_limits<double>::lowest();
+        size_t index = 0;
+        for(const auto& s : samples)
+            if(s.second > best) { best = s.second; index = s.first; }
+        return (op == Max) ? best : (double)index;
+    }
     case Median: {
-        if(!n) return nan;
+        // NaN breaks the ordering required by std::nth_element (undefined behavior).
+        if(std::any_of(samples.begin(), samples.end(), [](const auto& s) { return std::isnan(s.second); }))
+            return nan;
+        auto byValue = [](const auto& a, const auto& b) { return a.second < b.second; };
         auto mid = samples.begin() + n / 2;
         std::nth_element(samples.begin(), mid, samples.end(), byValue);
         if(n % 2) return mid->second;
@@ -139,7 +155,9 @@ double ReducePropertyModifier::reduce(ReductionOperation op, std::vector<std::pa
     }
     case Variance:
     case StdDev: {
-        if(n < 2) return nan;
+        if(n < 2)
+            throw Exception(op == Variance ? tr("Cannot compute sample variance for fewer than 2 input elements.")
+                                           : tr("Cannot compute sample standard deviation for fewer than 2 input elements."));
         // Two-pass algorithm for numerical stability.
         double mean = 0;
         for(const auto& s : samples) mean += s.second;
@@ -164,7 +182,9 @@ Future<PipelineFlowState> ReducePropertyModifier::evaluateModifier(const Modifie
         throw Exception(tr("No input property selected."));
 
     // Look up the property container object.
-    const PropertyContainer* container = state.expectLeafObject(subject());
+    ConstDataObjectPath containerObjectPath = state.expectObject(subject());
+    const PropertyContainer* container = static_object_cast<PropertyContainer>(containerObjectPath.back());
+    QString containerPath = containerObjectPath.toString();
     container->verifyIntegrity();
 
     // Get the input property.
@@ -181,7 +201,9 @@ Future<PipelineFlowState> ReducePropertyModifier::evaluateModifier(const Modifie
     if(onlySelectedElements()) {
         if(!container->getOOMetaClass().isValidStandardPropertyId(Property::GenericSelectionProperty))
             throw Exception(tr("The selected data elements do not support selection."));
-        inputSelection = container->expectProperty(Property::GenericSelectionProperty);
+        inputSelection = container->getProperty(Property::GenericSelectionProperty);
+        if(!inputSelection)
+            throw Exception(tr("Reduce property modifier has been restricted to selected elements, but no selection is present in the input."));
     }
 
     // The actual computation can be performed in a separate worker thread.
@@ -190,6 +212,7 @@ Future<PipelineFlowState> ReducePropertyModifier::evaluateModifier(const Modifie
             property = std::move(property),
             inputSelection = std::move(inputSelection),
             vecComponent,
+            containerPath,
             op = operation(),
             createdByNode = request.modificationNodeWeak()]() mutable
     {
@@ -218,22 +241,17 @@ Future<PipelineFlowState> ReducePropertyModifier::evaluateModifier(const Modifie
             }
             selectedCount = samples.size();
             double result = reduce(op, std::move(samples));
-            QString name = property->nameWithComponent(property->componentCount() > 1 ? c : -1) + QChar('.') + operationKey(op);
-            if(op == NonzeroCount || op == Argmin || op == Argmax) {
-                if(std::isnan(result))
-                    state.setAttribute(name, QVariant::fromValue(result), createdByNode);
-                else
-                    state.setAttribute(name, QVariant::fromValue((qlonglong)result), createdByNode);
-            }
-            else {
+            QString name = attributeName(containerPath, op, property->nameWithComponent(property->componentCount() > 1 ? c : -1));
+            // Counts and indices are integers; so are the min, max and sum of an integer property.
+            bool integerResult = op == NonzeroCount || op == Argmin || op == Argmax
+                || ((op == Min || op == Max || op == Sum) && property->dataType() != Property::Float32 && property->dataType() != Property::Float64);
+            if(integerResult && std::isfinite(result))
+                state.setAttribute(name, QVariant::fromValue((qlonglong)std::llround(result)), createdByNode);
+            else
                 state.setAttribute(name, QVariant::fromValue(result), createdByNode);
-            }
         }
 
-        if(inputSelection && selectedCount == 0)
-            state.setStatus(PipelineStatus(PipelineStatus::Warning, tr("No elements are selected.")));
-        else
-            state.setStatus(PipelineStatus(PipelineStatus::Success, tr("Reduced %1 elements.").arg(inputSelection ? selectedCount : property->size())));
+        state.setStatus(PipelineStatus(PipelineStatus::Success, tr("Reduced %1 elements.").arg(inputSelection ? selectedCount : property->size())));
         return std::move(state);
     });
 }

@@ -120,9 +120,11 @@ Future<PipelineFlowState> CalculateLocalEntropyModifier::evaluateModifier(const 
         const FloatType globalDensity = count / cell->volume3D();
         const FloatType cutoffSphereVolume = FloatType(4) / 3 * FLOATTYPE_PI * cutoff * cutoff * cutoff;
 
-        // g(r) is sampled at r_k = k * sigma, k = 0 .. nbin-1; each pair contributes to the bins within +/-3 of its own.
+        // g(r) is sampled on nbin equidistant points from 0 to the cutoff (spacing ~sigma), and every pair contributes
+        // to all of them. This grid reproduces OVITO Pro 3.16.1 to machine precision (measured as a black box; a
+        // window of +/-3 bins with spacing sigma, as in LAMMPS, differs by ~2% in fcc when the cutoff is not a multiple of sigma).
         const int nbin = static_cast<int>(cutoff / sigma) + 1;
-        constexpr int deltabin = 3;
+        const FloatType deltar = (nbin > 1) ? cutoff / (nbin - 1) : 0;
         const FloatType twoSigmaSq = 2 * sigma * sigma;
 
         CutoffNeighborFinder neighFinder(cutoff, positions, cell, nullptr);
@@ -146,11 +148,8 @@ Future<PipelineFlowState> CalculateLocalEntropyModifier::evaluateModifier(const 
 
             std::fill(gofr.begin(), gofr.end(), FloatType(0));
             for(FloatType r : distances) {
-                const int bin = static_cast<int>(std::floor(r / sigma));
-                const int minbin = std::clamp(bin - deltabin, 1, nbin - 1);  // r_0 = 0 carries no weight in the integral
-                const int maxbin = std::min(bin + deltabin, nbin - 1);
-                for(int k = minbin; k <= maxbin; k++) {
-                    const FloatType rk = k * sigma;
+                for(int k = 1; k < nbin; k++) {  // r_0 = 0 carries no weight in the integral
+                    const FloatType rk = k * deltar;
                     const FloatType d = r - rk;
                     gofr[k] += invNormBase / (rk * rk) * std::exp(-d * d / twoSigmaSq);
                 }
@@ -159,12 +158,12 @@ Future<PipelineFlowState> CalculateLocalEntropyModifier::evaluateModifier(const 
             // s = -2 pi rho integral_0^rc [g ln g - g + 1] r^2 dr, trapezoidal rule; g ln g -> 0 for g -> 0.
             FloatType integral = 0;
             for(int k = 0; k < nbin; k++) {
-                const FloatType rk = k * sigma;
+                const FloatType rk = k * deltar;
                 const FloatType g = gofr[k];
                 FloatType f = (g < FloatType(1e-10)) ? rk * rk : (g * std::log(g) - g + 1) * rk * rk;
                 integral += (k == 0 || k == nbin - 1) ? f / 2 : f;
             }
-            entropy[i] = -2 * FLOATTYPE_PI * density * integral * sigma;
+            entropy[i] = -2 * FLOATTYPE_PI * density * integral * deltar;
         });
 
         Property* entropyProperty = particles->createProperty(DataBuffer::Uninitialized, QStringLiteral("Entropy"), Property::FloatDefault);

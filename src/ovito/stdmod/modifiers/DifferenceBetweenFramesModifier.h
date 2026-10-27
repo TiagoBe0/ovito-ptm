@@ -39,8 +39,9 @@ namespace Ovito {
  *                                        or a voxel grid property, e.g. "property:binning/Count"
  *
  * The reference frame is either fixed (referenceFrameNumber()) or relative to the current frame
- * (referenceFrameOffset(), e.g. -1 for incremental differences). Results are output next to the
- * inputs with the suffix " (Difference)" and have the same data type as the input.
+ * (referenceFrameOffset(), e.g. -1 for incremental differences). As in OVITO Pro, properties are output
+ * next to the inputs with the suffix " (Difference)" and the data type of the input, attribute differences
+ * are floating-point, and table columns go into a new table "<identifier>[diff]" (with the x column copied).
  *
  * Element-wise properties are matched across frames by their unique identifiers when the container
  * has them (e.g. particle IDs), otherwise by index. The reference frame may contain more elements

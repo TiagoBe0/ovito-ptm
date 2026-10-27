@@ -80,6 +80,9 @@ Future<PipelineFlowState> ShrinkWrapBoxModifier::evaluateModifier(const Modifier
     if(dims == 2)
         matrix(2, 0) = matrix(2, 1) = 0;
     cell->setCellMatrix(matrix);
+    // The tight box puts atoms on opposite faces at distance zero through the periodic images, so periodic
+    // boundary conditions no longer make sense. OVITO Pro turns them off as well.
+    cell->setPbcFlags({false, false, false});
 
     state.setStatus(PipelineStatus(PipelineStatus::Success, tr("Cell size: %1 x %2 x %3").arg(matrix(0, 0)).arg(matrix(1, 1)).arg(matrix(2, 2))));
     return std::move(state);

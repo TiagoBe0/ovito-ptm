@@ -23,6 +23,7 @@
 
 #include <ovito/particles/gui/ParticlesGui.h>
 #include <ovito/particles/modifier/analysis/rings/FindRingsModifier.h>
+#include <ovito/gui/desktop/properties/BooleanParameterUI.h>
 #include <ovito/gui/desktop/properties/IntegerParameterUI.h>
 #include <ovito/gui/desktop/properties/ObjectStatusDisplay.h>
 #include <ovito/gui/desktop/properties/OpenDataInspectorButton.h>
@@ -60,6 +61,9 @@ void FindRingsModifierEditor::createUI(const RolloutInsertionParameters& rollout
     IntegerParameterUI* maxSizeUI = createParamUI<IntegerParameterUI>(PROPERTY_FIELD(FindRingsModifier::maxRingSize));
     layout2->addWidget(maxSizeUI->label(), 1, 0);
     layout2->addLayout(maxSizeUI->createFieldLayout(), 1, 1);
+
+    BooleanParameterUI* wrappingUI = createParamUI<BooleanParameterUI>(PROPERTY_FIELD(FindRingsModifier::includeWrappingRings));
+    layout2->addWidget(wrappingUI->checkBox(), 2, 0, 1, 2);
 
     OpenDataInspectorButton* openDataInspectorBtn = new OpenDataInspectorButton(this, tr("Show histogram in data inspector"),
         QString::fromLatin1(FindRingsModifier::histogramTableIdentifier));
