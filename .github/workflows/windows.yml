@@ -35,6 +35,7 @@ jobs:
             boost-headers boost-algorithm boost-range boost-iterator boost-geometry boost-container boost-random \
             boost-spirit boost-phoenix boost-type-traits boost-ublas boost-math boost-lexical-cast boost-intrusive \
             boost-heap boost-dynamic-bitset boost-any
+          ls "$VCPKG_DIR/installed/x64-windows/bin"
           echo "$VCPKG_DIR/installed/x64-windows/bin" >> "$GITHUB_PATH"
 
       - name: Set up MSVC environment

@@ -356,12 +356,17 @@ IF(ZLIB_FOUND AND NOT EMSCRIPTEN)
         # Deploy the zlib DLL.
         GET_TARGET_PROPERTY(ZLIB_LIBRARY_LOCATION ZLIB::ZLIB LOCATION)
         GET_FILENAME_COMPONENT(ZLIB_LIBRARY_PATH "${ZLIB_LIBRARY_LOCATION}" PATH)
-        # The zlib DLL is named zlib1.dll in some distributions (e.g. vcpkg) instead of zlib.dll.
-        IF(EXISTS "${ZLIB_LIBRARY_PATH}/../bin/zlib1.dll" AND NOT EXISTS "${ZLIB_LIBRARY_PATH}/../bin/zlib.dll")
-            OVITO_INSTALL_SHARED_LIB("${ZLIB_LIBRARY_PATH}/../bin/zlib1.dll")
-        ELSE()
-            OVITO_INSTALL_SHARED_LIB("${ZLIB_LIBRARY_PATH}/../bin/zlib.dll")
-        ENDIF()
+        # The DLL name differs between distributions (zlib.dll, zlib1.dll, z.dll in recent vcpkg). Try the name of the
+        # import library first, then the known alternatives.
+        GET_FILENAME_COMPONENT(ZLIB_LIBRARY_NAME_WE "${ZLIB_LIBRARY_LOCATION}" NAME_WE)
+        SET(ZLIB_DLL "${ZLIB_LIBRARY_PATH}/../bin/zlib.dll")
+        FOREACH(_name ${ZLIB_LIBRARY_NAME_WE} zlib zlib1 z)
+            IF(EXISTS "${ZLIB_LIBRARY_PATH}/../bin/${_name}.dll")
+                SET(ZLIB_DLL "${ZLIB_LIBRARY_PATH}/../bin/${_name}.dll")
+                BREAK()
+            ENDIF()
+        ENDFOREACH()
+        OVITO_INSTALL_SHARED_LIB("${ZLIB_DLL}")
     ENDIF()
 ENDIF()
 
