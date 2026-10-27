@@ -1,0 +1,34 @@
+OVITO (fork del grupo) para Windows 10/11 de 64 bits
+=====================================================
+
+Es una versión portable: no hace falta instalar nada.
+
+1. Descomprimir el .zip completo en una carpeta propia (por ejemplo C:\OVITO).
+   No ejecutarlo desde adentro del .zip.
+2. Abrir ovito.exe.
+
+La primera vez Windows puede mostrar "Windows protegió su PC" porque el programa
+no está firmado: hacer clic en "Más información" -> "Ejecutar de todas formas".
+
+Si OVITO no abre, se cierra al arrancar o los viewports quedan negros
+---------------------------------------------------------------------
+Pasa en computadoras sin placa de video o sin drivers de OpenGL actualizados
+(máquinas virtuales, escritorio remoto, algunas notebooks). En ese caso usar
+"OVITO (OpenGL por software).bat", que dibuja con la CPU (más lento, pero funciona).
+Lo mejor igualmente es actualizar el driver de la placa de video.
+
+Qué incluye
+-----------
+OVITO 3.14 con los modificadores agregados por el grupo: Time series, Time averaging,
+Reduce property, Difference between frames, Spatial binning, Identify fcc planar
+faults, Calculate local entropy, Bond length/angle distribution, Find rings,
+Structure factor, Shrink-wrap box, Render LAMMPS regions, Bond order, Bader charge
+integration, seguimiento de dislocaciones, análisis de vacancias, SOM, etc.
+
+No incluye: el AI Agent, el lector/escritor NetCDF (AMBER) ni los plugins de
+machine learning (necesitan LibTorch).
+
+Licencias
+---------
+OVITO es software libre (GPLv3 / MIT). Qt se distribuye bajo LGPLv3.
+opengl32sw.dll y libgallium_wgl.dll son Mesa 3D (licencia MIT).

@@ -1,4 +1,5 @@
-# Windows build of the fork (MSVC 2022, Qt 6, Ninja) followed by the ctest suite.
+# Windows build of the fork (MSVC 2022, Qt 6, Ninja) followed by the ctest suite, and a portable .zip package
+# (artifact OVITO-windows-x64) that is checked to run on its own before it is uploaded.
 #
 # Build and test failures are also reported as a single error annotation on the job, so they can be
 # read through the public check-runs API without downloading the logs.
@@ -43,10 +44,13 @@ jobs:
         run: |
           set -o pipefail
           cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET=x64-windows \
             -DOVITO_BUILD_PLUGIN_NETCDFPLUGIN=OFF \
+            -DOVITO_BUILD_PLUGIN_AIAGENT=OFF \
+            -DOVITO_BUILD_PLUGIN_ML=OFF \
+            -DOVITO_BUILD_PLUGIN_MLTRAINING=OFF \
             -DOVITO_BUILD_SSH_CLIENT=OFF \
             2>&1 | tee build.log
 
@@ -82,6 +86,50 @@ jobs:
         run: |
           set -o pipefail
           ctest --test-dir build --output-on-failure --timeout 600 2>&1 | tee ctest.log
+
+      # cmake --install copies the Qt DLLs and Qt plugins (see cmake/Prerequisites.cmake). Added here: the vcpkg DLLs,
+      # the MSVC runtime (so the Visual C++ redistributable need not be installed), Mesa as the software OpenGL
+      # fallback, and the end-user notes.
+      - name: Package
+        shell: bash
+        run: |
+          set -o pipefail
+          PKG=pkg/OVITO-windows-x64
+          cmake --install build --prefix "$PKG" 2>&1 | tee install.log
+          EXE_DIR=$(dirname "$(find "$PKG" -name ovito.exe | head -n 1)")
+          cp "$VCPKG_ROOT"/installed/x64-windows/bin/*.dll "$EXE_DIR"/
+          CRT=$(ls -d "$(cygpath -u "$VCToolsRedistDir")"/x64/Microsoft.VC*.CRT | head -n 1)
+          cp "$CRT"/*.dll "$EXE_DIR"/
+          BUILD_EXE_DIR=$(dirname "$(find build -name ovito.exe | head -n 1)")
+          for f in opengl32sw.dll libgallium_wgl.dll libglapi.dll; do [ -f "$BUILD_EXE_DIR/$f" ] && cp "$BUILD_EXE_DIR/$f" "$EXE_DIR"/; done
+          cp research/windows_build/package/* "$EXE_DIR"/
+          echo "commit ${GITHUB_SHA}" > "$EXE_DIR"/VERSION.txt
+          find "$PKG" -name '*.pdb' -delete
+          du -sh "$PKG"; ls "$EXE_DIR"
+
+      # Run the package with a PATH that holds only Windows and the shell, so that any DLL it still loads from
+      # Qt, vcpkg or Visual Studio on the runner would make it fail.
+      - name: Test package in isolation
+        shell: bash
+        env:
+          QT_FORCE_STDERR_LOGGING: '1'
+        run: |
+          EXE=$(find pkg -name ovito.exe | head -n 1)
+          CLEAN_PATH="/usr/bin:/c/Windows/System32:/c/Windows"
+          for t in bond-order-selftest structure-factor-selftest dxa-selftest; do
+            PATH="$CLEAN_PATH" timeout 600 "$EXE" --nogui --$t > /dev/null 2>&1 || { echo "FAILED: --$t"; exit 1; }
+            echo "ok: --$t"
+          done
+          PATH="$CLEAN_PATH" QT_OPENGL=software GALLIUM_DRIVER=llvmpipe timeout 600 "$EXE" --gui-editors-selftest particles 2>&1 | tail -n 3
+          test ${PIPESTATUS[0]} -eq 0
+          cd pkg && 7z a -tzip -mx=7 OVITO-windows-x64.zip OVITO-windows-x64 > /dev/null && ls -la OVITO-windows-x64.zip
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: OVITO-windows-x64
+          path: pkg/OVITO-windows-x64.zip
+          compression-level: 0
 
       # On a crashing test, rerun the GUI smoke tests under the console debugger to get a stack trace.
       - name: Stack traces of crashing GUI tests
@@ -124,4 +172,5 @@ jobs:
             build.log
             ctest.log
             cdb.log
+            install.log
           if-no-files-found: ignore
