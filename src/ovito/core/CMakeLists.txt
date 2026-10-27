@@ -356,7 +356,12 @@ IF(ZLIB_FOUND AND NOT EMSCRIPTEN)
         # Deploy the zlib DLL.
         GET_TARGET_PROPERTY(ZLIB_LIBRARY_LOCATION ZLIB::ZLIB LOCATION)
         GET_FILENAME_COMPONENT(ZLIB_LIBRARY_PATH "${ZLIB_LIBRARY_LOCATION}" PATH)
-        OVITO_INSTALL_SHARED_LIB("${ZLIB_LIBRARY_PATH}/../bin/zlib.dll")
+        # The zlib DLL is named zlib1.dll in some distributions (e.g. vcpkg) instead of zlib.dll.
+        IF(EXISTS "${ZLIB_LIBRARY_PATH}/../bin/zlib1.dll" AND NOT EXISTS "${ZLIB_LIBRARY_PATH}/../bin/zlib.dll")
+            OVITO_INSTALL_SHARED_LIB("${ZLIB_LIBRARY_PATH}/../bin/zlib1.dll")
+        ELSE()
+            OVITO_INSTALL_SHARED_LIB("${ZLIB_LIBRARY_PATH}/../bin/zlib.dll")
+        ENDIF()
     ENDIF()
 ENDIF()
 
