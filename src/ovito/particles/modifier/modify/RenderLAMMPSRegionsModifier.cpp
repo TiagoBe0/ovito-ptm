@@ -28,6 +28,7 @@
 #include <ovito/mesh/surface/SurfaceMeshBuilder.h>
 #include <ovito/core/dataset/pipeline/ModificationNode.h>
 #include "RenderLAMMPSRegionsModifier.h"
+#include <numbers>
 
 namespace Ovito {
 
@@ -149,7 +150,7 @@ Polyhedron frustum(int axis, double c1, double c2, double radlo, double radhi, d
     for(int ring = 0; ring < 2; ring++) {
         const double r = (ring == 0) ? radhi : radlo;
         for(int k = 0; k < CircleSegments; k++) {
-            const double angle = 2 * M_PI * k / CircleSegments;
+            const double angle = 2 * std::numbers::pi * k / CircleSegments;
             Point3 pt;
             pt[u] = c1 + r * std::cos(angle);
             pt[v] = c2 + r * std::sin(angle);

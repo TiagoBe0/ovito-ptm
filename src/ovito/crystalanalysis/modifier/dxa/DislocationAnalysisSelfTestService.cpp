@@ -38,6 +38,7 @@
 #include <QTemporaryDir>
 #include <QTextStream>
 #include <cmath>
+#include <numbers>
 
 namespace Ovito {
 
@@ -101,7 +102,7 @@ Configuration rotatedCubicCrystal(double a, bool diamond, int nx, int ny, int nz
         const double burgers = a * s;
         const double x0 = L[0] / 2 + 0.1 * a, y0 = L[1] / 2 + 0.07 * a;
         for(Vec& r : config.positions)
-            r[2] = std::fmod(r[2] + burgers / (2 * M_PI) * std::atan2(r[1] - y0, r[0] - x0) + L[2], L[2]);
+            r[2] = std::fmod(r[2] + burgers / (2 * std::numbers::pi) * std::atan2(r[1] - y0, r[0] - x0) + L[2], L[2]);
     }
     config.boxLow = {0, 0, 0};
     config.boxHigh = L;

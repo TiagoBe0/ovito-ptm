@@ -38,6 +38,7 @@
 #include <QTemporaryDir>
 #include <QTextStream>
 #include <cmath>
+#include <numbers>
 
 namespace Ovito {
 
@@ -204,8 +205,8 @@ bool ConstructSurfaceSelfTestService::runTest()
     // Bounds for one pore: at least the removed sphere minus a nearest-neighbor shell, at most the
     // sphere grown by one nearest-neighbor distance.
     const double nn = A / std::sqrt(2.0);
-    const double minPore = 4.0 / 3.0 * M_PI * std::pow(PORE_RADIUS - nn, 3);
-    const double maxPore = 4.0 / 3.0 * M_PI * std::pow(PORE_RADIUS + nn, 3);
+    const double minPore = 4.0 / 3.0 * std::numbers::pi * std::pow(PORE_RADIUS - nn, 3);
+    const double maxPore = 4.0 / 3.0 * std::numbers::pi * std::pow(PORE_RADIUS + nn, 3);
     using Method = ConstructSurfaceModifier::SurfaceMethod;
 
     bool ok = true;

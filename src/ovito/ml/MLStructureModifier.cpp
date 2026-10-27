@@ -33,6 +33,7 @@
 #include <ovito/particles/objects/Particles.h>
 #include <ovito/particles/util/CutoffNeighborFinder.h>
 #include "MLStructureModifier.h"
+#include <numbers>
 
 // Include LibTorch headers only when the library is available.
 #ifdef OVITO_ML_HAS_LIBTORCH
@@ -289,7 +290,7 @@ Future<PipelineFlowState> MLStructureModifier::evaluateModifier(
             //   ideal[k] = ρ * (4π/3) * ((k+1)³ - k³) * dr³
             std::vector<float> ideal(static_cast<size_t>(nRdfBins), 1.0f);
             if(rho > 0.0f) {
-                const float factor = rho * (4.0f / 3.0f) * static_cast<float>(M_PI) * dr * dr * dr;
+                const float factor = rho * (4.0f / 3.0f) * std::numbers::pi_v<float> * dr * dr * dr;
                 for(int k = 0; k < nRdfBins; ++k) {
                     const float k1 = static_cast<float>(k + 1);
                     const float k0 = static_cast<float>(k);

@@ -30,6 +30,7 @@
 #include <ovito/core/utilities/concurrent/ParallelFor.h>
 #include <complex>
 #include "StructureFactorModifier.h"
+#include <numbers>
 
 namespace Ovito {
 
@@ -434,14 +435,14 @@ Future<PipelineFlowState> StructureFactorModifier::evaluateModifier(const Modifi
             const AffineTransformation& inverse = cell->reciprocalCellMatrix();
             int hmax[3];
             for(int d = 0; d < 3; d++)
-                hmax[d] = (int)std::floor(kMax * cell->cellMatrix().column(d).length() / (2 * M_PI));
+                hmax[d] = (int)std::floor(kMax * cell->cellMatrix().column(d).length() / (2 * std::numbers::pi));
             std::vector<Vector3> kvectors;
             std::vector<size_t> kbins;
             for(int h = 0; h <= hmax[0]; h++) for(int k = 0; k <= hmax[1]; k++) for(int l = 0; l <= hmax[2]; l++) {
                 if(h == 0 && k == 0 && l == 0) continue;
                 Vector3 kv;
                 for(int d = 0; d < 3; d++)
-                    kv[d] = 2 * M_PI * (h * inverse(0, d) + k * inverse(1, d) + l * inverse(2, d));
+                    kv[d] = 2 * std::numbers::pi * (h * inverse(0, d) + k * inverse(1, d) + l * inverse(2, d));
                 double kn = kv.length();
                 if(kn < kMin || kn >= kMax) continue;
                 size_t bin = (size_t)((kn - kMin) / dk);
@@ -511,7 +512,7 @@ Future<PipelineFlowState> StructureFactorModifier::evaluateModifier(const Modifi
                 std::vector<double> g(DebyeRdfBins);
                 for(int j = 0; j < DebyeRdfBins; j++) {
                     const double r0 = j * dr, r1 = (j + 1) * dr;
-                    const double shell = 4.0 / 3.0 * M_PI * (r1 * r1 * r1 - r0 * r0 * r0);
+                    const double shell = 4.0 / 3.0 * std::numbers::pi * (r1 * r1 * r1 - r0 * r0 * r0);
                     g[j] = hist[(a * nc + b) * DebyeRdfBins + j] / (classCount[a] * (classCount[b] / volume) * shell);
                 }
                 for(size_t bin = 0; bin < numBins; bin++) {
@@ -519,10 +520,10 @@ Future<PipelineFlowState> StructureFactorModifier::evaluateModifier(const Modifi
                     double integral = 0;
                     for(int j = 1; j < DebyeRdfBins; j++) {   // The r = 0 term vanishes.
                         const double r = j * dr;
-                        const double u = 2 * M_PI * r / lmax;
+                        const double u = 2 * std::numbers::pi * r / lmax;
                         integral += r * std::sin(k * r) * g[j] * (std::sin(u) / u) * dr;
                     }
-                    const double A = 1 + 4 * M_PI * rho / k * integral;
+                    const double A = 1 + 4 * std::numbers::pi * rho / k * integral;
                     sab[bin * np + q] = x[a] * x[b] * (A - 1) + (a == b ? x[a] : 0.0);
                 }
             }
@@ -542,7 +543,7 @@ Future<PipelineFlowState> StructureFactorModifier::evaluateModifier(const Modifi
                 if(classCount[a] != 0 && std::isnan(formFactor(classNames[a], 0)))
                     throw Exception(tr("No atomic form factor is tabulated for particle type '%1'. The type name must be a chemical species such as 'Cu', 'O1-' or 'Siv'.").arg(classNames[a]));
             for(size_t bin = 0; bin < numBins; bin++) {
-                const double s = (kMin + (bin + 0.5) * dk) / (4 * M_PI);
+                const double s = (kMin + (bin + 0.5) * dk) / (4 * std::numbers::pi);
                 std::vector<double> f(nc);
                 double mean = 0;
                 for(int a = 0; a < nc; a++) { f[a] = (classCount[a] != 0) ? formFactor(classNames[a], s) : 0.0; mean += x[a] * f[a]; }
