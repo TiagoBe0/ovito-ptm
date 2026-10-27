@@ -1,0 +1,85 @@
+# Windows build of the fork (MSVC 2022, Qt 6, Ninja) followed by the ctest suite.
+#
+# Build and test failures are also reported as a single error annotation on the job, so they can be
+# read through the public check-runs API without downloading the logs.
+name: Windows build
+
+on:
+  push:
+    branches: [ ovitopro-win ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 300
+    env:
+      VCPKG_ROOT: C:\vcpkg
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: 'win64_msvc2022_64'
+          cache: true
+
+      - name: Install Boost headers, zlib and zstd
+        shell: bash
+        run: |
+          "$VCPKG_ROOT/vcpkg" install --triplet x64-windows boost-headers zlib zstd
+          echo "$VCPKG_ROOT/installed/x64-windows/bin" >> "$GITHUB_PATH"
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET=x64-windows \
+            -DOVITO_BUILD_PLUGIN_NETCDFPLUGIN=OFF \
+            -DOVITO_BUILD_SSH_CLIENT=OFF \
+            2>&1 | tee build.log
+
+      - name: Build
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build build --parallel 4 -- -k 0 2>&1 | tee -a build.log
+
+      - name: Test
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -o pipefail
+          ctest --test-dir build --output-on-failure --timeout 600 2>&1 | tee ctest.log
+
+      - name: Report errors as annotation
+        if: failure()
+        shell: bash
+        run: |
+          report() {
+            # Annotation messages are single-line; encode newlines as %0A.
+            local msg
+            msg=$(grep -E "$2" "$1" | head -n 80 | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+            [ -n "$msg" ] && echo "::error title=$3::$msg"
+          }
+          [ -f build.log ] && report build.log ' error |error:|FAILED:|fatal error|CMake Error|LNK[0-9]+' "Build errors"
+          [ -f ctest.log ] && report ctest.log 'FAIL|Failed|\*\*\*|Exception|tests passed' "Test failures"
+          true
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs
+          path: |
+            build.log
+            ctest.log
+          if-no-files-found: ignore
