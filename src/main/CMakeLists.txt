@@ -314,3 +314,13 @@ ENDIF()
 IF(NOT EMSCRIPTEN)
     ADD_TEST(NAME BondOrderSelfTest COMMAND Ovito --nogui --bond-order-selftest)
 ENDIF()
+
+IF(NOT EMSCRIPTEN)
+    # GUI smoke test of the editors of the modifiers ported from OVITO Pro; runs the real main window off-screen.
+    ADD_TEST(NAME GuiEditorsParticlesSelfTest COMMAND Ovito --gui-editors-selftest particles)
+    ADD_TEST(NAME GuiEditorsGridSelfTest COMMAND Ovito --gui-editors-selftest grid)
+    # A private config directory keeps parameters memorized in the user's Ovito.conf out of the test.
+    SET_TESTS_PROPERTIES(GuiEditorsParticlesSelfTest GuiEditorsGridSelfTest PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/gui_editors_selftest_config"
+        TIMEOUT 400)
+ENDIF()
