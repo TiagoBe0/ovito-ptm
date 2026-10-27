@@ -1,0 +1,88 @@
+# Linux build of the fork (GCC, system Qt 6 of Ubuntu 24.04, Ninja) followed by the ctest suite. Same branches
+# as the Windows build, so every push is checked on both platforms.
+#
+# Build and test failures are also reported as a single error annotation on the job, so they can be
+# read through the public check-runs API without downloading the logs.
+name: Linux build
+
+on:
+  push:
+    branches: [ feature/ptm-dxa, ovito-vacancy ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # The same packages the local development machine (Ubuntu 24.04) builds against. Mesa provides the
+      # software OpenGL that the GUI editor tests need under QT_QPA_PLATFORM=offscreen.
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build ccache \
+            qt6-base-dev qt6-base-private-dev qt6-svg-dev libgl-dev libegl-dev libxkbcommon-dev libvulkan-dev \
+            libboost-dev libnetcdf-dev zlib1g-dev libzstd-dev \
+            libgl1-mesa-dri libegl-mesa0 libglx-mesa0
+
+      - name: Restore compiler cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-linux-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            ccache-linux-${{ github.ref_name }}-
+            ccache-linux-
+
+      - name: Configure
+        run: |
+          set -o pipefail
+          ccache --max-size=2G
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DOVITO_BUILD_SSH_CLIENT=OFF \
+            2>&1 | tee build.log
+
+      # 4 jobs: the runner has 16 GB and some translation units need more than 2 GB each.
+      - name: Build
+        run: |
+          set -o pipefail
+          cmake --build build --parallel 4 -- -k 0 2>&1 | tee -a build.log
+          ccache --show-stats
+
+      - name: Test
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          set -o pipefail
+          ctest --test-dir build --output-on-failure --timeout 600 2>&1 | tee ctest.log
+
+      - name: Report errors as annotation
+        if: failure()
+        run: |
+          report() {
+            # Annotation messages are single-line; encode newlines as %0A.
+            local msg
+            msg=$(grep -E "$2" "$1" | head -n 80 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            [ -n "$msg" ] && echo "::error title=$3::$msg"
+          }
+          [ -f build.log ] && report build.log 'error:|FAILED:|fatal error|CMake Error|undefined reference' "Build errors"
+          [ -f ctest.log ] && report ctest.log 'FAIL|Failed|\*\*\*|Exception|tests passed' "Test failures"
+          true
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-linux
+          path: |
+            build.log
+            ctest.log
+          if-no-files-found: ignore
