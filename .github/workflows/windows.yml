@@ -7,7 +7,7 @@ name: Windows build
 
 on:
   push:
-    branches: [ ovitopro-win ]
+    branches: [ feature/ptm-dxa, ovito-vacancy ]
   workflow_dispatch:
 
 jobs:
