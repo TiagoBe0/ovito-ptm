@@ -25,10 +25,14 @@ jobs:
           arch: 'win64_msvc2022_64'
           cache: true
 
+      # vcpkg splits Boost into one port per library; these are the ones included anywhere under src/.
       - name: Install Boost headers, zlib and zstd
         shell: bash
         run: |
-          "$VCPKG_ROOT/vcpkg" install --triplet x64-windows boost-headers zlib zstd
+          "$VCPKG_ROOT/vcpkg" install --triplet x64-windows zlib zstd \
+            boost-headers boost-algorithm boost-range boost-iterator boost-geometry boost-container boost-random \
+            boost-spirit boost-phoenix boost-type-traits boost-ublas boost-math boost-lexical-cast boost-intrusive \
+            boost-heap boost-dynamic-bitset boost-any
           echo "$VCPKG_ROOT/installed/x64-windows/bin" >> "$GITHUB_PATH"
 
       - name: Set up MSVC environment
