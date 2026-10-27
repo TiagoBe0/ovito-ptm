@@ -15,7 +15,8 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 300
     env:
-      VCPKG_ROOT: C:\vcpkg
+      # Not VCPKG_ROOT: the MSVC environment step overwrites that with the vcpkg bundled with Visual Studio.
+      VCPKG_DIR: C:\vcpkg
     steps:
       - uses: actions/checkout@v4
 
@@ -30,11 +31,11 @@ jobs:
       - name: Install Boost headers, zlib and zstd
         shell: bash
         run: |
-          "$VCPKG_ROOT/vcpkg" install --triplet x64-windows zlib zstd \
+          "$VCPKG_DIR/vcpkg" install --triplet x64-windows zlib zstd \
             boost-headers boost-algorithm boost-range boost-iterator boost-geometry boost-container boost-random \
             boost-spirit boost-phoenix boost-type-traits boost-ublas boost-math boost-lexical-cast boost-intrusive \
             boost-heap boost-dynamic-bitset boost-any
-          echo "$VCPKG_ROOT/installed/x64-windows/bin" >> "$GITHUB_PATH"
+          echo "$VCPKG_DIR/installed/x64-windows/bin" >> "$GITHUB_PATH"
 
       - name: Set up MSVC environment
         uses: ilammy/msvc-dev-cmd@v1
@@ -45,7 +46,7 @@ jobs:
           set -o pipefail
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_DIR/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET=x64-windows \
             -DOVITO_BUILD_PLUGIN_NETCDFPLUGIN=OFF \
             -DOVITO_BUILD_PLUGIN_AIAGENT=OFF \
@@ -97,7 +98,7 @@ jobs:
           PKG=pkg/OVITO-windows-x64
           cmake --install build --prefix "$PKG" 2>&1 | tee install.log
           EXE_DIR=$(dirname "$(find "$PKG" -name ovito.exe | head -n 1)")
-          cp "$VCPKG_ROOT"/installed/x64-windows/bin/*.dll "$EXE_DIR"/
+          cp "$VCPKG_DIR"/installed/x64-windows/bin/*.dll "$EXE_DIR"/
           CRT=$(ls -d "$(cygpath -u "$VCToolsRedistDir")"/x64/Microsoft.VC*.CRT | head -n 1)
           cp "$CRT"/*.dll "$EXE_DIR"/
           BUILD_EXE_DIR=$(dirname "$(find build -name ovito.exe | head -n 1)")
