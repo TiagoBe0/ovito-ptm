@@ -114,6 +114,26 @@ jobs:
           find "$PKG" -name '*.pdb' -delete
           du -sh "$PKG"; ls "$EXE_DIR"
 
+      # Git Bash names the first DLL it cannot find in PATH when a program fails to load, which is usually an
+      # api-ms-win-* API set and not the DLL that is really missing. So list the imports of every binary in the package
+      # that are neither next to ovito.exe nor in System32.
+      - name: Check package DLL dependencies
+        shell: bash
+        run: |
+          EXE_DIR=$(dirname "$(find pkg -name ovito.exe | head -n 1)")
+          missing=0
+          while IFS= read -r -d '' bin; do
+            for dll in $(dumpbin -nologo -dependents "$bin" | tr -d '\r' | grep -iE '^ +[^ ]+\.dll$'); do
+              case "${dll,,}" in api-ms-win-*|ext-ms-*) continue ;; esac
+              if [ ! -f "$EXE_DIR/$dll" ] && [ ! -f "/c/Windows/System32/$dll" ]; then
+                echo "MISSING: $dll  (needed by ${bin#pkg/})"
+                missing=1
+              fi
+            done
+          done < <(find pkg -iname '*.exe' -print0 -o -iname '*.dll' -print0)
+          [ $missing -eq 0 ] && echo "All DLL dependencies are in the package or in System32."
+          exit $missing
+
       # Run the package with a PATH that holds only Windows and the shell, so that any DLL it still loads from
       # Qt, vcpkg or Visual Studio on the runner would make it fail.
       - name: Test package in isolation

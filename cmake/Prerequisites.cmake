@@ -196,9 +196,13 @@ FUNCTION(OVITO_DEPLOY_QT_FRAMEWORK_FILES)
 
     # Filter dependency list to find all Qt framework modules (targets starting with Qt6::).
     # Qt's internal interface targets (e.g. Qt6::Platform, Qt6::GlobalConfig, *Private) have no library of their own.
+    # The module name must be saved before the second match, which clears CMAKE_MATCH_1 when it fails.
     FOREACH(lib ${ovito_dependency_libraries})
-        IF(lib MATCHES "^Qt6::(.+)" AND NOT CMAKE_MATCH_1 MATCHES "^(Platform.*|GlobalConfig.*|EntryPoint.*)$|(Private|Internal)$")
-            LIST(APPEND OVITO_REQUIRED_QT_COMPONENTS ${CMAKE_MATCH_1})
+        IF(lib MATCHES "^Qt6::(.+)")
+            SET(qtmodule "${CMAKE_MATCH_1}")
+            IF(NOT qtmodule MATCHES "^(Platform.*|GlobalConfig.*|EntryPoint.*)$|(Private|Internal)$")
+                LIST(APPEND OVITO_REQUIRED_QT_COMPONENTS ${qtmodule})
+            ENDIF()
         ENDIF()
     ENDFOREACH()
     # The dependency scan does not necessarily report the basic modules; the Windows deployment below also takes
