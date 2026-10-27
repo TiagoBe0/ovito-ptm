@@ -131,6 +131,8 @@ SharedFuture<void> TimeSeriesModificationNode::sampleTrajectory(const ModifierEv
     }
     auto inputFrameRange = boost::irange(startFrame, endFrame + 1, std::max(mod->samplingFrequency(), 1));
 
+    // Start a new generation, so that a cancelled operation that may still be pending cannot add to the new samples.
+    _generation++;
     _samples.clear();
     _samples.reserve(boost::size(inputFrameRange));
 

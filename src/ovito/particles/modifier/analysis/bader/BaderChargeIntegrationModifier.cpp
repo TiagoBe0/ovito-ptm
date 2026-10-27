@@ -128,6 +128,30 @@ BaderChargeIntegrationModifier::Partition BaderChargeIntegrationModifier::partit
             uphill.emplace_back((size_t)other, flux);
             total += flux;
         }
+        if(!uphill.empty() && !(total > 0)) {
+            // All fluxes underflowed (subnormal density differences); 0/0 weights would turn every result into NaN.
+            uphill.clear();
+            for(const GridNeighbor& neighbor : neighbors) {
+                const int64_t other = neighborIndex(point, neighbor.offset);
+                if(other >= 0 && density[other] > rho) {
+                    uphill.emplace_back((size_t)other, neighbor.coupling);
+                    total += neighbor.coupling;
+                }
+            }
+        }
+        if(uphill.empty()) {
+            // Exact ties (a maximum between grid points, or a plateau such as vacuum with zero density): join the
+            // neighbors of equal density that were already processed, weighted by the geometric coupling alone.
+            // Otherwise every point of the plateau would start its own region. OVITO Pro 3.16.1 also splits such
+            // plateaus into spurious regions and may divide a single maximum between two of them.
+            for(const GridNeighbor& neighbor : neighbors) {
+                const int64_t other = neighborIndex(point, neighbor.offset);
+                if(other >= 0 && density[other] == rho && region[other] >= 0) {
+                    uphill.emplace_back((size_t)other, neighbor.coupling);
+                    total += neighbor.coupling;
+                }
+            }
+        }
         if(uphill.empty()) {
             // A density maximum starts a new region.
             region[point] = (int32_t)result.regionCount++;

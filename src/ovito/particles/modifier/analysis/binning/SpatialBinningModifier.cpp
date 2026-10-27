@@ -207,8 +207,9 @@ Future<PipelineFlowState> SpatialBinningModifier::evaluateModifier(const Modifie
         table = state.createObject<DataTable>(QStringLiteral("binning"), request.modificationNode(), DataTable::Histogram,
             property ? property->nameWithComponent(vecComponent) : QStringLiteral("Count"));
         table->setAxisLabelX(tr("Position"));
-        table->setIntervalStart(cell->matrix()(binnedDim, 3));
-        table->setIntervalEnd(cell->matrix()(binnedDim, 3) + cell->matrix()(binnedDim, binnedDim));
+        // Like OVITO Pro, the x-axis runs from 0 to the length of the binned cell vector (the cell origin is ignored).
+        table->setIntervalStart(0);
+        table->setIntervalEnd(cell->matrix().column(binnedDim).length());
     }
     else {
         grid = state.createObjectWithVis<VoxelGrid>(QStringLiteral("binning"), request.modificationNode(), voxelGridVis(),
@@ -239,7 +240,7 @@ Future<PipelineFlowState> SpatialBinningModifier::evaluateModifier(const Modifie
             shape, ndim, binDims, binnedDim, table, grid, derivative,
             inverseMatrix = cell->inverseMatrix(),
             pbc = cell->pbcFlagsCorrected(),
-            binLength = cell->matrix()(binnedDim, binnedDim),
+            binLength = cell->matrix().column(binnedDim).length(),
             binVolume = cell->volume3D() / (shape[0] * shape[1] * shape[2]),
             op = reductionOperation()]() mutable
     {

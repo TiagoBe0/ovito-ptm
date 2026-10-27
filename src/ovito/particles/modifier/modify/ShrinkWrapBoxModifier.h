@@ -31,7 +31,7 @@ namespace Ovito {
 
 /**
  * \brief Replaces the simulation cell with the axis-aligned bounding box of all particle coordinates
- *        (particle radii are ignored). Periodic boundary flags are kept. For a 2D cell only the x and y
+ *        (particle radii are ignored). Periodic boundary conditions are turned off. For a 2D cell only the x and y
  *        extents are changed. Without particles, the cell is left unchanged.
  */
 class OVITO_PARTICLES_EXPORT ShrinkWrapBoxModifier : public Modifier

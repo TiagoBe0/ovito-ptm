@@ -275,6 +275,24 @@ bool BaderChargeIntegrationSelfTestService::runTest()
     if(qEnvironmentVariableIsSet("OVITO_BADER_DUMP"))
         return ok;
 
+    // Exact ties: narrow gaussians leave a plateau of exactly zero density far from the atoms (exp underflows),
+    // and the first atom lies halfway between two grid points along x, so its maximum is shared by two points.
+    // Each atom must get a single region holding its whole charge, and the plateau must not split into many regions.
+    {
+        const std::vector<Atom> tieAtoms = {{{2.25, 3.0, 4.0}, 1.0, 0.15, 8}, {{7.0, 7.0, 8.0}, 1.0, 0.15, 1}};
+        writeCube(dir.filePath(QStringLiteral("tie.cube")), orthoCell, orthoShape, tieAtoms);
+        Result r = evaluate(QStringLiteral("tie.cube"));
+        size_t chargedRegions = 0, emptyRegions = 0;
+        for(double d : r.density) (d > 0 ? chargedRegions : emptyRegions)++;
+        if(chargedRegions != 2)
+            fail(QStringLiteral("tie.cube: %1 regions with charge, expected 2").arg(chargedRegions));
+        if(emptyRegions > 2)
+            fail(QStringLiteral("tie.cube: the zero-density plateau splits into %1 regions").arg(emptyRegions));
+        if(r.atomDensity.size() != 2 || r.atomDensity[0] <= 0 || r.atomDensity[1] <= 0)
+            fail(QStringLiteral("tie.cube: each atom must receive the charge of its region"));
+        qInfo().noquote() << "Bader self-test: tie.cube" << chargedRegions << "charged and" << emptyRegions << "empty regions";
+    }
+
     qInfo().noquote() << (ok ? "Bader self-test: ALL PASSED" : "Bader self-test: FAILED");
     return ok;
 }

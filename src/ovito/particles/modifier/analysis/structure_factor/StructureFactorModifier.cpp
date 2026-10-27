@@ -429,6 +429,8 @@ Future<PipelineFlowState> StructureFactorModifier::evaluateModifier(const Modifi
 
         if(mode == Direct) {
             // Reciprocal lattice vectors with h, k, l >= 0 (not all zero) and kMin <= |k| < kMax.
+            // Deliberate difference: in triclinic cells OVITO Pro 3.16.1 uses k = 2 pi M^-1 h (measured), which is not a
+            // reciprocal lattice vector, so its S(k) is not invariant under cell translations. Here k = 2 pi M^-T h.
             const AffineTransformation& inverse = cell->reciprocalCellMatrix();
             int hmax[3];
             for(int d = 0; d < 3; d++)

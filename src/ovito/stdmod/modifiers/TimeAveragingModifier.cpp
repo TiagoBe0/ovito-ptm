@@ -207,6 +207,8 @@ SharedFuture<void> TimeAveragingModificationNode::averageTrajectory(const Modifi
 
     const TimeAveragingModifier* mod = static_object_cast<TimeAveragingModifier>(modifier());
 
+    // Start a new generation, so that a cancelled operation that may still be pending cannot add to the new sums.
+    _generation++;
     _accumulators.clear();
     for(const QString& key : mod->operateOn())
         _accumulators.push_back(parseInputKey(key));
@@ -340,6 +342,8 @@ void TimeAveragingModificationNode::FrameAccumulator::operator()(int frame, cons
             if(numComponents != acc.componentCount || values.size() != acc.sums.size())
                 throw Exception(tr("Time averaging: The number of elements in '%1' changes at trajectory frame %2. Place the time averaging modifier before any filter that removes elements.").arg(acc.containerPath).arg(frame));
             if(!acc.idToIndex.empty()) {
+                if(ids.size() * numComponents != values.size())
+                    throw Exception(tr("Time averaging: The identifiers of '%1' are missing at trajectory frame %2.").arg(acc.containerPath).arg(frame));
                 // Match elements across frames by their unique identifiers.
                 for(size_t i = 0; i < ids.size(); i++) {
                     auto iter = acc.idToIndex.find(ids[i]);

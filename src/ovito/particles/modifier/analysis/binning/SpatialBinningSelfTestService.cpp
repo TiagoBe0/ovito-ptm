@@ -48,6 +48,7 @@ namespace {
 
 /// Writes 8 atoms in a 10x10x10 box. Frame 0 is fully periodic, frame 1 is non-periodic along x.
 /// Atom 5 sits at x = -0.5: it wraps into the last x bin on frame 0 and is discarded on frame 1.
+/// Frame 2 shifts the cell origin to (-5,-5,-5); frame 3 is triclinic with tilt xy = 4 (|b| = sqrt(116)).
 ///
 ///   id   x    y    z    vx
 ///    1  0.5  0.5  0.5   1
@@ -73,10 +74,15 @@ void writeDump(const QString& path)
         "6 1 4.9 7.0 3.0 2 0 0\n"
         "7 1 5.1 2.0 8.0 4 0 0\n"
         "8 1 7.5 9.0 1.0 6 0 0\n";
-    for(int frame = 0; frame < 2; frame++) {
+    for(int frame = 0; frame < 4; frame++) {
         out << "ITEM: TIMESTEP\n" << frame << "\n";
         out << "ITEM: NUMBER OF ATOMS\n8\n";
-        out << "ITEM: BOX BOUNDS " << (frame == 0 ? "pp" : "ff") << " pp pp\n0 10\n0 10\n0 10\n";
+        if(frame < 2)
+            out << "ITEM: BOX BOUNDS " << (frame == 0 ? "pp" : "ff") << " pp pp\n0 10\n0 10\n0 10\n";
+        else if(frame == 2)
+            out << "ITEM: BOX BOUNDS pp pp pp\n-5 5\n-5 5\n-5 5\n";
+        else
+            out << "ITEM: BOX BOUNDS xy xz yz pp pp pp\n0 14 4\n0 10 0\n0 10 0\n";
         out << "ITEM: ATOMS id type x y z vx vy vz\n" << atoms;
     }
 }
@@ -263,6 +269,21 @@ bool SpatialBinningSelfTestService::runTest()
     binning->setNumberOfBinsY(4);
     ok &= check(QStringLiteral("Y mean (2 bins)"), table(0).second, {29.0 / 6.0, 4});
     binning->setNumberOfBinsY(2);
+    binning->setBinDirection(SpatialBinningModifier::X);
+
+    // As in OVITO Pro 3.16.1 (measured): the x-axis runs from 0 to the length of the binned cell vector,
+    // ignoring the cell origin, and the derivative step is that length divided by the bin count.
+    qInfo().noquote() << "Spatial binning self-test: x-axis range with shifted origin and triclinic cell";
+    auto interval = [&](int frame) -> std::vector<double> {
+        PipelineFlowState state = evaluate(frame);
+        const DataTable* t = state.getObjectBy<DataTable>(node, QStringLiteral("binning"));
+        if(!t)
+            throw Exception(QStringLiteral("The binning table is missing from the pipeline output: %1").arg(state.status().text()));
+        return { t->intervalStart(), t->intervalEnd() };
+    };
+    ok &= check(QStringLiteral("range (shifted origin)"), interval(2), {0, 10});
+    binning->setBinDirection(SpatialBinningModifier::Y);
+    ok &= check(QStringLiteral("range along tilted b"), interval(3), {0, std::sqrt(116.0)});
     binning->setBinDirection(SpatialBinningModifier::X);
 
     // Voxel index = z*4 + y*2 + x.
