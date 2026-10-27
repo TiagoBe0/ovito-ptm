@@ -320,7 +320,14 @@ IF(NOT EMSCRIPTEN)
     ADD_TEST(NAME GuiEditorsParticlesSelfTest COMMAND Ovito --gui-editors-selftest particles)
     ADD_TEST(NAME GuiEditorsGridSelfTest COMMAND Ovito --gui-editors-selftest grid)
     # A private config directory keeps parameters memorized in the user's Ovito.conf out of the test.
+    # On Windows the native platform plugin is used (the main window stays hidden) with Qt's software OpenGL,
+    # and Qt's messages are sent to stderr, since a GUI-subsystem executable has no console.
+    IF(WIN32)
+        SET(_gui_test_env "QT_OPENGL=software;QT_FORCE_STDERR_LOGGING=1")
+    ELSE()
+        SET(_gui_test_env "QT_QPA_PLATFORM=offscreen;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/gui_editors_selftest_config")
+    ENDIF()
     SET_TESTS_PROPERTIES(GuiEditorsParticlesSelfTest GuiEditorsGridSelfTest PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/gui_editors_selftest_config"
+        ENVIRONMENT "${_gui_test_env}"
         TIMEOUT 400)
 ENDIF()
