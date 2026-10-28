@@ -36,7 +36,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-OVITO = os.path.join(REPO_ROOT, "build", "bin", "ovito")
+OVITO = os.environ.get("OVITO_BIN", os.path.join(REPO_ROOT, "build-release", "bin", "ovito"))
 DATASETS = os.path.join(REPO_ROOT, "research", "vacancy_analysis", "datasets", "generated")
 DEFAULT_OUT = os.path.join(REPO_ROOT, "research", "vacancy_analysis", "results",
                            "synthetic", "ml_prototype_metrics.csv")

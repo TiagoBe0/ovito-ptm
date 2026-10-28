@@ -38,7 +38,7 @@ import tempfile
 from collections import defaultdict
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-OVITO = os.path.join(REPO_ROOT, "build", "bin", "ovito")
+OVITO = os.environ.get("OVITO_BIN", os.path.join(REPO_ROOT, "build-release", "bin", "ovito"))
 MULTISOM = os.path.join(REPO_ROOT, "MultiSOM-main")
 PARAMS_TEMPLATE = os.path.join(REPO_ROOT, "research", "vacancy_analysis", "multisom", "input_params.py")
 DEFAULT_DATASET = os.path.join(REPO_ROOT, "research", "vacancy_analysis",

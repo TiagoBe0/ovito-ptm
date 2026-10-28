@@ -100,7 +100,7 @@ per-site properties `Local Shear Strain` (mean + max), `Local Volumetric Strain`
 on non-candidate sites). The `VacancyAnalysis.local_signals` attribute lists which
 of them were actually available.
 
-They are aggregated over the same neighbour shell that defines `Disorder Fraction`,
+They are aggregated over the 1.5 nn shell of the site (first shell included; `Disorder Fraction` uses the 1.3–2.1 nn annulus instead),
 and they are read from whatever upstream modifier provides `Shear Strain`,
 `Volumetric Strain`, `RMSD` and `Atomic Volume`. The sweep can compute those itself,
 so no LAMMPS computes and no re-run of the simulation are needed:

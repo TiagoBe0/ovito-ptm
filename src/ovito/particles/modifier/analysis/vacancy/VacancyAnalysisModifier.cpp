@@ -433,6 +433,12 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
         else if(_maskSignal == LammpsCoordSignal)
             haveDisorderSignal = maskFromScalarSignal(_lammpsCoordProperty, false);
     }
+    // Sample-wide fraction of disordered atoms. When it exceeds the mask threshold, even a site
+    // picked at random would be masked, so the mask no longer discriminates anything (typically
+    // PTM/CNA under thermal noise beyond their RMSD tolerance).
+    FloatType globalDisorderedFraction = (FloatType)-1;
+    if(haveDisorderSignal && numAtoms > 0)
+        globalDisorderedFraction = (FloatType)std::count(disordered.begin(), disordered.end(), 1) / numAtoms;
 
     // --- Continuous per-atom deformation context (used for the local-context descriptors). ---
     // These are never thresholded: they are averaged over the neighborhood of each candidate site so
@@ -464,6 +470,16 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
     const FloatType searchRadius = (FloatType)1.5 * r_nn_cur;
     CutoffNeighborFinder currentFinder(searchRadius, positions(), cell(), {});
 
+    // The structural mask is evaluated over a shell that EXCLUDES the atoms adjacent to the empty
+    // site. Those atoms lost a neighbor to the vacancy itself, so PTM/CNA label them OTHER, their
+    // centrosymmetry jumps and their coordination drops: measured over the 1.5 nn shell, an isolated
+    // vacancy in a perfect FCC crystal has 12/18 "disordered" neighbors and was always masked.
+    // The inner radius also skips the BCC second shell (1.155 nn), which CNA and PTM use as well.
+    const FloatType maskInnerRadiusSq = (FloatType)(1.3 * 1.3) * r_nn_cur * r_nn_cur;
+    std::optional<CutoffNeighborFinder> maskFinder;
+    if(haveDisorderSignal)
+        maskFinder.emplace((FloatType)2.1 * r_nn_cur, positions(), cell(), BufferReadAccess<SelectionIntType>{});
+
     // --- Output: per-reference-site classification. ---
     PropertyPtr rawOccupancy = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::Int32, 1, QStringLiteral("Raw Occupancy"));
     PropertyPtr correctedInterstitialSurplus = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::Int32, 1, QStringLiteral("Corrected Interstitial Surplus"));
@@ -488,9 +504,10 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
     PropertyPtr mlProbability = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::FloatDefault, 1, QStringLiteral("ML Vacancy Probability"));
 
     // Local deformation context of each candidate site, aggregated over the current atoms inside the
-    // same shell that defines "Disorder Fraction". This is the continuous counterpart of the binary
-    // structural mask: it is what lets a classifier tell a genuinely empty site apart from a site
-    // that only looks empty because its atom was pushed away by the surrounding deformation.
+    // 1.5 nn shell around it (first shell included, unlike "Disorder Fraction"). This is the
+    // continuous counterpart of the binary structural mask: it is what lets a classifier tell a
+    // genuinely empty site apart from a site that only looks empty because its atom was pushed away
+    // by the surrounding deformation.
     PropertyPtr localShearStrain = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::FloatDefault, 2, QStringLiteral("Local Shear Strain"));
     PropertyPtr localVolumetricStrain = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::FloatDefault, 1, QStringLiteral("Local Volumetric Strain"));
     PropertyPtr localRmsd = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::FloatDefault, 1, QStringLiteral("Local RMSD"));
@@ -636,8 +653,8 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
                 shellCountsArray.set(vs, 2, c125);
             }
 
-            // Local deformation context: aggregate the continuous per-atom signals over the same
-            // shell the structural mask uses, so every candidate carries a measure of how deformed
+            // Local deformation context: aggregate the continuous per-atom signals over the 1.5 nn
+            // shell (first shell included), so every candidate carries a measure of how deformed
             // its surroundings are, independent of whether the mask happened to reject it.
             {
                 int contextCount = 0;
@@ -713,13 +730,20 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
                 nearestDistanceArray[vs] = std::sqrt(nearestDistanceSq);
         }
 
-        int numNeighbors = 0, numDisordered = 0;
-        for(CutoffNeighborFinder::Query q(currentFinder, queryPoint); !q.atEnd(); q.next()) {
+        int numNeighbors = 0;
+        for(CutoffNeighborFinder::Query q(currentFinder, queryPoint); !q.atEnd(); q.next())
             numNeighbors++;
-            if(haveDisorderSignal && disordered[q.current()]) numDisordered++;
+
+        if(maskFinder) {
+            int numMaskShell = 0, numDisordered = 0;
+            for(CutoffNeighborFinder::Query q(*maskFinder, queryPoint); !q.atEnd(); q.next()) {
+                if(q.distanceSquared() <= maskInnerRadiusSq) continue;
+                numMaskShell++;
+                if(disordered[q.current()]) numDisordered++;
+            }
+            if(numMaskShell > 0)
+                disorderFractionArray[vs] = (FloatType)numDisordered / numMaskShell;
         }
-        if(numNeighbors > 0 && haveDisorderSignal)
-            disorderFractionArray[vs] = (FloatType)numDisordered / numNeighbors;
 
         if(numNeighbors == 0) {
             // No atom in the local shell: compatible with a free surface, void boundary, or large low-density region.
@@ -787,6 +811,10 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
             confidenceArray[vs] = prob;
             if(prob >= _mlThreshold) {
                 if(defectTypeArray[vs] != DefectVacancy) mlResurrectedCount++;
+                // A restored Frenkel vacancy keeps its partner's surplus consumed: a vacancy-interstitial
+                // pair within the recombination cutoff is unstable, so if the vacancy is genuine the
+                // adjacent over-occupation is a displacement artifact, not an interstitial. Counting it
+                // again was tested and raised the interstitial error on every synthetic case.
                 defectTypeArray[vs] = DefectVacancy;
                 mlVacancyCount++;
             }
@@ -845,6 +873,7 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
     state.addAttribute(QStringLiteral("VacancyAnalysis.mask_signal_used"), QVariant::fromValue(haveDisorderSignal), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.mask_signal_name"), QVariant::fromValue(selectedMaskSignalName), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.mask_signal_cutoff"), QVariant::fromValue(haveMaskSignalCutoff ? maskSignalCutoff : (FloatType)-1), _createdByNode);
+    state.addAttribute(QStringLiteral("VacancyAnalysis.mask_global_disordered_fraction"), QVariant::fromValue(globalDisorderedFraction), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.local_signals"), QVariant::fromValue(availableLocalSignals.join(QChar(','))), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.ml_used"), QVariant::fromValue(_mlModel != nullptr), _createdByNode);
     if(_mlModel) {
@@ -863,6 +892,11 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
     if(_maskDisordered && !haveDisorderSignal) {
         status.setType(PipelineStatus::Warning);
         status.setText(status.text() + tr("\nStructural masking was requested, but the selected upstream signal '%1' is not available. No sites were excluded by the structural mask.").arg(selectedMaskSignalName));
+    }
+    else if(haveDisorderSignal && globalDisorderedFraction > _maskThreshold) {
+        status.setType(PipelineStatus::Warning);
+        status.setText(status.text() + tr("\n%1% of all atoms are flagged as disordered by '%2', more than the mask threshold. The structural mask cannot discriminate in this sample (for PTM, consider raising its RMSD cutoff).")
+            .arg(globalDisorderedFraction * 100, 0, 'f', 1).arg(selectedMaskSignalName));
     }
     state.setStatus(std::move(status));
 }

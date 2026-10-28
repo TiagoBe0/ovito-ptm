@@ -22,7 +22,7 @@ import subprocess
 import sys
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-OVITO = os.path.join(REPO_ROOT, "build", "bin", "ovito")
+OVITO = os.environ.get("OVITO_BIN", os.path.join(REPO_ROOT, "build-release", "bin", "ovito"))
 DEFAULT_DATASET = os.path.join(REPO_ROOT, "research", "vacancy_analysis",
                                "datasets", "generated", "noise_fcc_8x8x8")
 DEFAULT_OUT = os.path.join(REPO_ROOT, "research", "vacancy_analysis", "results",
