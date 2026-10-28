@@ -76,7 +76,7 @@ def run_sweep(case_dir, reference, dump_path, workdir, args):
         "--vacancy-sweep-reference", reference,
         "--vacancy-sweep-output", counts,
         "--vacancy-sweep-no-mask",                  # ordered crystal: structural mask N/A
-        "--vacancy-sweep-cavity-ratios", "0.5",
+        "--vacancy-sweep-cavity-ratios", "0.85",
         "--vacancy-sweep-recombination-cutoffs", "auto",
         "--vacancy-sweep-features", "all",
         "--vacancy-sweep-strain-cutoff", str(args.strain_cutoff),

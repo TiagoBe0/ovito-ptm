@@ -81,8 +81,8 @@ private:
  * filters intended to separate likely point-defect candidates from deformation artifacts:
  *   1. Frenkel-pair recombination: a candidate vacancy adjacent to an over-occupied site is the
  *      signature of a displaced (not a missing) atom -> annihilate the pair.
- *   2. Free-volume confirmation: a likely vacancy leaves a measurable cavity (no current atom sits
- *      close to the empty site).
+ *   2. Free-volume confirmation: a likely vacancy leaves a measurable cavity (the 6 nearest current
+ *      atoms stay, on average, about one nn distance away from the empty site).
  *   3. Structural masking: candidates surrounded by disordered atoms (grain boundary / surface /
  *      amorphous) are reported separately, not as point vacancies. The disorder signal is taken
  *      from an upstream PTM/CNA (Structure Type), Centrosymmetry, AtomicStrain (Shear Strain), or
@@ -208,8 +208,10 @@ private:
     /// Require local free volume at a candidate vacancy site.
     DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(bool{true}, requireFreeVolume, setRequireFreeVolume, PROPERTY_FIELD_MEMORIZE)
 
-    /// Minimum cavity radius for a vacancy candidate, expressed as a fraction of the nn distance.
-    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(FloatType{0.5}, cavityRadiusRatio, setCavityRadiusRatio, PROPERTY_FIELD_MEMORIZE)
+    /// Minimum cavity radius for a vacancy candidate, expressed as a fraction of the current nn distance.
+    /// The cavity radius is the mean distance from the empty site to its 6 nearest current atoms; the
+    /// nn distance is the same 6-neighbor mean measured around the atoms, so 1 means a full first shell.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(FloatType{0.85}, cavityRadiusRatio, setCavityRadiusRatio, PROPERTY_FIELD_MEMORIZE)
 
     /// Exclude candidate vacancies that sit inside disordered (grain-boundary/surface) regions.
     DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(bool{true}, maskDisordered, setMaskDisordered, PROPERTY_FIELD_MEMORIZE)

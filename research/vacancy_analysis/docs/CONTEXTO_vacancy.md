@@ -616,3 +616,27 @@ Uso recomendado:
 2. Comparar `VacancyAnalysis.raw_ws_*` contra `results/7kev.csv`.
 3. Medir reduccion por `frenkel_recombined`, `freevolume_excluded`, `structural_excluded` y `surface_or_void_excluded`.
 4. Usar `LAMMPS c_centro` o `LAMMPS c_coord` como senal de mascara estructural.
+
+## Auditoria del algoritmo (2026-10-28)
+
+1. **Mascara estructural auto-inducida (corregido, 5a0f2db68).** La fraccion de desorden incluia
+   los 12 primeros vecinos del sitio vacio, que PTM/CNA/CSP/coord marcan como desordenados *por la
+   propia vacancia* (12/18 = 0.67 > 0.5): toda vacancia aislada se enmascaraba. Ahora se mide en la
+   corona (1.3, 2.1]·r_nn_cur. Explica que `c_centro` mandara todo a structural en FeCrNi.
+   Nuevo atributo `mask_global_disordered_fraction` y warning si supera `maskThreshold` (p. ej. PTM
+   con RMSD cutoff 0.1 bajo ruido sigma >= 0.10: 99.9 % OTHER).
+2. **Test de cavidad tautologico (redisenado).** El atomo mas cercano a un sitio vacio WS nunca esta
+   a menos de d_sitio/2, asi que `nearest >= 0.5 r_nn` no podia fallar (`freevolume_excluded = 0`
+   siempre). Ahora: radio de cavidad = distancia media a los 6 atomos mas cercanos (propiedad
+   `Cavity Radius`, columna `cavity_radius` del dump), comparado con `cavityRadiusRatio · r_nn_cur`.
+   Default 0.85 (GUI y sweep).
+3. **Estimador de r_nn sesgado (corregido).** Era la mediana de la distancia al vecino mas cercano:
+   minimo sobre la primera cascara, sesgado hacia abajo por ruido (sigma 0.20: 1.65 vs 2.55). Ahora
+   es la mediana de la distancia media a 6 vecinos (2.20), el mismo estadistico que la cavidad.
+4. **Descartado:** devolver el intersticial cuando el ML restaura una vacancia Frenkel. Empeora
+   `interstitial_count` en todos los casos sinteticos (un par a <= 1.2 nn es inestable).
+
+Calibracion de 0.85 (ajuste seed0, validacion seed7, candidatos que sobreviven a Frenkel): elimina
+55-57 % de los falsos y pierde 7/904 y 2/916 verdaderas; 0.80 elimina 26-28 % sin perder ninguna.
+Reglas, F1 antes -> despues: strain 0.522 -> 0.713 (seed7 0.536 -> 0.756; FP 163 -> 19); noise,
+cluster y cascade iguales o +0.01. Modo ML sin cambios (0 discrepancias C++/Python).

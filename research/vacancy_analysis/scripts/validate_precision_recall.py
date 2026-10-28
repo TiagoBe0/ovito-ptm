@@ -40,7 +40,7 @@ def run_case(case_dir, reference, scratch):
         "--vacancy-sweep-output", counts,
         "--vacancy-sweep-dump-sites", sites,
         "--vacancy-sweep-no-mask",                 # ordered crystal: structural mask N/A
-        "--vacancy-sweep-cavity-ratios", "0.5",
+        "--vacancy-sweep-cavity-ratios", "0.85",
         "--vacancy-sweep-recombination-cutoffs", "auto",
     ]
     res = subprocess.run(cmd, capture_output=True, text=True)

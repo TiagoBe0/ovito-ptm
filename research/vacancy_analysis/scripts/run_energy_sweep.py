@@ -76,7 +76,7 @@ def run_sweep(input_glob, reference, output, masked, max_frames, dry_run,
         "--vacancy-sweep-input", input_glob,
         "--vacancy-sweep-reference", reference,
         "--vacancy-sweep-output", output,
-        "--vacancy-sweep-cavity-ratios", "0.5",
+        "--vacancy-sweep-cavity-ratios", "0.85",
         "--vacancy-sweep-recombination-cutoffs", "auto",
     ]
     if masked:

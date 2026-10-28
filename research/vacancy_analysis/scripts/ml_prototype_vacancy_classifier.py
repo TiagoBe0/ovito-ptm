@@ -75,7 +75,7 @@ def run_native(case_dir, reference, sites_csv):
         "--vacancy-sweep-output", os.path.join(os.path.dirname(sites_csv), "counts.csv"),
         "--vacancy-sweep-dump-sites", sites_csv,
         "--vacancy-sweep-no-mask",
-        "--vacancy-sweep-cavity-ratios", "0.5",
+        "--vacancy-sweep-cavity-ratios", "0.85",
         "--vacancy-sweep-recombination-cutoffs", "auto",
     ]
     res = subprocess.run(cmd, capture_output=True, text=True)

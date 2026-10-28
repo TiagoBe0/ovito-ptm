@@ -121,9 +121,9 @@ void VacancyAnalysisSweepService::registerCommandLineOptions(QCommandLineParser&
         QStringLiteral("0.5")));
     cmdLineParser.addOption(makeOption(
         QStringLiteral("vacancy-sweep-cavity-ratios"),
-        tr("Comma-separated minimum cavity radii expressed as fractions of nearest-neighbor distance."),
+        tr("Comma-separated minimum cavity radii (mean distance to the 6 nearest atoms) expressed as fractions of the current nearest-neighbor distance. Default: 0.85."),
         QStringLiteral("list"),
-        QStringLiteral("0.5")));
+        QStringLiteral("0.85")));
     cmdLineParser.addOption(makeOption(
         QStringLiteral("vacancy-sweep-recombination-cutoffs"),
         tr("Comma-separated Frenkel recombination cutoffs. Use 0 or auto for automatic cutoff."),
@@ -211,7 +211,7 @@ VacancyAnalysisSweepService::SweepParameters VacancyAnalysisSweepService::parseC
 
     params.maskSignals = parseMaskSignalList(parser.value(QStringLiteral("vacancy-sweep-mask-signals")));
     params.maskThresholds = parseFloatList(parser.value(QStringLiteral("vacancy-sweep-mask-thresholds")), {FloatType(0.5)}, QStringLiteral("vacancy-sweep-mask-thresholds"));
-    params.cavityRadiusRatios = parseFloatList(parser.value(QStringLiteral("vacancy-sweep-cavity-ratios")), {FloatType(0.5)}, QStringLiteral("vacancy-sweep-cavity-ratios"));
+    params.cavityRadiusRatios = parseFloatList(parser.value(QStringLiteral("vacancy-sweep-cavity-ratios")), {FloatType(0.85)}, QStringLiteral("vacancy-sweep-cavity-ratios"));
     params.recombinationCutoffs = parseCutoffList(parser.value(QStringLiteral("vacancy-sweep-recombination-cutoffs")));
     for(FloatType value : params.maskThresholds) {
         if(value < 0 || value > 1)
@@ -469,6 +469,7 @@ void VacancyAnalysisSweepService::writeSiteDump(QTextStream& stream, const Pipel
     const Property* interstitialSurplusNN = particles->getProperty(QStringLiteral("Nearest Interstitial Surplus"));
     const Property* interstitialShell = particles->getProperty(QStringLiteral("Interstitial Sites In Shell"));
     const Property* mlProbability = particles->getProperty(QStringLiteral("ML Vacancy Probability"));
+    const Property* cavityRadius = particles->getProperty(QStringLiteral("Cavity Radius"));
     if(!defectType)
         return;
 
@@ -488,6 +489,7 @@ void VacancyAnalysisSweepService::writeSiteDump(QTextStream& stream, const Pipel
     BufferReadAccess<int32_t> interstitialSurplusNNArray(interstitialSurplusNN);
     BufferReadAccess<int32_t> interstitialShellArray(interstitialShell);
     BufferReadAccess<FloatType> mlProbabilityArray(mlProbability);
+    BufferReadAccess<FloatType> cavityRadiusArray(cavityRadius);
 
     const size_t n = defectType->size();
     for(size_t s = 0; s < n; s++) {
@@ -511,6 +513,7 @@ void VacancyAnalysisSweepService::writeSiteDump(QTextStream& stream, const Pipel
         fields << (interstitialSurplusNN ? QString::number(interstitialSurplusNNArray[s]) : QString());
         fields << (interstitialShell ? QString::number(interstitialShellArray[s]) : QString());
         fields << (mlProbability ? QLocale::c().toString((double)mlProbabilityArray[s], 'g', 9) : QString());
+        fields << (cavityRadius ? QLocale::c().toString((double)cavityRadiusArray[s], 'g', 9) : QString());
         writeCsvRow(stream, fields);
     }
 }
@@ -812,7 +815,8 @@ void VacancyAnalysisSweepService::runSweep(const SweepParameters& params)
             QStringLiteral("count_075nn"), QStringLiteral("count_100nn"), QStringLiteral("count_125nn"),
             QStringLiteral("nearest_vacant_distance"), QStringLiteral("vacant_neighbors_150"),
             QStringLiteral("nearest_interstitial_distance"), QStringLiteral("nearest_interstitial_surplus"),
-            QStringLiteral("interstitial_neighbors_150"), QStringLiteral("ml_probability")
+            QStringLiteral("interstitial_neighbors_150"), QStringLiteral("ml_probability"),
+            QStringLiteral("cavity_radius")
         });
     }
 
