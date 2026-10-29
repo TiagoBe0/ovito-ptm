@@ -487,6 +487,7 @@ void VacancyAnalysisSweepService::writeSiteDump(QTextStream& stream, const Pipel
     const Property* cavityRadius = particles->getProperty(QStringLiteral("Cavity Radius"));
     const Property* chainPartner = particles->getProperty(QStringLiteral("Replacement Chain Partner"));
     const Property* chainDistance = particles->getProperty(QStringLiteral("Replacement Chain Distance"));
+    const Property* comparison = particles->getProperty(QStringLiteral("Wigner-Seitz Comparison"));
     if(!defectType)
         return;
 
@@ -509,6 +510,7 @@ void VacancyAnalysisSweepService::writeSiteDump(QTextStream& stream, const Pipel
     BufferReadAccess<FloatType> cavityRadiusArray(cavityRadius);
     BufferReadAccess<int64_t> chainPartnerArray(chainPartner);
     BufferReadAccess<FloatType> chainDistanceArray(chainDistance);
+    BufferReadAccess<int32_t> comparisonArray(comparison);
 
     const size_t n = defectType->size();
     for(size_t s = 0; s < n; s++) {
@@ -535,6 +537,10 @@ void VacancyAnalysisSweepService::writeSiteDump(QTextStream& stream, const Pipel
         fields << (cavityRadius ? QLocale::c().toString((double)cavityRadiusArray[s], 'g', 9) : QString());
         fields << (chainPartner ? QString::number((qlonglong)chainPartnerArray[s]) : QString());
         fields << (chainDistance ? QLocale::c().toString((double)chainDistanceArray[s], 'g', 9) : QString());
+        if(const ElementType* type = comparison ? comparison->elementType(comparisonArray[s]) : nullptr)
+            fields << type->name();
+        else
+            fields << QString();
         writeCsvRow(stream, fields);
     }
 }
@@ -844,7 +850,8 @@ void VacancyAnalysisSweepService::runSweep(const SweepParameters& params)
             QStringLiteral("nearest_interstitial_distance"), QStringLiteral("nearest_interstitial_surplus"),
             QStringLiteral("interstitial_neighbors_150"), QStringLiteral("ml_probability"),
             QStringLiteral("cavity_radius"),
-            QStringLiteral("chain_partner_site"), QStringLiteral("chain_distance")
+            QStringLiteral("chain_partner_site"), QStringLiteral("chain_distance"),
+            QStringLiteral("ws_comparison")
         });
     }
 

@@ -27,6 +27,7 @@
 #include <ovito/particles/objects/ParticleType.h>
 #include <ovito/stdobj/properties/ElementType.h>
 #include <ovito/stdobj/simcell/SimulationCell.h>
+#include <ovito/stdobj/table/DataTable.h>
 #include <ovito/core/dataset/pipeline/ModificationNode.h>
 #include <ovito/core/dataset/data/AttributeDataObject.h>
 #include <ovito/core/utilities/concurrent/ParallelFor.h>
@@ -123,6 +124,7 @@ DEFINE_PROPERTY_FIELD(VacancyAnalysisModifier, maskThreshold);
 DEFINE_PROPERTY_FIELD(VacancyAnalysisModifier, mlClassification);
 DEFINE_PROPERTY_FIELD(VacancyAnalysisModifier, mlModelPath);
 DEFINE_PROPERTY_FIELD(VacancyAnalysisModifier, mlThreshold);
+DEFINE_PROPERTY_FIELD(VacancyAnalysisModifier, outputSites);
 SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, frenkelRecombination, "Recombine Frenkel pairs");
 SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, recombinationCutoff, "Recombination cutoff");
 SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, requireFreeVolume, "Require free volume");
@@ -135,6 +137,7 @@ SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, maskThreshold, "Disorder fract
 SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, mlClassification, "ML classification");
 SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, mlModelPath, "ML model file");
 SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, mlThreshold, "ML probability threshold");
+SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, outputSites, "Output sites");
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(VacancyAnalysisModifier, recombinationCutoff, WorldParameterUnit, 0);
 SET_PROPERTY_FIELD_UNITS_AND_RANGE(VacancyAnalysisModifier, cavityRadiusRatio, FloatParameterUnit, 0, 1);
 SET_PROPERTY_FIELD_UNITS_AND_RANGE(VacancyAnalysisModifier, nearestAtomRatio, FloatParameterUnit, 0, 1);
@@ -155,7 +158,11 @@ Future<PipelineFlowState> VacancyAnalysisModifier::reuseCachedState(const Modifi
         }
     }
 
-    // Adopt all global attributes computed by the modifier from the cached state.
+    // Adopt the bar charts and all global attributes computed by the modifier from the cached state.
+    for(const QString& tableId : {QStringLiteral("vacancy-ws-comparison"), QStringLiteral("vacancy-ws-outcome")}) {
+        if(const DataTable* cachedTable = cachedState.getObjectBy<DataTable>(request.modificationNode(), tableId))
+            output.addObject(cachedTable);
+    }
     output.adoptAttributesFrom(cachedState, request.modificationNode());
 
     return std::move(output);
@@ -229,6 +236,7 @@ std::unique_ptr<ReferenceConfigurationModifier::Engine> VacancyAnalysisModifier:
             structureProperty, cspProperty, shearProperty, lammpsCentroProperty, lammpsCoordProperty,
             volumetricStrainProperty, rmsdProperty, atomicVolumeProperty,
             std::move(mlModel), mlThreshold(),
+            outputSites(),
             request.modificationNode());
 }
 
@@ -1033,6 +1041,117 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
     outParticles->createProperty(localAtomicVolume);
     outParticles->createProperty(localContextCount);
 
+    // --- Site-by-site agreement with plain Wigner-Seitz. ---
+    // Every vacancy/interstitial of this modifier is also a Wigner-Seitz defect, so each WS defect
+    // site is either confirmed ("both") or rejected by the filters ("WS only").
+    PropertyPtr comparison = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::Int32, 1, QStringLiteral("Wigner-Seitz Comparison"));
+    static const Color comparisonColors[] = {
+        Color(0.70, 0.70, 0.70),    // no defect
+        Color(0.90, 0.10, 0.10),    // vacancy, both
+        Color(1.00, 0.75, 0.55),    // vacancy, WS only
+        Color(0.10, 0.30, 0.95),    // interstitial, both
+        Color(0.60, 0.85, 1.00)     // interstitial, WS only
+    };
+    {
+        const QString names[] = { tr("No defect"), tr("Vacancy (both)"), tr("Vacancy (WS only)"),
+                                  tr("Interstitial (both)"), tr("Interstitial (WS only)") };
+        for(int id = ComparisonNoDefect; id <= ComparisonInterstitialWSOnly; id++) {
+            DataOORef<ElementType> type = DataOORef<ElementType>::create();
+            type->setNumericId(id);
+            type->setName(names[id]);
+            type->setColor(comparisonColors[id]);
+            comparison->addElementType(std::move(type));
+        }
+    }
+    size_t wsOnlyVacancies = 0;
+    {
+        BufferWriteAccess<int32_t, access_mode::discard_write> comparisonArray(comparison);
+        for(size_t s = 0; s < numSites; s++) {
+            const int occ = rawOccupancyArray[s];
+            int c = ComparisonNoDefect;
+            if(occ == 0) {
+                c = (defectTypeArray[s] == DefectVacancy) ? ComparisonVacancyBoth : ComparisonVacancyWSOnly;
+                if(c == ComparisonVacancyWSOnly) wsOnlyVacancies++;
+            }
+            else if(occ >= 2) {
+                c = (correctedSurplusArray[s] > 0) ? ComparisonInterstitialBoth : ComparisonInterstitialWSOnly;
+            }
+            comparisonArray[s] = c;
+        }
+    }
+    outParticles->createProperty(comparison);
+
+    // --- Bar charts for the modifier panel and the data inspector. ---
+    // A bar chart is one bar per row, colored by the element type of its x column.
+    auto createBarChart = [&](const QString& id, const QString& title, const QString& xName,
+                              const std::vector<std::tuple<QString, Color, int64_t>>& bars) {
+        const size_t n = bars.size();
+        PropertyPtr countColumn = DataTable::OOClass().createUserProperty(DataBuffer::Uninitialized, n, Property::Int64, 1, QStringLiteral("Count"));
+        PropertyPtr categoryColumn = DataTable::OOClass().createUserProperty(DataBuffer::Uninitialized, n, Property::Int32, 1, xName);
+        {
+            BufferWriteAccess<int64_t, access_mode::discard_write> countArray(countColumn);
+            BufferWriteAccess<int32_t, access_mode::discard_write> categoryArray(categoryColumn);
+            for(size_t i = 0; i < n; i++) {
+                categoryArray[i] = (int32_t)i;
+                countArray[i] = std::get<2>(bars[i]);
+                DataOORef<ElementType> type = DataOORef<ElementType>::create();
+                type->setNumericId((int)i);
+                type->setName(std::get<0>(bars[i]));
+                type->setColor(std::get<1>(bars[i]));
+                categoryColumn->addElementType(std::move(type));
+            }
+        }
+        state.createObject<DataTable>(id, _createdByNode, DataTable::BarChart, title, std::move(countColumn), std::move(categoryColumn));
+    };
+
+    createBarChart(QStringLiteral("vacancy-ws-comparison"), tr("Wigner-Seitz vs. consensus"), QStringLiteral("Defect"), {
+        {tr("WS vacancies"),        comparisonColors[ComparisonVacancyWSOnly],      (int64_t)rawVacancyCount},
+        {tr("Vacancies"),           comparisonColors[ComparisonVacancyBoth],        (int64_t)classifiedVacancyCount},
+        {tr("WS interstitials"),    comparisonColors[ComparisonInterstitialWSOnly], (int64_t)rawInterstitialCount},
+        {tr("Interstitials"),       comparisonColors[ComparisonInterstitialBoth],   (int64_t)correctedInterstitialCount}
+    });
+
+    // What happened to each Wigner-Seitz vacancy: kept, or the stage that rejected it.
+    {
+        std::array<int64_t, DefectMLRejected + 1> outcomeCounts{};
+        for(size_t s = 0; s < numSites; s++) {
+            if(rawOccupancyArray[s] == 0 && defectTypeArray[s] >= 0 && defectTypeArray[s] <= DefectMLRejected)
+                outcomeCounts[defectTypeArray[s]]++;
+        }
+        std::vector<std::tuple<QString, Color, int64_t>> bars;
+        for(int t : {(int)DefectVacancy, (int)DefectFrenkel, (int)DefectNoCavity, (int)DefectStructural, (int)DefectSurfaceOrVoid, (int)DefectMLRejected}) {
+            if(t == DefectMLRejected && !_mlModel)
+                continue;
+            const ElementType* type = defectTypes->elementType(t);
+            bars.emplace_back(type->name(), type->color(), outcomeCounts[t]);
+        }
+        createBarChart(QStringLiteral("vacancy-ws-outcome"), tr("Fate of the Wigner-Seitz vacancies"), QStringLiteral("Outcome"), bars);
+    }
+
+    // Optionally keep only the defect sites and color them by comparison class, so the two
+    // results can be told apart in the viewport without further modifiers.
+    if(_outputSites != AllSites) {
+        PropertyPtr deletionMask = Particles::OOClass().createStandardProperty(DataBuffer::Uninitialized, numSites, Particles::SelectionProperty);
+        size_t numDeleted = 0;
+        {
+            BufferReadAccess<int32_t> comparisonArray(comparison);
+            BufferWriteAccess<SelectionIntType, access_mode::discard_write> maskArray(deletionMask);
+            for(size_t s = 0; s < numSites; s++) {
+                const int c = comparisonArray[s];
+                const bool keep = (_outputSites == WignerSeitzDefectSites)
+                    ? (c != ComparisonNoDefect)
+                    : (c == ComparisonVacancyBoth || c == ComparisonInterstitialBoth);
+                maskArray[s] = keep ? 0 : 1;
+                if(!keep) numDeleted++;
+            }
+        }
+        outParticles->deleteElements(std::move(deletionMask), numDeleted);
+        BufferReadAccess<int32_t> comparisonArray(outParticles->getProperty(QStringLiteral("Wigner-Seitz Comparison")));
+        BufferWriteAccess<ColorG, access_mode::discard_write> colorArray = outParticles->createProperty(Particles::ColorProperty);
+        for(size_t i = 0; i < comparisonArray.size(); i++)
+            colorArray[i] = comparisonColors[comparisonArray[i]].toDataType<GraphicsFloatType>();
+    }
+
     // --- Global attributes: corrected counts plus the raw Wigner-Seitz counts for comparison. ---
     state.addAttribute(QStringLiteral("VacancyAnalysis.vacancy_count"), QVariant::fromValue(classifiedVacancyCount), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.interstitial_count"), QVariant::fromValue(correctedInterstitialCount), _createdByNode);
@@ -1042,6 +1161,8 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
     state.addAttribute(QStringLiteral("VacancyAnalysis.freevolume_excluded"), QVariant::fromValue(freeVolumeExcluded), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.structural_excluded"), QVariant::fromValue(structuralExcluded), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.surface_or_void_excluded"), QVariant::fromValue(surfaceExcluded), _createdByNode);
+    state.addAttribute(QStringLiteral("VacancyAnalysis.ws_only_vacancies"), QVariant::fromValue(wsOnlyVacancies), _createdByNode);
+    state.addAttribute(QStringLiteral("VacancyAnalysis.ws_only_interstitials"), QVariant::fromValue(rawInterstitialCount > correctedInterstitialCount ? rawInterstitialCount - correctedInterstitialCount : (size_t)0), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.interstitial_pairing"), QVariant::fromValue(identityLedger ? QStringLiteral("identity") : QStringLiteral("geometric")), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.missing_atom_vacancies"), QVariant::fromValue(missingAtomVacancies), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.estimated_nn_distance"), QVariant::fromValue(r_nn), _createdByNode);
@@ -1060,9 +1181,10 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
     }
 
     PipelineStatus status(PipelineStatus::Success,
-        tr("Classified %1 vacancy candidates and %2 corrected interstitials.\nWigner-Seitz raw: %3 vacancies. Removed: %4 Frenkel pairs, %5 without free volume, %6 in disordered regions, %7 near surfaces/voids.")
+        tr("Vacancies: %1 (Wigner-Seitz: %3)\nInterstitials: %2 (Wigner-Seitz: %8)\nRemoved vacancies: %4 Frenkel pairs, %5 without free volume, %6 in disordered regions, %7 near surfaces/voids.")
             .arg(classifiedVacancyCount).arg(correctedInterstitialCount).arg(rawVacancyCount)
-            .arg(frenkelRecombined).arg(freeVolumeExcluded).arg(structuralExcluded).arg(surfaceExcluded));
+            .arg(frenkelRecombined).arg(freeVolumeExcluded).arg(structuralExcluded).arg(surfaceExcluded)
+            .arg(rawInterstitialCount));
     if(identityLedger)
         status.setText(status.text() + tr("\nInterstitials balanced by atom identity: %1 vacant sites lost their atom, the rest were displaced along replacement chains.").arg(missingAtomVacancies));
     if(_mlModel)

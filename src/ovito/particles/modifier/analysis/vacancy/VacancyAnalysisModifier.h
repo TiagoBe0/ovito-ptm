@@ -123,6 +123,24 @@ public:
         DefectMLRejected = 7    ///< Empty site the learned classifier rejected as a deformation artifact.
     };
 
+    /// Which reference sites the modifier outputs.
+    enum OutputSitesType {
+        AllSites,               ///< Every reference site (required for per-site exports).
+        WignerSeitzDefectSites, ///< Only the sites plain Wigner-Seitz flags (occupancy != 1).
+        DetectedDefectSites     ///< Only the vacancies and interstitials this modifier keeps.
+    };
+    Q_ENUM(OutputSitesType)
+
+    /// Per-reference-site agreement with plain Wigner-Seitz, stored in "Wigner-Seitz Comparison".
+    /// The modifier only removes Wigner-Seitz defects, so a "this method only" class does not exist.
+    enum WignerSeitzComparison {
+        ComparisonNoDefect = 0,             ///< Singly occupied site: no defect for either method.
+        ComparisonVacancyBoth = 1,          ///< Empty site confirmed as a vacancy.
+        ComparisonVacancyWSOnly = 2,        ///< Empty site rejected by the filters.
+        ComparisonInterstitialBoth = 3,     ///< Over-occupied site that keeps an interstitial.
+        ComparisonInterstitialWSOnly = 4    ///< Over-occupied site whose surplus was cancelled.
+    };
+
 protected:
 
     /// Creates a computation engine that will compute the modifier's results.
@@ -150,6 +168,7 @@ private:
                 ConstPropertyPtr lammpsCentroProperty, ConstPropertyPtr lammpsCoordProperty,
                 ConstPropertyPtr volumetricStrainProperty, ConstPropertyPtr rmsdProperty, ConstPropertyPtr atomicVolumeProperty,
                 std::shared_ptr<const VacancyMLModel> mlModel, FloatType mlThreshold,
+                OutputSitesType outputSites,
                 OOWeakRef<const PipelineNode> createdByNode) :
             Engine(std::move(positions), simCell, std::move(refPositions), simCellRef,
                 std::move(identifiers), std::move(refIdentifiers), affineMapping, false),
@@ -160,7 +179,7 @@ private:
             _lammpsCentroProperty(std::move(lammpsCentroProperty)), _lammpsCoordProperty(std::move(lammpsCoordProperty)),
             _volumetricStrainProperty(std::move(volumetricStrainProperty)), _rmsdProperty(std::move(rmsdProperty)),
             _atomicVolumeProperty(std::move(atomicVolumeProperty)),
-            _mlModel(std::move(mlModel)), _mlThreshold(mlThreshold),
+            _mlModel(std::move(mlModel)), _mlThreshold(mlThreshold), _outputSites(outputSites),
             _referenceState(std::move(referenceState)),
             _createdByNode(std::move(createdByNode)) {}
 
@@ -201,6 +220,8 @@ private:
         std::shared_ptr<const VacancyMLModel> _mlModel;
         FloatType _mlThreshold;
 
+        OutputSitesType _outputSites;
+
         const PipelineFlowState _referenceState;
         OOWeakRef<const PipelineNode> _createdByNode;
     };
@@ -233,6 +254,10 @@ private:
 
     /// Which upstream per-atom signal is used to detect disordered environments.
     DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(MaskSignalType{StructureSignal}, maskSignal, setMaskSignal, PROPERTY_FIELD_MEMORIZE)
+
+    /// Which reference sites are output: all of them, or only the Wigner-Seitz / detected defect sites
+    /// (colored by their Wigner-Seitz Comparison class), for a direct visual comparison.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(OutputSitesType{AllSites}, outputSites, setOutputSites)
 
     /// Fraction of disordered neighbors above which a candidate vacancy is treated as structural.
     DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(FloatType{0.5}, maskThreshold, setMaskThreshold, PROPERTY_FIELD_MEMORIZE)

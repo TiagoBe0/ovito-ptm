@@ -31,6 +31,7 @@
 #include <ovito/gui/desktop/properties/SubObjectParameterUI.h>
 #include <ovito/gui/desktop/properties/ObjectStatusDisplay.h>
 #include <ovito/core/dataset/io/FileSource.h>
+#include <ovito/core/dataset/pipeline/ModificationNode.h>
 #include "VacancyAnalysisModifierEditor.h"
 
 namespace Ovito {
@@ -162,6 +163,38 @@ void VacancyAnalysisModifierEditor::createUI(const RolloutInsertionParameters& r
     mlModelPathUI->setEnabled(mlUI->checkBox()->isChecked());
     mlThresholdUI->setEnabled(mlUI->checkBox()->isChecked());
 
+    // --- Comparison with plain Wigner-Seitz. ---
+    QGroupBox* outputGroupBox = new QGroupBox(tr("Comparison with Wigner-Seitz"));
+    layout->addWidget(outputGroupBox);
+    QVBoxLayout* outputLayout = new QVBoxLayout(outputGroupBox);
+    outputLayout->setContentsMargins(4,4,4,4);
+    outputLayout->setSpacing(4);
+    IntegerRadioButtonParameterUI* outputSitesUI = createParamUI<IntegerRadioButtonParameterUI>(PROPERTY_FIELD(VacancyAnalysisModifier::outputSites));
+    outputLayout->addWidget(outputSitesUI->addRadioButton(VacancyAnalysisModifier::AllSites, tr("Output all reference sites")));
+    outputLayout->addWidget(outputSitesUI->addRadioButton(VacancyAnalysisModifier::WignerSeitzDefectSites, tr("Only Wigner-Seitz defect sites")));
+    outputLayout->addWidget(outputSitesUI->addRadioButton(VacancyAnalysisModifier::DetectedDefectSites, tr("Only defects kept by this modifier")));
+    QLabel* legendLabel = new QLabel(tr("<p>In the two defect-only modes the sites are colored by the <i>Wigner-Seitz Comparison</i> property: "
+        "<span style=\"color:#e61a1a\">&#9632;</span> vacancy (both), <span style=\"color:#ffbf8c\">&#9632;</span> vacancy (WS only), "
+        "<span style=\"color:#1a4df2\">&#9632;</span> interstitial (both), <span style=\"color:#99d9ff\">&#9632;</span> interstitial (WS only).</p>"));
+    legendLabel->setWordWrap(true);
+    outputLayout->addWidget(legendLabel);
+
+    _comparisonPlot = new DataTablePlotWidget();
+    _comparisonPlot->setMinimumHeight(160);
+    _comparisonPlot->setMaximumHeight(160);
+    outputLayout->addSpacing(6);
+    outputLayout->addWidget(new QLabel(tr("<b>Wigner-Seitz vs. consensus</b>")));
+    outputLayout->addWidget(_comparisonPlot);
+
+    _outcomePlot = new DataTablePlotWidget();
+    _outcomePlot->setMinimumHeight(160);
+    _outcomePlot->setMaximumHeight(160);
+    outputLayout->addWidget(new QLabel(tr("<b>Fate of the Wigner-Seitz vacancies</b>")));
+    outputLayout->addWidget(_outcomePlot);
+
+    // Update the charts whenever the modifier has calculated new results.
+    connect(this, &PropertiesEditor::pipelineOutputChanged, this, &VacancyAnalysisModifierEditor::updateResults);
+
     // --- Affine mapping of the simulation cell. ---
     QGroupBox* mappingGroupBox = new QGroupBox(tr("Affine mapping of simulation cell"));
     layout->addWidget(mappingGroupBox);
@@ -250,6 +283,18 @@ void VacancyAnalysisModifierEditor::onSourceButtonClicked(int id)
         else {
             mod->setReferenceConfiguration(nullptr);
         }
+    });
+}
+
+/******************************************************************************
+* Updates the bar charts computed by the modifier.
+******************************************************************************/
+void VacancyAnalysisModifierEditor::updateResults()
+{
+    handleExceptions([&]() {
+        const PipelineFlowState& state = getPipelineOutput();
+        _comparisonPlot->setTable(state ? state.getObjectBy<DataTable>(modificationNode(), QStringLiteral("vacancy-ws-comparison")) : nullptr);
+        _outcomePlot->setTable(state ? state.getObjectBy<DataTable>(modificationNode(), QStringLiteral("vacancy-ws-outcome")) : nullptr);
     });
 }
 

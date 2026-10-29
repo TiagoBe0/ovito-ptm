@@ -24,6 +24,7 @@
 
 
 #include <ovito/particles/gui/ParticlesGui.h>
+#include <ovito/stdobj/gui/widgets/DataTablePlotWidget.h>
 #include <ovito/gui/desktop/properties/PropertiesEditor.h>
 
 namespace Ovito {
@@ -44,12 +45,21 @@ private Q_SLOTS:
     /// Is called when the user clicks one of the reference source mode buttons.
     void onSourceButtonClicked(int id);
 
+    /// Updates the bar charts computed by the modifier.
+    void updateResults();
+
 protected:
 
     /// Creates the user interface controls for the editor.
     virtual void createUI(const RolloutInsertionParameters& rolloutParams) override;
 
     QButtonGroup* _sourceButtonGroup;
+
+    /// Bar chart of the Wigner-Seitz and consensus defect counts.
+    DataTablePlotWidget* _comparisonPlot;
+
+    /// Bar chart of what happened to each Wigner-Seitz vacancy.
+    DataTablePlotWidget* _outcomePlot;
 };
 
 }   // End of namespace

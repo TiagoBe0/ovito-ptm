@@ -726,3 +726,18 @@ Trayectoria completa con el test (V = I en todos los frames), vacancias antes ->
 70000 637 -> 7, 80000 261 -> 11, 90000 232 -> 26, 100000 374 -> 20, 110000 295 -> 12, 120000 456 -> 14,
 130000 421 -> 18, 140000 751 -> 26, 150000 837 -> 38, finalCool 876 -> 29. El "crecimiento" desde
 t = 120000 desaparece: era fondo de artefactos. Queda un nivel de 10-40 vacancias por frame.
+
+## Comparacion directa con Wigner-Seitz (2026-10-29)
+
+Propiedad por sitio `Wigner-Seitz Comparison` (tipada, con colores): No defect / Vacancy (both) /
+Vacancy (WS only) / Interstitial (both) / Interstitial (WS only). No existe "solo este metodo": el
+modificador solo descarta defectos de WS. El motivo del descarte sigue en `Defect Type`.
+Opcion `outputSites` (GUI: grupo "Comparison with Wigner-Seitz"): todos los sitios (default, lo
+necesitan los dumps por sitio del sweep), solo los defectos WS o solo los defectos detectados; en
+los dos ultimos modos los sitios salen ya coloreados por la comparacion. Atributos nuevos
+`ws_only_vacancies` y `ws_only_interstitials`; columna `ws_comparison` en `--vacancy-sweep-dump-sites`.
+El status muestra "Vacancies: N (Wigner-Seitz: M)" e igual para intersticiales.
+Graficos de barras (tablas `vacancy-ws-comparison` y `vacancy-ws-outcome`, visibles en el panel del
+modificador y en el inspector de datos, exportables como cualquier DataTable): (1) vacancias e
+intersticiales WS vs los del metodo; (2) destino de cada vacancia WS: confirmada, Frenkel, sin
+cavidad, estructural, superficie/void y (en modo ML) rechazada por ML.
