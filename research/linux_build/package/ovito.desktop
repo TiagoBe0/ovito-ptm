@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=OVITO
+GenericName=Visualization of atomistic simulations
+Comment=Open Visualization Tool (fork del grupo)
+Exec=ovito %F
+Icon=ovito
+Terminal=false
+Categories=Science;Physics;Education;

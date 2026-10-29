@@ -28,7 +28,7 @@ jobs:
             ninja-build ccache \
             qt6-base-dev qt6-base-private-dev qt6-svg-dev libgl-dev libegl-dev libxkbcommon-dev libvulkan-dev \
             libboost-dev libnetcdf-dev zlib1g-dev libzstd-dev \
-            libgl1-mesa-dri libegl-mesa0 libglx-mesa0
+            libgl1-mesa-dri libegl-mesa0 libglx-mesa0 patchelf
 
       - name: Restore compiler cache
         uses: actions/cache@v4
@@ -64,6 +64,45 @@ jobs:
           set -o pipefail
           ctest --test-dir build --output-on-failure --timeout 600 2>&1 | tee ctest.log
 
+      - name: Build AppImage
+        run: |
+          set -o pipefail
+          bash research/linux_build/build_appimage.sh build appimage 2>&1 | tee appimage.log
+
+      # A bare Ubuntu image has none of the Qt, Boost or zstd packages of the runner, so the AppImage only passes if
+      # it bundles them. It gets just the libraries that linuxdeploy deliberately leaves to the host (OpenGL, X11,
+      # fontconfig), which every desktop has.
+      - name: Test AppImage in a bare container
+        run: |
+          docker run --rm -v "$PWD/appimage:/w" -e APPIMAGE_EXTRACT_AND_RUN=1 ubuntu:24.04 bash -c '
+            apt-get update -qq
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+              libgl1 libegl1 libgl1-mesa-dri libopengl0 libfontconfig1 libx11-6 libx11-xcb1 libxkbcommon0 > /dev/null
+            cd /tmp
+            fail() {
+              echo "FAILED: $1"; tail -n 30 run.log
+              /w/OVITO-x86_64.AppImage --appimage-extract > /dev/null
+              echo "Libraries missing from the AppImage:"
+              find squashfs-root -type f \( -name "*.so*" -o -path "*/bin/ovito" \) -exec ldd {} \; 2>/dev/null | grep "not found" | sort -u
+              exit 1
+            }
+            for t in bond-order-selftest structure-factor-selftest dxa-selftest; do
+              timeout 600 /w/OVITO-x86_64.AppImage --nogui --$t > run.log 2>&1 || fail "--$t"
+              echo "ok: --$t"
+            done
+            QT_QPA_PLATFORM=offscreen LIBGL_ALWAYS_SOFTWARE=1 timeout 600 /w/OVITO-x86_64.AppImage --gui-editors-selftest particles > run.log 2>&1 || fail "--gui-editors-selftest particles"
+            tail -n 3 run.log'
+          cp research/linux_build/package/LEEME.txt appimage/
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: OVITO-linux-x86_64
+          path: |
+            appimage/OVITO-x86_64.AppImage
+            appimage/LEEME.txt
+          compression-level: 0
+
       - name: Report errors as annotation
         if: failure()
         run: |
@@ -85,4 +124,5 @@ jobs:
           path: |
             build.log
             ctest.log
+            appimage.log
           if-no-files-found: ignore

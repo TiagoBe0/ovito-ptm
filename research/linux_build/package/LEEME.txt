@@ -1,0 +1,38 @@
+OVITO (fork del grupo) para Linux de 64 bits
+============================================
+
+Es un AppImage: un único archivo que se ejecuta sin instalar nada.
+
+1. Darle permiso de ejecución:
+       chmod +x OVITO-x86_64.AppImage
+2. Abrirlo con doble clic o desde una terminal:
+       ./OVITO-x86_64.AppImage
+
+Requisitos: una distribución con glibc 2.39 o más nueva (Ubuntu 24.04 o posterior,
+Linux Mint 22, Debian 13, Fedora 40, etc.). Ver la versión con: ldd --version
+
+Si al abrirlo dice "dlopen(): error loading libfuse.so.2"
+---------------------------------------------------------
+Falta FUSE 2. Instalarlo (Ubuntu 24.04: sudo apt install libfuse2t64) o, sin instalar
+nada, ejecutarlo así:
+       ./OVITO-x86_64.AppImage --appimage-extract-and-run
+
+Si los viewports quedan negros o el programa se cierra al arrancar
+------------------------------------------------------------------
+Pasa en máquinas virtuales, escritorio remoto o sin drivers de OpenGL. Probar con
+OpenGL por software (más lento, pero funciona):
+       LIBGL_ALWAYS_SOFTWARE=1 ./OVITO-x86_64.AppImage
+
+Qué incluye
+-----------
+OVITO 3.14 con los modificadores agregados por el grupo: Time series, Time averaging,
+Reduce property, Difference between frames, Spatial binning, Identify fcc planar
+faults, Calculate local entropy, Bond length/angle distribution, Find rings,
+Structure factor, Shrink-wrap box, Render LAMMPS regions, Bond order, Bader charge
+integration, seguimiento de dislocaciones, análisis de vacancias, SOM, etc.
+
+No incluye: el AI Agent ni los plugins de machine learning (necesitan LibTorch).
+
+Licencias
+---------
+OVITO es software libre (GPLv3 / MIT). Qt se distribuye bajo LGPLv3.
