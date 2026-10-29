@@ -43,11 +43,17 @@ export EXTRA_PLATFORM_PLUGINS="libqoffscreen.so"
 export LDAI_OUTPUT="$OUT_DIR/OVITO-x86_64.AppImage"
 
 # linuxdeploy replaces the RUNPATH of every ELF file it touches with one that points to usr/lib only, which would
-# cut OVITO's plugins off from each other. Record the original ones and put them back in front afterwards.
+# cut OVITO's plugins off from each other. Record the $ORIGIN-relative entries and put them back in front afterwards.
+# Absolute entries (e.g. the HDF5 directory of the build machine) are dropped so that the bundled copy wins.
 declare -A RUNPATHS
 while IFS= read -r -d '' elf; do
-    if rp=$(patchelf --print-rpath "$elf" 2>/dev/null) && [ -n "$rp" ]; then RUNPATHS["$elf"]=$rp; fi
+    rp=$(patchelf --print-rpath "$elf" 2>/dev/null | tr ':' '\n' | grep '^\$ORIGIN' | paste -sd: -) || true
+    if [ -n "$rp" ]; then RUNPATHS["$elf"]=$rp; fi
 done < <(find "$APPDIR/usr/bin" "$APPDIR/usr/lib/ovito" -type f -print0)
+
+# Some of OVITO's libraries (libovito_netcdf.so) link to Core.so without a RUNPATH to it; at run time it is already
+# loaded, but linuxdeploy resolves every file on its own.
+export LD_LIBRARY_PATH="$APPDIR/usr/lib/ovito:$APPDIR/usr/lib/ovito/plugins${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 cd "$OUT_DIR"
 "$TOOLS/linuxdeploy-x86_64.AppImage" \
