@@ -71,13 +71,14 @@ jobs:
 
       # A bare Ubuntu image has none of the Qt, Boost or zstd packages of the runner, so the AppImage only passes if
       # it bundles them. It gets just the libraries that linuxdeploy deliberately leaves to the host (OpenGL, X11,
-      # fontconfig), which every desktop has.
+      # fontconfig, harfbuzz, ICE/SM), which every desktop has.
       - name: Test AppImage in a bare container
         run: |
           docker run --rm -v "$PWD/appimage:/w" -e APPIMAGE_EXTRACT_AND_RUN=1 ubuntu:24.04 bash -c '
             apt-get update -qq
             DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-              libgl1 libegl1 libgl1-mesa-dri libopengl0 libfontconfig1 libx11-6 libx11-xcb1 libxkbcommon0 > /dev/null
+              libgl1 libegl1 libgl1-mesa-dri libopengl0 libfontconfig1 libharfbuzz0b libx11-6 libx11-xcb1 libxkbcommon0 \
+              libice6 libsm6 > /dev/null
             cd /tmp
             fail() {
               echo "FAILED: $1"; tail -n 30 run.log
