@@ -32,6 +32,7 @@
 #include <ovito/gui/base/mainwin/AvailableModifiersModel.h>
 #include <ovito/gui/base/mainwin/PipelineListModel.h>
 #include <ovito/gui/base/mainwin/PipelineListItem.h>
+#include <ovito/stdobj/gui/widgets/DataTablePlotWidget.h>
 #include <ovito/core/app/StandaloneApplication.h>
 #include <ovito/core/dataset/pipeline/ModificationNode.h>
 #include <ovito/core/dataset/pipeline/PipelineEvaluationRequest.h>
@@ -58,6 +59,7 @@ struct Random {
 };
 
 /// Diamond-cubic carbon, 4x4x4 unit cells (512 atoms), three frames with small random displacements.
+/// Atom 1 is missing from frames 1 and 2, so that they contain one vacancy relative to frame 0.
 void writeCarbonDump(const QString& path)
 {
     QFile file(path);
@@ -71,17 +73,21 @@ void writeCarbonDump(const QString& path)
     Random random;
     for(int frame = 0; frame < 3; frame++) {
         out << "ITEM: TIMESTEP\n" << frame * 100 << "\n";
-        out << "ITEM: NUMBER OF ATOMS\n" << 8 * n * n * n << "\n";
+        out << "ITEM: NUMBER OF ATOMS\n" << 8 * n * n * n - (frame == 0 ? 0 : 1) << "\n";
         out << "ITEM: BOX BOUNDS pp pp pp\n";
         for(int d = 0; d < 3; d++) out << "0 " << a * n << "\n";
         out << "ITEM: ATOMS id element x y z\n";
         int id = 1;
         for(int i = 0; i < n; i++) for(int j = 0; j < n; j++) for(int k = 0; k < n; k++) for(const auto& b : basis) {
             const double noise = frame == 0 ? 0.0 : 0.05;
-            out << QString::asprintf("%d C %.6f %.6f %.6f\n", id++,
-                a * (i + b[0]) + noise * (random() - 0.5),
-                a * (j + b[1]) + noise * (random() - 0.5),
-                a * (k + b[2]) + noise * (random() - 0.5));
+            const double x = a * (i + b[0]) + noise * (random() - 0.5);
+            const double y = a * (j + b[1]) + noise * (random() - 0.5);
+            const double z = a * (k + b[2]) + noise * (random() - 0.5);
+            if(id == 1 && frame != 0) {
+                id++;
+                continue;
+            }
+            out << QString::asprintf("%d C %.6f %.6f %.6f\n", id++, x, y, z);
         }
     }
 }
@@ -159,6 +165,7 @@ void GuiEditorsSelfTestService::applicationStarted()
             {"FindRingsModifier"}, {"StructureFactorModifier"}, {"ShrinkWrapBoxModifier"},
             {"RenderLAMMPSRegionsModifier"}, {"BondOrderModifier"},
             {"ColorByTypeModifier"}, {"SliceModifier"}, {"ConstructSurfaceModifier"}, {"DislocationAnalysisModifier"},
+            {"VacancyAnalysisModifier", false, true},       // Evaluated at the last frame, which has a vacancy.
         };
     }
     else if(mode == QStringLiteral("grid")) {
@@ -306,6 +313,27 @@ void GuiEditorsSelfTestService::tick()
             .arg(QString::fromLatin1(typeName)).arg(_stepClock.elapsed()).arg(s.text().simplified().left(160));
         qInfo().noquote() << _report.back();
 
+        // The editor's plots must show the data tables the modifier produced.
+        if(step.plotsExpected) {
+            for(DataTablePlotWidget* plot : _ui->mainWindow()->commandPanel()->findChildren<DataTablePlotWidget*>()) {
+                const DataTable* table = plot->table();
+                if(!table || !table->y() || table->y()->size() == 0) {
+                    _failures++;
+                    _report << QStringLiteral("  FAIL  %1 shows an empty plot").arg(step.className, -34);
+                    qCritical().noquote() << _report.back();
+                    continue;
+                }
+                QStringList values;
+                table->y()->forAnyType([&](auto _) {
+                    using T = decltype(_);
+                    BufferReadAccess<T*> y(table->y());
+                    for(size_t i = 0; i < y.size(); i++)
+                        values << QString::number((double)y.get(i, 0));
+                });
+                qInfo().noquote() << QStringLiteral("        plot '%1': %2").arg(table->objectTitle(), values.join(QStringLiteral(" ")));
+            }
+        }
+
         if(step.className == QStringLiteral("CreateBondsModifier")) {
             _current++;
             _phase = Phase::Insert;
@@ -376,6 +404,11 @@ void GuiEditorsSelfTestService::insertCurrentModifier()
         return fail(tr("is not listed in the modifier menu"));
     if(!action->isEnabled())
         return fail(tr("is disabled in the modifier menu (not applicable to the input data)"));
+
+    if(step.plotsExpected) {
+        // Move to the last animation frame, where the test data differs from the reference frame.
+        _ui->datasetContainer().activeAnimationSettings()->jumpToAnimationEnd();
+    }
 
     _stepClock.start();
     modifiersModel->insertModifierByIndex(index);

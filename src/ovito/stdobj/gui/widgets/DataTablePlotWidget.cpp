@@ -28,6 +28,7 @@
 #include <qwt/qwt_plot_spectrocurve.h>
 #include <qwt/qwt_plot_grid.h>
 #include <qwt/qwt_plot_barchart.h>
+#include <qwt/qwt_column_symbol.h>
 #include <qwt/qwt_plot_legenditem.h>
 #include <qwt/qwt_plot_layout.h>
 #include <qwt/qwt_scale_widget.h>
@@ -37,6 +38,32 @@
 #include <qwt/qwt_painter.h>
 
 namespace Ovito {
+
+namespace {
+
+/// Bar chart that draws each bar in the color of the element type it represents.
+class TypeColoredBarChart : public QwtPlotBarChart
+{
+public:
+
+    void setColors(std::vector<QColor> colors) { _colors = std::move(colors); }
+
+    virtual QwtColumnSymbol* specialSymbol(int sampleIndex, const QPointF&) const override {
+        if(sampleIndex < 0 || sampleIndex >= (int)_colors.size() || !_colors[sampleIndex].isValid())
+            return nullptr;
+        QwtColumnSymbol* symbol = new QwtColumnSymbol(QwtColumnSymbol::Box);
+        symbol->setFrameStyle(QwtColumnSymbol::Plain);
+        symbol->setLineWidth(1);
+        symbol->setPalette(QPalette(_colors[sampleIndex]));
+        return symbol;
+    }
+
+private:
+
+    std::vector<QColor> _colors;
+};
+
+}   // End of anonymous namespace
 
 /******************************************************************************
 * Constructor.
@@ -284,7 +311,7 @@ void DataTablePlotWidget::updateDataPlot()
     else if(plotMode == DataTable::BarChart) {
         // Bar chart:
         if(!_barChart) {
-            _barChart = new QwtPlotBarChart();
+            _barChart = new TypeColoredBarChart();
             _barChart->setRenderHint(QwtPlotItem::RenderAntialiased, true);
             _barChart->setZ(0);
             _barChart->attach(this);
@@ -297,6 +324,7 @@ void DataTablePlotWidget::updateDataPlot()
         }
         QVector<double> ycoords;
         QStringList labels;
+        std::vector<QColor> colors;
 
         // Populate Y array
         if(y) {
@@ -320,6 +348,7 @@ void DataTablePlotWidget::updateDataPlot()
                 if(!type && x) type = x->elementType(i);
                 if(type) {
                     labels.push_back(type->name());
+                    colors.push_back(static_cast<QColor>(type->color()));
                 }
             }
         }
@@ -337,6 +366,7 @@ void DataTablePlotWidget::updateDataPlot()
 
         setAxisMaxMinor(QwtPlot::xBottom, 0);
         setAxisMaxMajor(QwtPlot::xBottom, labels.size());
+        static_cast<TypeColoredBarChart*>(_barChart)->setColors(std::move(colors));
         _barChart->setSamples(ycoords);
         _barChartScaleDraw->setLabels(std::move(labels));
 

@@ -103,12 +103,13 @@ private:
             invalidateCache();
         }
 
-        /// Returns the label text for the given axis position.
+        /// Returns the label text for the given axis position. Words go on separate lines so that the labels of
+        /// neighboring bars do not overlap in a narrow plot.
         virtual QwtText label(double value) const override {
             QwtText lbl;
             int index = qRound(value);
             if(index >= 0 && index < _labels.size() && std::abs(value - (double)index) < 1e-1)
-                lbl = _labels[index];
+                lbl = QString(_labels[index]).replace(QChar(' '), QChar('\n'));
             return lbl;
         }
 

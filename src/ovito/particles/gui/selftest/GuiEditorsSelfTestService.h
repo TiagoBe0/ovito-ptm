@@ -70,6 +70,7 @@ private:
     struct Step {
         QString className;
         bool errorExpected = false;     ///< The modifier cannot work on the test data (e.g. needs FCC); an error status is fine.
+        bool plotsExpected = false;     ///< Every plot in the editor must show a non-empty data table.
     };
 
     /// Advances the test state machine; called periodically by the timer.
