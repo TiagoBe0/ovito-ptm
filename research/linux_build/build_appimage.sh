@@ -55,12 +55,20 @@ done < <(find "$APPDIR/usr/bin" "$APPDIR/usr/lib/ovito" -type f -print0)
 # loaded, but linuxdeploy resolves every file on its own.
 export LD_LIBRARY_PATH="$APPDIR/usr/lib/ovito:$APPDIR/usr/lib/ovito/plugins${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
+# All of OVITO's theme icons are SVG files, and Qt's theme icon loader only considers SVG files when the SVG icon
+# engine plugin is present. linuxdeploy-plugin-qt deploys the SVG image format plugin but not the icon engine, which
+# left every icon-only button (command panel tabs, viewport maximize) blank.
+QT_PLUGIN_DIR=$("$QMAKE" -query QT_INSTALL_PLUGINS)
+mkdir -p "$APPDIR/usr/plugins/iconengines"
+cp "$QT_PLUGIN_DIR/iconengines/libqsvgicon.so" "$APPDIR/usr/plugins/iconengines/"
+
 cd "$OUT_DIR"
 "$TOOLS/linuxdeploy-x86_64.AppImage" \
     --appdir "$APPDIR" \
     --executable "$APPDIR/usr/bin/ovito" \
     --deploy-deps-only "$APPDIR/usr/lib/ovito" \
     --deploy-deps-only "$APPDIR/usr/lib/ovito/plugins" \
+    --deploy-deps-only "$APPDIR/usr/plugins/iconengines" \
     --desktop-file "$HERE/package/ovito.desktop" \
     --icon-file "$REPO/doc/manual/images/team/ovito_logo_256.png" \
     --icon-filename ovito \
@@ -73,6 +81,10 @@ for elf in "${!RUNPATHS[@]}"; do
 done
 echo "RUNPATH of usr/bin/ovito: $(patchelf --print-rpath "$APPDIR/usr/bin/ovito")"
 echo "RUNPATH of Core.so:       $(patchelf --print-rpath "$APPDIR/usr/lib/ovito/plugins/Core.so")"
+
+for plugin in iconengines/libqsvgicon.so imageformats/libqsvg.so platforms/libqxcb.so; do
+    [ -f "$APPDIR/usr/plugins/$plugin" ] || { echo "ERROR: Qt plugin $plugin is missing from the AppDir"; exit 1; }
+done
 
 # Packaging step only: unlike linuxdeploy --output appimage, it does not run the ELF deployment again.
 "$TOOLS/linuxdeploy-plugin-appimage-x86_64.AppImage" --appdir "$APPDIR"
