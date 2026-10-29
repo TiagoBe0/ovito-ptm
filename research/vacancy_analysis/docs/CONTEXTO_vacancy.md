@@ -640,3 +640,89 @@ Calibracion de 0.85 (ajuste seed0, validacion seed7, candidatos que sobreviven a
 55-57 % de los falsos y pierde 7/904 y 2/916 verdaderas; 0.80 elimina 26-28 % sin perder ninguna.
 Reglas, F1 antes -> despues: strain 0.522 -> 0.713 (seed7 0.536 -> 0.756; FP 163 -> 19); noise,
 cluster y cascade iguales o +0.01. Modo ML sin cambios (0 discrepancias C++/Python).
+
+## Balance de intersticiales por identidad (2026-10-28)
+
+Datos: HfNbTaTiZr con interfase BCC/HCP (`~/Desktop/track_facu/simulacion_HCP-BCC`, 7.96 M atomos,
+referencia `track_dump-relax.0`). Dos casos con respuesta conocida, armados por el trabajo WS+SOM
+previo (`postpro/ws_som`):
+
+- **control** `relax.0 -> relax.1000`: sin defectos reales, todo lo que marca WS es artefacto.
+- **calibracion** `calib/dump.calib`: configuracion final templada con 240 vacancias reales
+  insertadas (80 BCC, 80 compacta, 80 interfase; `patches_map.npz`). V - I verdadero = 240.
+
+Diagnostico: las vacancias andaban bien (control 0 falsas; calibracion 238/240 recuperadas, las 9
+que "faltaban" migraron > 1.5 A), pero los intersticiales solo se corregian por la recombinacion
+geometrica: control I = 1044 (verdad 0), calibracion I = 8915 (V = 1068). Cada vacancia rechazada
+por cavidad/mascara dejaba vivo su excedente, que esta al final de una cadena de reemplazos de
+2-8 nn (transformacion de fase), fuera del cutoff de 1.2 nn.
+
+Cambio (`identityPairing`, default on; `--vacancy-sweep-no-identity-pairing` lo apaga): con
+Particle Identifier en ambas configuraciones se sigue cada sitio vacio por su cadena (atomo propio
+-> sitio que ocupa -> atomo propio de ese sitio ...) hasta un sitio con excedente libre o hasta un
+atomo que ya no existe. Un intersticial sobrevive solo si la vacancia del otro extremo fue
+confirmada; el excedente que ninguna cadena alcanza (atomos agregados) se conserva. Donde las
+cadenas se cruzan, el atomo faltante se le asigna a una vacancia confirmada (intercambio de
+extremos), porque solo su numero esta determinado. Propiedades nuevas `Replacement Chain Partner`
+(-1 atomo faltante) y `Replacement Chain Distance`; atributos `interstitial_pairing` y
+`missing_atom_vacancies`; columnas `chain_partner_site chain_distance` en los dumps.
+
+| caso | WS crudo V/I | antes V/I | ahora V/I |
+|---|---|---|---|
+| control (0/0) | 3663/3663 | 0/1044 | 0/0 |
+| calibracion (V-I = 240) | 23503/23263 | 1068/8915 | 1068/828 |
+
+Sinteticos (con `--vacancy-sweep-identifier-column site_id`, I verdadero = 0), error medio de I
+geometrico -> identidad: strain 19.6 -> 0.0, cascade 2.8 -> 1.8 (seed7 4.2 -> 3.8), cluster
+2.4 -> 2.4. Vacancias identicas en todos los casos; `validate_precision_recall.py` sin cambios.
+Costo en 7.96 M atomos: +4 s y +1 GB (mapa de identificadores).
+
+Trayectoria completa (ref `relax.0`, 16 frames Evol + finalCool, PTM, ~40 s y 5.7 GB por frame):
+WS crudo sube a 230 k pares en t = 60000 (pico de la transformacion) y vuelve a 23 k; el metodo
+da V = I en todos los frames (0 en 10000, pico 1189 en 50000, 876 al final). Antes del cambio I
+hubiera seguido a las vacancias rechazadas por cavidad/mascara (decenas de miles).
+
+Abierto: de las 839 vacancias aceptadas en la calibracion que no son las insertadas, 100 tienen su
+excedente de cadena a <= 1.2 nn (par inestable). Recombinar por cadena las eliminaria, pero falta
+verdad de terreno para validarlo.
+
+## Test de atomo mas cercano (2026-10-28)
+
+Verdad aproximada para el fondo de ~850 vacancias que quedaba en la configuracion final: el
+snapshot `track_data.sistema_track_final_cooled` (base de `calib`) es del paso 161000, 1000 pasos
+despues de `finalCool.160000`, a ~300 K. De las 876 vacancias de 160000 solo 79 siguen en el mismo
+sitio a 161000 (entre frames Evol consecutivos: 5-9 %). Una vacancia real no salta en 1 ps a
+300 K, asi que el fondo es casi todo artefacto. Caso nuevo de intersticiales: `calib/dump.calib_int`
+(240 atomos insertados, `patches_map_int.npz`), verdad I - V = 240; se mide por parche (radio 16 A)
+porque el dumbbell migra por reemplazo y el atomo extra no marca el defecto.
+
+Diagnostico: las insertadas tienen el atomo mas cercano a d1 = 0.88 nn (mediana; minimo 0.67), el
+fondo a 0.63 nn: un atomo a mitad de camino del sitio (sitio de referencia que no coincide con la
+red actual). La media de 6 vecinos (test de cavidad) no lo ve: en el fondo es incluso mayor.
+
+Cambio (`nearestAtomRatio`, default 0.75; `--vacancy-sweep-nearest-atom-ratio`, 0 lo apaga): dentro
+del test de volumen libre, ademas de la cavidad se exige d1 >= 0.75 * r1, con r1 = mediana de la
+distancia al vecino mas cercano entre atomos actuales (mismo estadistico, mismo sesgo por ruido;
+atributo `closest_pair_distance_current`, 2.81 A aca). Normalizar por r_nn en vez de r1 fallaria con
+ruido sintetico sigma >= 0.18. El test viejo `nearest >= 0.5 nn` no podia fallar; a 0.75 de r1 si.
+
+| caso | verdad | antes V/I | ahora V/I |
+|---|---|---|---|
+| control | 0/0 | 0/0 | 0/0 |
+| calib (vacancias) | V - I = 240 | 1068/828 | 249/9 |
+| calib_int (intersticiales) | I - V = 240 | 853/1093 | 26/266 |
+| finalCool.160000 | ? | 876/876 | 29/29 |
+
+calib: recall 218/240 (bcc 77, cp 79, iface 62: las perdidas estan en la interfase), otras
+vacancias 839 -> 31, precision 0.21 -> 0.88. calib_int: los 240 parches con exactamente I = 1, V = 0
+(antes 237); fondo 26/26. finalCool: de las 29 que quedan, 20 persisten a 161000 (69 %, antes 9 %).
+Sinteticos TP/FP antes -> despues: cascade 166/43 -> 161/19 (seed7 177/41 -> 173/20), strain
+123/22 -> 122/22 (seed7 133/19 -> 132/18), cluster 187/25 -> 186/25 (seed7 189/23 -> 189/22),
+noise sin cambios. Barrido: 0.70 deja 225/240 insertadas y 100 de fondo; 0.80 deja 211 y 16 pero
+empieza a perder en strain (123 -> 115).
+
+Trayectoria completa con el test (V = I en todos los frames), vacancias antes -> despues:
+10000 0 -> 0, 20000 115 -> 8, 30000 531 -> 12, 40000 1087 -> 16, 50000 1189 -> 32, 60000 875 -> 18,
+70000 637 -> 7, 80000 261 -> 11, 90000 232 -> 26, 100000 374 -> 20, 110000 295 -> 12, 120000 456 -> 14,
+130000 421 -> 18, 140000 751 -> 26, 150000 837 -> 38, finalCool 876 -> 29. El "crecimiento" desde
+t = 120000 desaparece: era fondo de artefactos. Queda un nivel de 10-40 vacancias por frame.

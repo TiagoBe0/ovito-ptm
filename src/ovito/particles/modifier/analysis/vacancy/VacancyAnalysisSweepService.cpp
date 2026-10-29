@@ -125,6 +125,11 @@ void VacancyAnalysisSweepService::registerCommandLineOptions(QCommandLineParser&
         QStringLiteral("list"),
         QStringLiteral("0.85")));
     cmdLineParser.addOption(makeOption(
+        QStringLiteral("vacancy-sweep-nearest-atom-ratio"),
+        tr("Minimum distance from a vacancy candidate to its closest atom, as a fraction of the median closest-pair distance between atoms. 0 disables the test. Default: 0.75."),
+        QStringLiteral("value"),
+        QStringLiteral("0.75")));
+    cmdLineParser.addOption(makeOption(
         QStringLiteral("vacancy-sweep-recombination-cutoffs"),
         tr("Comma-separated Frenkel recombination cutoffs. Use 0 or auto for automatic cutoff."),
         QStringLiteral("list"),
@@ -142,6 +147,9 @@ void VacancyAnalysisSweepService::registerCommandLineOptions(QCommandLineParser&
     cmdLineParser.addOption(makeOption(
         QStringLiteral("vacancy-sweep-no-frenkel"),
         tr("Disable local Frenkel-pair recombination during the sweep.")));
+    cmdLineParser.addOption(makeOption(
+        QStringLiteral("vacancy-sweep-no-identity-pairing"),
+        tr("Do not balance interstitials through the atom-identity replacement chains; use the geometric Frenkel bookkeeping only.")));
     cmdLineParser.addOption(makeOption(
         QStringLiteral("vacancy-sweep-no-free-volume"),
         tr("Disable the local free-volume vacancy confirmation during the sweep.")));
@@ -213,6 +221,12 @@ VacancyAnalysisSweepService::SweepParameters VacancyAnalysisSweepService::parseC
     params.maskThresholds = parseFloatList(parser.value(QStringLiteral("vacancy-sweep-mask-thresholds")), {FloatType(0.5)}, QStringLiteral("vacancy-sweep-mask-thresholds"));
     params.cavityRadiusRatios = parseFloatList(parser.value(QStringLiteral("vacancy-sweep-cavity-ratios")), {FloatType(0.85)}, QStringLiteral("vacancy-sweep-cavity-ratios"));
     params.recombinationCutoffs = parseCutoffList(parser.value(QStringLiteral("vacancy-sweep-recombination-cutoffs")));
+    {
+        bool ok = false;
+        params.nearestAtomRatio = (FloatType)parser.value(QStringLiteral("vacancy-sweep-nearest-atom-ratio")).toDouble(&ok);
+        if(!ok || params.nearestAtomRatio < 0 || params.nearestAtomRatio > 1)
+            throw Exception(QStringLiteral("--vacancy-sweep-nearest-atom-ratio must be a number in the [0, 1] range."));
+    }
     for(FloatType value : params.maskThresholds) {
         if(value < 0 || value > 1)
             throw Exception(QStringLiteral("--vacancy-sweep-mask-thresholds values must be in the [0, 1] range."));
@@ -222,6 +236,7 @@ VacancyAnalysisSweepService::SweepParameters VacancyAnalysisSweepService::parseC
             throw Exception(QStringLiteral("--vacancy-sweep-cavity-ratios values must be in the [0, 1] range."));
     }
     params.frenkelRecombination = !parser.isSet(QStringLiteral("vacancy-sweep-no-frenkel"));
+    params.identityPairing = !parser.isSet(QStringLiteral("vacancy-sweep-no-identity-pairing"));
     params.requireFreeVolume = !parser.isSet(QStringLiteral("vacancy-sweep-no-free-volume"));
     params.maskDisordered = !parser.isSet(QStringLiteral("vacancy-sweep-no-mask"));
     params.autodetectFileSequences = !parser.isSet(QStringLiteral("vacancy-sweep-no-sequence-detection"));
@@ -470,6 +485,8 @@ void VacancyAnalysisSweepService::writeSiteDump(QTextStream& stream, const Pipel
     const Property* interstitialShell = particles->getProperty(QStringLiteral("Interstitial Sites In Shell"));
     const Property* mlProbability = particles->getProperty(QStringLiteral("ML Vacancy Probability"));
     const Property* cavityRadius = particles->getProperty(QStringLiteral("Cavity Radius"));
+    const Property* chainPartner = particles->getProperty(QStringLiteral("Replacement Chain Partner"));
+    const Property* chainDistance = particles->getProperty(QStringLiteral("Replacement Chain Distance"));
     if(!defectType)
         return;
 
@@ -490,6 +507,8 @@ void VacancyAnalysisSweepService::writeSiteDump(QTextStream& stream, const Pipel
     BufferReadAccess<int32_t> interstitialShellArray(interstitialShell);
     BufferReadAccess<FloatType> mlProbabilityArray(mlProbability);
     BufferReadAccess<FloatType> cavityRadiusArray(cavityRadius);
+    BufferReadAccess<int64_t> chainPartnerArray(chainPartner);
+    BufferReadAccess<FloatType> chainDistanceArray(chainDistance);
 
     const size_t n = defectType->size();
     for(size_t s = 0; s < n; s++) {
@@ -514,6 +533,8 @@ void VacancyAnalysisSweepService::writeSiteDump(QTextStream& stream, const Pipel
         fields << (interstitialShell ? QString::number(interstitialShellArray[s]) : QString());
         fields << (mlProbability ? QLocale::c().toString((double)mlProbabilityArray[s], 'g', 9) : QString());
         fields << (cavityRadius ? QLocale::c().toString((double)cavityRadiusArray[s], 'g', 9) : QString());
+        fields << (chainPartner ? QString::number((qlonglong)chainPartnerArray[s]) : QString());
+        fields << (chainDistance ? QLocale::c().toString((double)chainDistanceArray[s], 'g', 9) : QString());
         writeCsvRow(stream, fields);
     }
 }
@@ -566,6 +587,8 @@ void VacancyAnalysisSweepService::writeMultiSomDump(const QString& path, const P
     const Property* localRmsd = column(u"Local RMSD");
     const Property* localAtomicVolume = column(u"Local Atomic Volume");
     const Property* localContextCount = column(u"Local Context Count");
+    const Property* chainPartner = column(u"Replacement Chain Partner");
+    const Property* chainDistance = column(u"Replacement Chain Distance");
     const Property* siteId = column(u"site_id");
 
     BufferReadAccess<Point3> positionArray(positionProperty);
@@ -589,6 +612,8 @@ void VacancyAnalysisSweepService::writeMultiSomDump(const QString& path, const P
     BufferReadAccess<FloatType> localRmsdArray(localRmsd);
     BufferReadAccess<FloatType> localAtomicVolumeArray(localAtomicVolume);
     BufferReadAccess<int32_t> localContextCountArray(localContextCount);
+    BufferReadAccess<int64_t> chainPartnerArray(chainPartner);
+    BufferReadAccess<FloatType> chainDistanceArray(chainDistance);
     BufferReadAccess<int32_t> siteIdArray(siteId);
 
     const size_t numSites = defectType->size();
@@ -638,7 +663,7 @@ void VacancyAnalysisSweepService::writeMultiSomDump(const QString& path, const P
               " nearest_vacant_distance vacant_neighbors_150 nearest_interstitial_distance"
               " nearest_interstitial_surplus interstitial_neighbors_150 ml_probability"
               " local_shear_strain_mean local_shear_strain_max local_vol_strain local_rmsd"
-              " local_atomic_volume local_context_count\n";
+              " local_atomic_volume local_context_count chain_partner_site chain_distance\n";
 
     for(size_t s : rows) {
         QStringList fields;
@@ -669,6 +694,8 @@ void VacancyAnalysisSweepService::writeMultiSomDump(const QString& path, const P
         fields << QLocale::c().toString(localRmsd ? (double)localRmsdArray[s] : 0.0, 'g', 9);
         fields << QLocale::c().toString(localAtomicVolume ? (double)localAtomicVolumeArray[s] : 0.0, 'g', 9);
         fields << QString::number(localContextCount ? localContextCountArray[s] : 0);
+        fields << QString::number(chainPartner ? (qlonglong)chainPartnerArray[s] : -2);
+        fields << QLocale::c().toString(chainDistance ? (double)chainDistanceArray[s] : -1.0, 'g', 9);
         stream << fields.join(QChar(' ')) << "\n";
     }
 }
@@ -816,7 +843,8 @@ void VacancyAnalysisSweepService::runSweep(const SweepParameters& params)
             QStringLiteral("nearest_vacant_distance"), QStringLiteral("vacant_neighbors_150"),
             QStringLiteral("nearest_interstitial_distance"), QStringLiteral("nearest_interstitial_surplus"),
             QStringLiteral("interstitial_neighbors_150"), QStringLiteral("ml_probability"),
-            QStringLiteral("cavity_radius")
+            QStringLiteral("cavity_radius"),
+            QStringLiteral("chain_partner_site"), QStringLiteral("chain_distance")
         });
     }
 
@@ -844,6 +872,10 @@ void VacancyAnalysisSweepService::runSweep(const SweepParameters& params)
         QStringLiteral("estimated_nn_distance_current"),
         QStringLiteral("mask_signal_used"),
         QStringLiteral("mask_signal_cutoff"),
+        QStringLiteral("interstitial_pairing"),
+        QStringLiteral("missing_atom_vacancies"),
+        QStringLiteral("nearest_atom_ratio"),
+        QStringLiteral("closest_pair_distance_current"),
         QStringLiteral("status_type"),
         QStringLiteral("status_text")
     });
@@ -856,8 +888,10 @@ void VacancyAnalysisSweepService::runSweep(const SweepParameters& params)
                 for(FloatType recombinationCutoff : params.recombinationCutoffs) {
                     modifier->setFrenkelRecombination(params.frenkelRecombination);
                     modifier->setRecombinationCutoff(recombinationCutoff);
+                    modifier->setIdentityPairing(params.identityPairing);
                     modifier->setRequireFreeVolume(params.requireFreeVolume);
                     modifier->setCavityRadiusRatio(cavityRatio);
+                    modifier->setNearestAtomRatio(params.nearestAtomRatio);
                     modifier->setMaskDisordered(params.maskDisordered);
                     modifier->setMaskSignal(maskSignal);
                     modifier->setMaskThreshold(maskThreshold);
@@ -894,6 +928,10 @@ void VacancyAnalysisSweepService::runSweep(const SweepParameters& params)
                             variantToString(attr(state, QStringLiteral("VacancyAnalysis.estimated_nn_distance_current"))),
                             variantToString(attr(state, QStringLiteral("VacancyAnalysis.mask_signal_used"))),
                             variantToString(attr(state, QStringLiteral("VacancyAnalysis.mask_signal_cutoff"))),
+                            variantToString(attr(state, QStringLiteral("VacancyAnalysis.interstitial_pairing"))),
+                            variantToString(attr(state, QStringLiteral("VacancyAnalysis.missing_atom_vacancies"))),
+                            QLocale::c().toString(params.nearestAtomRatio, 'g', 9),
+                            variantToString(attr(state, QStringLiteral("VacancyAnalysis.closest_pair_distance_current"))),
                             statusTypeName(status.type()),
                             status.text()
                         });

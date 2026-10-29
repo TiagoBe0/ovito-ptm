@@ -70,6 +70,11 @@ void VacancyAnalysisModifierEditor::createUI(const RolloutInsertionParameters& r
     connect(frenkelUI->checkBox(), &QCheckBox::toggled, recombCutoffUI, &FloatParameterUI::setEnabled);
     recombCutoffUI->setEnabled(frenkelUI->checkBox()->isChecked());
 
+    BooleanParameterUI* identityPairingUI = createParamUI<BooleanParameterUI>(PROPERTY_FIELD(VacancyAnalysisModifier::identityPairing));
+    identityPairingUI->checkBox()->setText(tr("Balance interstitials by atom identity"));
+    identityPairingUI->checkBox()->setToolTip(tr("Requires particle identifiers. Follows each vacant site along its replacement chain and keeps the interstitial at the other end only if the vacancy is confirmed."));
+    sublayout->addWidget(identityPairingUI->checkBox(), 2, 0, 1, 2);
+
     // --- Free-volume confirmation. ---
     QGroupBox* freeVolGroupBox = new QGroupBox(tr("Free-volume confirmation"));
     layout->addWidget(freeVolGroupBox);
@@ -88,6 +93,13 @@ void VacancyAnalysisModifierEditor::createUI(const RolloutInsertionParameters& r
     sublayout->addLayout(cavityRatioUI->createFieldLayout(), 1, 1);
     connect(freeVolUI->checkBox(), &QCheckBox::toggled, cavityRatioUI, &FloatParameterUI::setEnabled);
     cavityRatioUI->setEnabled(freeVolUI->checkBox()->isChecked());
+
+    FloatParameterUI* nearestRatioUI = createParamUI<FloatParameterUI>(PROPERTY_FIELD(VacancyAnalysisModifier::nearestAtomRatio));
+    nearestRatioUI->label()->setText(tr("Min. nearest-atom distance (x closest-pair dist.):"));
+    sublayout->addWidget(nearestRatioUI->label(), 2, 0);
+    sublayout->addLayout(nearestRatioUI->createFieldLayout(), 2, 1);
+    connect(freeVolUI->checkBox(), &QCheckBox::toggled, nearestRatioUI, &FloatParameterUI::setEnabled);
+    nearestRatioUI->setEnabled(freeVolUI->checkBox()->isChecked());
 
     // --- Structural masking. ---
     QGroupBox* maskGroupBox = new QGroupBox(tr("Disordered-region masking"));

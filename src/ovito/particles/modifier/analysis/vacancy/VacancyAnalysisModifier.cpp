@@ -115,6 +115,8 @@ DEFINE_PROPERTY_FIELD(VacancyAnalysisModifier, frenkelRecombination);
 DEFINE_PROPERTY_FIELD(VacancyAnalysisModifier, recombinationCutoff);
 DEFINE_PROPERTY_FIELD(VacancyAnalysisModifier, requireFreeVolume);
 DEFINE_PROPERTY_FIELD(VacancyAnalysisModifier, cavityRadiusRatio);
+DEFINE_PROPERTY_FIELD(VacancyAnalysisModifier, nearestAtomRatio);
+DEFINE_PROPERTY_FIELD(VacancyAnalysisModifier, identityPairing);
 DEFINE_PROPERTY_FIELD(VacancyAnalysisModifier, maskDisordered);
 DEFINE_PROPERTY_FIELD(VacancyAnalysisModifier, maskSignal);
 DEFINE_PROPERTY_FIELD(VacancyAnalysisModifier, maskThreshold);
@@ -125,6 +127,8 @@ SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, frenkelRecombination, "Recombi
 SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, recombinationCutoff, "Recombination cutoff");
 SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, requireFreeVolume, "Require free volume");
 SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, cavityRadiusRatio, "Min. cavity radius (x nn dist.)");
+SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, nearestAtomRatio, "Min. nearest-atom distance (x closest-pair dist.)");
+SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, identityPairing, "Pair defects by atom identity");
 SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, maskDisordered, "Mask disordered regions");
 SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, maskSignal, "Disorder signal");
 SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, maskThreshold, "Disorder fraction threshold");
@@ -133,6 +137,7 @@ SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, mlModelPath, "ML model file");
 SET_PROPERTY_FIELD_LABEL(VacancyAnalysisModifier, mlThreshold, "ML probability threshold");
 SET_PROPERTY_FIELD_UNITS_AND_MINIMUM(VacancyAnalysisModifier, recombinationCutoff, WorldParameterUnit, 0);
 SET_PROPERTY_FIELD_UNITS_AND_RANGE(VacancyAnalysisModifier, cavityRadiusRatio, FloatParameterUnit, 0, 1);
+SET_PROPERTY_FIELD_UNITS_AND_RANGE(VacancyAnalysisModifier, nearestAtomRatio, FloatParameterUnit, 0, 1);
 SET_PROPERTY_FIELD_UNITS_AND_RANGE(VacancyAnalysisModifier, maskThreshold, FloatParameterUnit, 0, 1);
 SET_PROPERTY_FIELD_UNITS_AND_RANGE(VacancyAnalysisModifier, mlThreshold, FloatParameterUnit, 0, 1);
 
@@ -187,6 +192,13 @@ std::unique_ptr<ReferenceConfigurationModifier::Engine> VacancyAnalysisModifier:
     if(refCell && refCell->isDegenerate())
         throw Exception(tr("Simulation cell is degenerate in the reference configuration."));
 
+    // Particle identifiers enable the replacement-chain ledger; without them in both configurations the
+    // interstitials are corrected by the geometric Frenkel recombination alone.
+    const Property* identifierProperty = identityPairing() ? particles->getProperty(Particles::IdentifierProperty) : nullptr;
+    const Property* refIdentifierProperty = identityPairing() ? refParticles->getProperty(Particles::IdentifierProperty) : nullptr;
+    if(!identifierProperty || !refIdentifierProperty)
+        identifierProperty = refIdentifierProperty = nullptr;
+
     // Pick up optional upstream per-atom disorder signals from the current configuration.
     const Property* structureProperty = particles->getProperty(Particles::StructureTypeProperty);
     const Property* cspProperty = particles->getProperty(Particles::CentroSymmetryProperty);
@@ -210,9 +222,9 @@ std::unique_ptr<ReferenceConfigurationModifier::Engine> VacancyAnalysisModifier:
     }
 
     return std::make_unique<VacancyAnalysisEngine>(posProperty, inputCell,
-            referenceState, refPosProperty, refCell, affineMapping(),
+            referenceState, refPosProperty, refCell, identifierProperty, refIdentifierProperty, affineMapping(),
             frenkelRecombination(), recombinationCutoff(),
-            requireFreeVolume(), cavityRadiusRatio(),
+            requireFreeVolume(), cavityRadiusRatio(), nearestAtomRatio(),
             maskDisordered(), maskSignal(), maskThreshold(),
             structureProperty, cspProperty, shearProperty, lammpsCentroProperty, lammpsCoordProperty,
             volumetricStrainProperty, rmsdProperty, atomicVolumeProperty,
@@ -252,11 +264,13 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
         o.store(0, std::memory_order_relaxed);
 
     BufferReadAccess<Point3> positionsArray(positions());
+    std::vector<size_t> siteOfAtom(numAtoms);
     parallelFor(numAtoms, 1024, progress, [&](size_t i) {
         Point3 p = positionsArray[i];
         if(affineMapping() == TO_REFERENCE_CELL) p = tm * p;
         FloatType closestDistanceSq;
         size_t site = siteFinder.findClosestParticle(p, closestDistanceSq);
+        siteOfAtom[i] = site;
         occupancy[site].fetch_add(1, std::memory_order_relaxed);
     });
 
@@ -276,7 +290,9 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
     // NOT used: as the minimum over the whole first shell it is biased low by thermal noise (at the
     // synthetic noise sigma = 0.20 it read 1.65 instead of 2.55, i.e. 35% too small). It is also the
     // same statistic as the cavity radius of an empty site, so the cavity test compares like with like.
-    auto medianNeighborDistance = [](const NearestNeighborFinder& finder, auto&& points, size_t count) -> FloatType {
+    // With closestOnly = true the median of the closest-neighbor distance is returned instead; that is
+    // the comparator of the nearest-atom test, which wants the noise bias on both sides.
+    auto medianNeighborDistance = [](const NearestNeighborFinder& finder, auto&& points, size_t count, bool closestOnly = false) -> FloatType {
         if(count < 2)
             return 0;
         const size_t nSample = std::min(count, (size_t)1000);
@@ -288,10 +304,12 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
             query.findNeighbors(points[s], /*includeSelf=*/false);
             if(query.results().empty())
                 continue;
-            FloatType sum = 0;
-            for(const auto& n : query.results())
+            FloatType sum = 0, closestSq = std::numeric_limits<FloatType>::max();
+            for(const auto& n : query.results()) {
                 sum += std::sqrt(n.distanceSq);
-            const FloatType mean = sum / query.results().size();
+                closestSq = std::min(closestSq, n.distanceSq);
+            }
+            const FloatType mean = closestOnly ? std::sqrt(closestSq) : sum / query.results().size();
             if(mean > 0)
                 meanDistances.push_back(mean);
         }
@@ -326,6 +344,10 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
         if(vRef > 0 && vCur > 0)
             r_nn_cur = r_nn * std::cbrt(vCur / vRef);
     }
+    // Median closest-pair distance between current atoms, the yardstick of the nearest-atom test.
+    FloatType r_closest_cur = medianNeighborDistance(currentNearestFinder, positionsArray, numAtoms, true);
+    if(r_closest_cur <= 0)
+        r_closest_cur = r_nn_cur;
 
     // --- Stage 2: Frenkel-pair recombination. ---
     // A candidate vacancy adjacent to an over-occupied site is the signature of a displaced atom,
@@ -365,6 +387,46 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
             matchedPartnerSite[pr.vacantListIndex] = (int64_t)pr.interstitialSite;
             interstitialSurplus[pr.interstitialSite]--;
             frenkelRecombined++;
+        }
+    }
+
+    // --- Replacement chains through the particle identifiers. ---
+    // Every site emits its own atom and receives the atoms assigned to it, so a vacant site is the start
+    // of a path: its own atom sits in site t, the own atom of t sits in site u, ... until the path reaches
+    // a site with surplus capacity left (the displaced atom is counted there as an interstitial) or a
+    // site whose own atom no longer exists (the vacancy is a missing atom, not a displaced one). Under
+    // the BCC/HCP transformation these paths run 2-8 nn, far beyond the geometric recombination cutoff,
+    // which is why rejecting a vacancy without cancelling its chain end left a spurious interstitial.
+    constexpr int64_t ChainMissingAtom = -1;
+    constexpr int64_t ChainUnresolved = -2;
+    const bool identityLedger = identifiers() && refIdentifiers();
+    std::vector<int64_t> chainEnd(vacantSites.size(), ChainUnresolved);
+    std::vector<int> chainSurplusLeft;   // surplus units no chain reached (atoms absent from the reference)
+    size_t missingAtomVacancies = 0;
+    if(identityLedger) {
+        progress.setText(tr("Vacancy analysis: following replacement chains"));
+        buildParticleMapping(false, false);
+        const std::vector<size_t>& ownAtom = refToCurrentIndexMap();
+        chainSurplusLeft.resize(numSites);
+        for(size_t s = 0; s < numSites; s++)
+            chainSurplusLeft[s] = std::max(occupancy[s].load(std::memory_order_relaxed) - 1, 0);
+        for(size_t vi = 0; vi < vacantSites.size(); vi++) {
+            size_t t = vacantSites[vi];
+            // A path never revisits a site, so it is at most numSites steps long.
+            for(size_t step = 0; step < numSites; step++) {
+                const size_t a = ownAtom[t];
+                if(a == std::numeric_limits<size_t>::max()) {
+                    chainEnd[vi] = ChainMissingAtom;
+                    missingAtomVacancies++;
+                    break;
+                }
+                t = siteOfAtom[a];
+                if(chainSurplusLeft[t] > 0) {
+                    chainSurplusLeft[t]--;
+                    chainEnd[vi] = (int64_t)t;
+                    break;
+                }
+            }
         }
     }
 
@@ -501,6 +563,10 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
     PropertyPtr cavityRadius = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::FloatDefault, 1, QStringLiteral("Cavity Radius"));
     PropertyPtr disorderFraction = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::FloatDefault, 1, QStringLiteral("Disorder Fraction"));
     PropertyPtr frenkelPartner = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::Int64, 1, QStringLiteral("Frenkel Partner Site"));
+    // Identity ledger: the over-occupied site at the end of each vacancy's replacement chain (-1 = the
+    // site's own atom is missing, -2 = no chain) and its distance in the reference frame.
+    PropertyPtr chainPartner = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::Int64, 1, QStringLiteral("Replacement Chain Partner"));
+    PropertyPtr chainDistance = Particles::OOClass().createUserProperty(DataBuffer::Uninitialized, numSites, Property::FloatDefault, 1, QStringLiteral("Replacement Chain Distance"));
 
     // ML descriptor block: raw, continuous versions of the consensus signals, computed for every
     // WS candidate site (occupancy == 0) including sites the rule stages reclassify below. They
@@ -559,6 +625,8 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
     BufferWriteAccess<FloatType, access_mode::discard_write> cavityRadiusArray(cavityRadius);
     BufferWriteAccess<FloatType, access_mode::discard_write> disorderFractionArray(disorderFraction);
     BufferWriteAccess<int64_t, access_mode::discard_write> partnerArray(frenkelPartner);
+    BufferWriteAccess<int64_t, access_mode::discard_write> chainPartnerArray(chainPartner);
+    BufferWriteAccess<FloatType, access_mode::discard_write> chainDistanceArray(chainDistance);
     // discard_read_write: the ML pass below reads these descriptors back after writing them.
     BufferWriteAccess<FloatType*, access_mode::discard_read_write> knnDistancesArray(knnDistances);
     BufferWriteAccess<int32_t*, access_mode::discard_read_write> shellCountsArray(shellCounts);
@@ -583,6 +651,8 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
         cavityRadiusArray[s] = (FloatType)-1;
         disorderFractionArray[s] = (FloatType)-1;
         partnerArray[s] = -1;
+        chainPartnerArray[s] = ChainUnresolved;
+        chainDistanceArray[s] = (FloatType)-1;
         for(size_t c = 0; c < 6; c++) knnDistancesArray.set(s, c, (FloatType)-1);
         for(size_t c = 0; c < 3; c++) shellCountsArray.set(s, c, -1);
         nearestVacantArray[s] = (FloatType)-1;
@@ -597,6 +667,16 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
         localRmsdArray[s] = 0;
         localAtomicVolumeArray[s] = 0;
         localContextCountArray[s] = -1;
+    }
+
+    if(identityLedger) {
+        BufferReadAccess<Point3> refPosChainArray(refPositions());
+        for(size_t vi = 0; vi < vacantSites.size(); vi++) {
+            const size_t vs = vacantSites[vi];
+            chainPartnerArray[vs] = chainEnd[vi];
+            if(chainEnd[vi] >= 0)
+                chainDistanceArray[vs] = refCell().wrapVector(refPosChainArray[chainEnd[vi]] - refPosChainArray[vs]).length();
+        }
     }
 
     // --- ML descriptor pass over the WS candidate sites. ---
@@ -784,7 +864,20 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
         if(knnCount > 0)
             cavityRadiusArray[vs] = (FloatType)(knnSum / knnCount);
 
-        const bool cavityPass = !_requireFreeVolume || (cavityRadiusArray[vs] >= _cavityRadiusRatio * r_nn_cur);
+        // Nearest-atom test: a mean over 6 atoms can still pass when one atom sits halfway into the
+        // site, the signature of a reference site that does not match the current lattice (phase
+        // boundaries, transformed regions). The closest atom is compared with the closest-pair distance
+        // of the crystal itself, so both carry the same thermal-noise bias. On the HCP-BCC calibration
+        // (300 K, 240 inserted vacancies) 0.75 kept 218 inserted vacancies and cut the background of
+        // ~830 unconfirmed candidates to 33; those candidates have d1 ~ 0.65 and 90% of them vanish
+        // within 1 ps. On the synthetic sets it lost 1 of 1065 strain/noise/cluster vacancies.
+        FloatType closestAtom = std::numeric_limits<FloatType>::max();
+        for(size_t c = 0; c < 6; c++) {
+            const FloatType d = knnDistancesArray.get(vs, c);
+            if(d >= 0) closestAtom = std::min(closestAtom, d);
+        }
+        const bool cavityPass = !_requireFreeVolume || (cavityRadiusArray[vs] >= _cavityRadiusRatio * r_nn_cur
+                && closestAtom >= _nearestAtomRatio * r_closest_cur);
         // A candidate is masked as structural only when the disordered-neighbor fraction is
         // strictly above the threshold, so maskThreshold = 0 keeps candidates with a fully
         // ordered environment and maskThreshold = 1 disables the mask.
@@ -857,7 +950,54 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
         classifiedVacancyCount = mlVacancyCount;
     }
 
-    const size_t correctedInterstitialCount = rawInterstitialCount - frenkelRecombined;
+    // --- Identity ledger: an interstitial survives only if its chain starts at a confirmed vacancy. ---
+    // This replaces the geometric surplus bookkeeping, which cancelled only the interstitials adjacent to
+    // a recombined vacancy and kept those of every vacancy rejected by the cavity or the mask. Surplus no
+    // chain reached belongs to atoms absent from the reference (inserted) and is always kept.
+    size_t correctedInterstitialCount = rawInterstitialCount - frenkelRecombined;
+    if(identityLedger) {
+        // Where chains cross, which vacancy inherits a missing atom is decided by the traversal order,
+        // not by physics: only the number of missing atoms is fixed. A missing atom is a genuine vacancy,
+        // so it is handed to a confirmed vacancy, and the rejected one takes over that vacancy's surplus
+        // end (the nearest one), which it then cancels. Without this swap a rejected true vacancy left an
+        // extra interstitial behind (synthetic cascade/cluster cases: +4 interstitials on average).
+        std::vector<size_t> acceptedWithSurplus;
+        for(size_t vi = 0; vi < vacantSites.size(); vi++) {
+            if(chainEnd[vi] >= 0 && defectTypeArray[vacantSites[vi]] == DefectVacancy)
+                acceptedWithSurplus.push_back(vi);
+        }
+        for(size_t vi = 0; vi < vacantSites.size() && !acceptedWithSurplus.empty(); vi++) {
+            if(chainEnd[vi] != ChainMissingAtom || defectTypeArray[vacantSites[vi]] == DefectVacancy)
+                continue;
+            const Point3& rejectedPos = refPosArray[vacantSites[vi]];
+            auto nearest = std::min_element(acceptedWithSurplus.begin(), acceptedWithSurplus.end(), [&](size_t a, size_t b) {
+                return refCell().wrapVector(refPosArray[chainEnd[a]] - rejectedPos).squaredLength()
+                     < refCell().wrapVector(refPosArray[chainEnd[b]] - rejectedPos).squaredLength();
+            });
+            const size_t ai = *nearest;
+            std::swap(chainEnd[vi], chainEnd[ai]);
+            *nearest = acceptedWithSurplus.back();
+            acceptedWithSurplus.pop_back();
+            for(size_t k : {vi, ai}) {
+                const size_t vs = vacantSites[k];
+                chainPartnerArray[vs] = chainEnd[k];
+                chainDistanceArray[vs] = (chainEnd[k] >= 0) ? refCell().wrapVector(refPosArray[chainEnd[k]] - refPosArray[vs]).length() : (FloatType)-1;
+            }
+        }
+
+        std::vector<int> ledgerSurplus = std::move(chainSurplusLeft);
+        for(size_t vi = 0; vi < vacantSites.size(); vi++) {
+            if(chainEnd[vi] >= 0 && defectTypeArray[vacantSites[vi]] == DefectVacancy)
+                ledgerSurplus[chainEnd[vi]]++;
+        }
+        correctedInterstitialCount = 0;
+        for(size_t s = 0; s < numSites; s++) {
+            if(rawOccupancyArray[s] < 2) continue;
+            correctedSurplusArray[s] = ledgerSurplus[s];
+            defectTypeArray[s] = (ledgerSurplus[s] > 0) ? DefectInterstitial : DefectOK;
+            correctedInterstitialCount += ledgerSurplus[s];
+        }
+    }
 
     // --- Replace the current configuration with the reference configuration in the output. ---
     const Particles* refParticles = referenceState().getObject<Particles>();
@@ -877,6 +1017,8 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
     outParticles->createProperty(cavityRadius);
     outParticles->createProperty(disorderFraction);
     outParticles->createProperty(frenkelPartner);
+    outParticles->createProperty(chainPartner);
+    outParticles->createProperty(chainDistance);
     outParticles->createProperty(knnDistances);
     outParticles->createProperty(shellCounts);
     outParticles->createProperty(nearestVacantDistance);
@@ -900,8 +1042,11 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
     state.addAttribute(QStringLiteral("VacancyAnalysis.freevolume_excluded"), QVariant::fromValue(freeVolumeExcluded), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.structural_excluded"), QVariant::fromValue(structuralExcluded), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.surface_or_void_excluded"), QVariant::fromValue(surfaceExcluded), _createdByNode);
+    state.addAttribute(QStringLiteral("VacancyAnalysis.interstitial_pairing"), QVariant::fromValue(identityLedger ? QStringLiteral("identity") : QStringLiteral("geometric")), _createdByNode);
+    state.addAttribute(QStringLiteral("VacancyAnalysis.missing_atom_vacancies"), QVariant::fromValue(missingAtomVacancies), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.estimated_nn_distance"), QVariant::fromValue(r_nn), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.estimated_nn_distance_current"), QVariant::fromValue(r_nn_cur), _createdByNode);
+    state.addAttribute(QStringLiteral("VacancyAnalysis.closest_pair_distance_current"), QVariant::fromValue(r_closest_cur), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.mask_signal_used"), QVariant::fromValue(haveDisorderSignal), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.mask_signal_name"), QVariant::fromValue(selectedMaskSignalName), _createdByNode);
     state.addAttribute(QStringLiteral("VacancyAnalysis.mask_signal_cutoff"), QVariant::fromValue(haveMaskSignalCutoff ? maskSignalCutoff : (FloatType)-1), _createdByNode);
@@ -918,6 +1063,8 @@ void VacancyAnalysisModifier::VacancyAnalysisEngine::perform(PipelineFlowState& 
         tr("Classified %1 vacancy candidates and %2 corrected interstitials.\nWigner-Seitz raw: %3 vacancies. Removed: %4 Frenkel pairs, %5 without free volume, %6 in disordered regions, %7 near surfaces/voids.")
             .arg(classifiedVacancyCount).arg(correctedInterstitialCount).arg(rawVacancyCount)
             .arg(frenkelRecombined).arg(freeVolumeExcluded).arg(structuralExcluded).arg(surfaceExcluded));
+    if(identityLedger)
+        status.setText(status.text() + tr("\nInterstitials balanced by atom identity: %1 vacant sites lost their atom, the rest were displaced along replacement chains.").arg(missingAtomVacancies));
     if(_mlModel)
         status.setText(status.text() + tr("\nML classifier verdict (threshold %1): rejected %2 rule-passed candidates, restored %3 rule-rejected ones.")
             .arg(_mlThreshold).arg(mlRejectedCount).arg(mlResurrectedCount));

@@ -87,6 +87,10 @@ private:
  *      amorphous) are reported separately, not as point vacancies. The disorder signal is taken
  *      from an upstream PTM/CNA (Structure Type), Centrosymmetry, AtomicStrain (Shear Strain), or
  *      imported LAMMPS per-atom columns such as c_centro/c_coord.
+ *   4. Identity ledger: with particle identifiers, each vacant site is followed along its chain of
+ *      replacements to the over-occupied site that holds its displaced atom. An interstitial is kept
+ *      only if the vacancy at the other end of its chain was confirmed, so the corrected counts obey
+ *      the same balance as the raw ones (vacancies - interstitials = missing atoms).
  *
  * Both the raw WS counts and the corrected counts are emitted as global attributes so the
  * overcount can be quantified directly.
@@ -137,9 +141,10 @@ private:
         /// Constructor.
         VacancyAnalysisEngine(ConstPropertyPtr positions, const SimulationCell* simCell,
                 PipelineFlowState referenceState, ConstPropertyPtr refPositions, const SimulationCell* simCellRef,
+                ConstPropertyPtr identifiers, ConstPropertyPtr refIdentifiers,
                 AffineMappingType affineMapping,
                 bool frenkelRecombination, FloatType recombinationCutoff,
-                bool requireFreeVolume, FloatType cavityRadiusRatio,
+                bool requireFreeVolume, FloatType cavityRadiusRatio, FloatType nearestAtomRatio,
                 bool maskDisordered, MaskSignalType maskSignal, FloatType maskThreshold,
                 ConstPropertyPtr structureProperty, ConstPropertyPtr cspProperty, ConstPropertyPtr shearProperty,
                 ConstPropertyPtr lammpsCentroProperty, ConstPropertyPtr lammpsCoordProperty,
@@ -147,9 +152,9 @@ private:
                 std::shared_ptr<const VacancyMLModel> mlModel, FloatType mlThreshold,
                 OOWeakRef<const PipelineNode> createdByNode) :
             Engine(std::move(positions), simCell, std::move(refPositions), simCellRef,
-                nullptr, nullptr, affineMapping, false),
+                std::move(identifiers), std::move(refIdentifiers), affineMapping, false),
             _frenkelRecombination(frenkelRecombination), _recombinationCutoff(recombinationCutoff),
-            _requireFreeVolume(requireFreeVolume), _cavityRadiusRatio(cavityRadiusRatio),
+            _requireFreeVolume(requireFreeVolume), _cavityRadiusRatio(cavityRadiusRatio), _nearestAtomRatio(nearestAtomRatio),
             _maskDisordered(maskDisordered), _maskSignal(maskSignal), _maskThreshold(maskThreshold),
             _structureProperty(std::move(structureProperty)), _cspProperty(std::move(cspProperty)), _shearProperty(std::move(shearProperty)),
             _lammpsCentroProperty(std::move(lammpsCentroProperty)), _lammpsCoordProperty(std::move(lammpsCoordProperty)),
@@ -172,6 +177,7 @@ private:
         FloatType _recombinationCutoff;
         bool _requireFreeVolume;
         FloatType _cavityRadiusRatio;
+        FloatType _nearestAtomRatio;
         bool _maskDisordered;
         MaskSignalType _maskSignal;
         FloatType _maskThreshold;
@@ -212,6 +218,15 @@ private:
     /// The cavity radius is the mean distance from the empty site to its 6 nearest current atoms; the
     /// nn distance is the same 6-neighbor mean measured around the atoms, so 1 means a full first shell.
     DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(FloatType{0.85}, cavityRadiusRatio, setCavityRadiusRatio, PROPERTY_FIELD_MEMORIZE)
+
+    /// Minimum distance from a vacancy candidate to its closest current atom, expressed as a fraction of
+    /// the median closest-neighbor distance between current atoms (the same statistic, so thermal noise
+    /// shrinks both alike). Rejects sites with an atom sitting halfway into them (lattice-mismatch artifacts).
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(FloatType{0.75}, nearestAtomRatio, setNearestAtomRatio, PROPERTY_FIELD_MEMORIZE)
+
+    /// Pair every vacant site with the over-occupied site at the end of its replacement chain (followed
+    /// through the particle identifiers) and keep an interstitial only if its vacancy was confirmed.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(bool{true}, identityPairing, setIdentityPairing, PROPERTY_FIELD_MEMORIZE)
 
     /// Exclude candidate vacancies that sit inside disordered (grain-boundary/surface) regions.
     DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(bool{true}, maskDisordered, setMaskDisordered, PROPERTY_FIELD_MEMORIZE)

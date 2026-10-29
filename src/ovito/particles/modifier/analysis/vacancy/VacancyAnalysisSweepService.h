@@ -71,8 +71,10 @@ private:
         QVector<VacancyAnalysisModifier::MaskSignalType> maskSignals;
         QVector<FloatType> maskThresholds;
         QVector<FloatType> cavityRadiusRatios;
+        FloatType nearestAtomRatio = 0.75; ///< Nearest-atom test, as a fraction of the closest-pair distance.
         QVector<FloatType> recombinationCutoffs;
         bool frenkelRecombination = true;
+        bool identityPairing = true;   ///< Balance interstitials through the replacement chains (needs particle identifiers).
         bool requireFreeVolume = true;
         bool maskDisordered = true;
         bool autodetectFileSequences = true;
