@@ -26,9 +26,14 @@
 #include <ovito/particles/Particles.h>
 #include <ovito/stdobj/properties/PropertyReference.h>
 #include <ovito/grid/objects/VoxelGridVis.h>
+#include <ovito/grid/objects/VoxelGrid.h>
+#include <ovito/stdobj/table/DataTable.h>
+#include <ovito/stdobj/simcell/SimulationCell.h>
 #include <ovito/core/dataset/pipeline/Modifier.h>
 
 namespace Ovito {
+
+class BinningLineSource;   // Defined in BinningLineSource.h
 
 /**
  * \brief Projects a particle property onto a 1-, 2- or 3-dimensional grid of bins aligned with the
@@ -42,6 +47,13 @@ namespace Ovito {
  * Without an input property, every particle contributes a value of 1, so "sum" counts particles
  * and "sum divided by bin volume" gives the number density. Bin volumes are always 3D cell volume
  * divided by the total number of bins.
+ *
+ * In the Dislocations mode the modifier instead computes the dislocation density (line length per volume)
+ * and the Nye tensor (sum of b_i t_j times line length per volume, b = spatial Burgers vector, t = unit
+ * line direction) of the dislocation lines. Each line segment is spread onto the bins with trilinear
+ * (cloud-in-cell) weights between bin centers, integrated exactly along the segment, as in OVITO Pro
+ * (Bertin, Int. J. Plast. 122 (2019), section 2). The line data comes from a BinningLineSource
+ * implemented by another plugin (CrystalAnalysis for dislocation networks).
  */
 class OVITO_PARTICLES_EXPORT SpatialBinningModifier : public Modifier
 {
@@ -65,6 +77,13 @@ public:
         Max
     };
     Q_ENUM(ReductionOperation);
+
+    /// The kind of data the modifier bins.
+    enum OperateOn {
+        OperateOnParticles,     ///< Reduction of a particle property.
+        OperateOnDislocations   ///< Dislocation density and Nye tensor of the dislocation lines.
+    };
+    Q_ENUM(OperateOn);
 
     /// The cell vectors along which particles are binned.
     enum BinDirection {
@@ -95,8 +114,13 @@ public:
 
     /// Returns a short piece of information to be displayed next to the modifier's title in the pipeline editor list.
     virtual QVariant getPipelineEditorShortInfo(Scene* scene, ModificationNode* node) const override {
+        if(operateOn() == OperateOnDislocations)
+            return tr("dislocations");
         return sourceProperty() ? sourceProperty().nameWithComponent() : tr("count");
     }
+
+    /// Returns the line source that handles the line data in the given data collection, or null if there is none.
+    static OORef<BinningLineSource> findLineSource(const DataCollection& input);
 
 protected:
 
@@ -107,6 +131,29 @@ private:
 
     /// Points the color mapping of the voxel grid vis element at the current output property.
     void updateColorMapping();
+
+    /// Grid dimensionality, cell vector of each grid axis (binned ones first) and grid shape.
+    struct OutputLayout {
+        int ndim = 0;
+        std::array<int, 3> binDims = {0, 1, 2};
+        VoxelGrid::GridDimensions shape;
+    };
+
+    /// Determines the output grid layout from the binning direction and the bin counts.
+    OutputLayout outputLayout(const SimulationCell* cell) const;
+
+    /// Creates the output table (1D) or voxel grid (2D/3D), titled after the given label.
+    std::pair<DataTable*, VoxelGrid*> createOutput(PipelineFlowState& state, const ModifierEvaluationRequest& request,
+        const SimulationCell* cell, const OutputLayout& layout, const QString& label) const;
+
+    /// Replaces a component-major 1D profile of n bins of width h by its first derivative.
+    static void differentiate(std::vector<double>& values, size_t componentCount, size_t n, double h, bool periodic);
+
+    /// Computes the dislocation density and Nye tensor (Dislocations mode).
+    Future<PipelineFlowState> evaluateDislocations(const ModifierEvaluationRequest& request, PipelineFlowState&& state);
+
+    /// Selects whether particles or dislocation lines are binned.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(OperateOn{OperateOnParticles}, operateOn, setOperateOn);
 
     /// The particle property to be binned (none = uniform value 1 per particle).
     DECLARE_MODIFIABLE_PROPERTY_FIELD(PropertyReference{}, sourceProperty, setSourceProperty);

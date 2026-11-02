@@ -51,6 +51,13 @@ void SpatialBinningModifierEditor::createUI(const RolloutInsertionParameters& ro
     layout->setContentsMargins(4,4,4,4);
     layout->setSpacing(4);
 
+    // Particles: reduction of a particle property. Dislocations: dislocation density and Nye tensor.
+    VariantComboBoxParameterUI* operateOnUI = createParamUI<VariantComboBoxParameterUI>(PROPERTY_FIELD(SpatialBinningModifier::operateOn));
+    operateOnUI->comboBox()->addItem(tr("Particles"), QVariant::fromValue((int)SpatialBinningModifier::OperateOnParticles));
+    operateOnUI->comboBox()->addItem(tr("Dislocations"), QVariant::fromValue((int)SpatialBinningModifier::OperateOnDislocations));
+    layout->addWidget(new QLabel(tr("Operate on:")));
+    layout->addWidget(operateOnUI->comboBox());
+
     // Vector properties can be selected as a whole, in which case every component is binned.
     PropertyReferenceParameterUI* sourcePropertyUI = createParamUI<PropertyReferenceParameterUI>(PROPERTY_FIELD(SpatialBinningModifier::sourceProperty),
         &Particles::OOClass(), PropertyReferenceParameterUI::ShowComponentsAndVectorProperties);
@@ -136,6 +143,12 @@ void SpatialBinningModifierEditor::createUI(const RolloutInsertionParameters& ro
         binsYUI->setEnabled(ndim >= 2);
         binsZUI->setEnabled(ndim >= 3);
         derivativeUI->setEnabled(ndim == 1);
+        // The input property, the selection and the reduction operation only apply to particles.
+        const bool particles = mod->operateOn() == SpatialBinningModifier::OperateOnParticles;
+        sourcePropertyUI->setEnabled(particles);
+        countButton->setEnabled(particles);
+        onlySelectedUI->setEnabled(particles);
+        operationUI->setEnabled(particles);
     };
     connect(this, &PropertiesEditor::contentsChanged, this, updateEnabled);
     connect(this, &PropertiesEditor::contentsReplaced, this, updateEnabled);

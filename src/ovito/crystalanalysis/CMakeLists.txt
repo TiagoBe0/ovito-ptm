@@ -28,6 +28,7 @@ SET(SourceFiles
     objects/ClusterGraph.cpp
     objects/DislocationNetwork.cpp
     objects/DislocationVis.cpp
+    objects/DislocationBinningLineSource.cpp
     objects/MicrostructurePhase.cpp
     modifier/dxa/DislocationAnalysisModifier.cpp
     modifier/dxa/DislocationAnalysisEngine.cpp
