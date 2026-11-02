@@ -78,3 +78,16 @@ Create bonds → Bond order no se ve ni funciona como en Pro.
   Test: ctest `BondsVisSelfTest`, que renderiza en un FrameGraph sin OpenGL. Verifica la cantidad de cilindros por orden, anchos 0.8/0.63,
   separaciones, el largo de los punteados con 3 y 4 segmentos, que el punteado quede dentro del anillo, el caso sin la opción y el orden 1 en enlaces nuevos.
   No se comparó la imagen contra Pro; la geometría sale del código de upstream.
+
+## Actualización 2026-11-02: modo dislocaciones de Spatial binning
+
+Implementado en clean-room a partir de mediciones de caja negra en Pro (`research/pro_ports/scripts/spatial_binning/README_dislocations.md`)
+y del manual. No hay fuente pública.
+- Pesos trilineales entre centros de bin, periódicos e integrados de forma exacta por segmento (Gauss-Legendre de 2 puntos entre cruces de planos).
+  Densidad = Σ largo·peso / V_bin y Nye_ij = Σ peso·largo·b_i·t_j / V_bin, con b espacial. La primera derivada se aplica a las dos salidas.
+- Arquitectura: `SpatialBinningModifier::operateOn` y la clase abstracta `BinningLineSource` (Particles), implementada por
+  `DislocationBinningLineSource` (CrystalAnalysis). Se descubre en runtime, porque Particles no puede depender de CrystalAnalysis.
+- ctest `SpatialBinningSelfTest`: densidad **idéntica a Pro a 1e-16**; Nye a 3e-8 relativo, porque Pro guarda la orientación del cluster en float32.
+  Cubre 1D, 2D, 3D, la derivada y los tres errores.
+- **Diferencia deliberada:** en ejes no periódicos Pro rechaza los puntos que no están entre el primer y el último centro de bin, aunque estén dentro de la
+  celda; en un eje no binneado los rechaza todos. El fork acepta cualquier punto dentro de la celda y le da el peso al bin del borde.
