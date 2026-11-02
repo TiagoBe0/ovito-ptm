@@ -32,7 +32,7 @@ import re
 import subprocess
 import sys
 
-PKA_ROOT = "/media/santi/ALMACEN_GRANDE_2/pka_acero"
+PKA_ROOT = os.environ.get("PKA_ROOT", "/media/santi/ALMACEN_GRANDE_2/pka_acero")
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 OVITO = os.environ.get("OVITO_BIN", os.path.join(REPO_ROOT, "build-release", "bin", "ovito"))
 RESULTS_DIR = os.path.join(REPO_ROOT, "research", "vacancy_analysis", "results", "energy_sweep")
