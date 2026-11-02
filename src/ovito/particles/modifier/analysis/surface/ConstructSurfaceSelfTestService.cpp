@@ -114,7 +114,7 @@ struct Result {
 /// Builds the crystal in the given cell and evaluates the modifier with region identification.
 Result evaluate(const QTemporaryDir& dir, ConstructSurfaceModifier::SurfaceMethod method, const char* bounds,
                 const std::array<double, 3>& lo, const std::array<double, 3>& hi, int* atomCount = nullptr, double poreRadius = PORE_RADIUS,
-                int smoothingLevel = 0)
+                int smoothingLevel = 0, bool identifyRegions = true)
 {
     static int counter = 0;
     const QString dumpPath = dir.filePath(QStringLiteral("crystal_%1.dump").arg(counter++));
@@ -139,8 +139,8 @@ Result evaluate(const QTemporaryDir& dir, ConstructSurfaceModifier::SurfaceMetho
     surface->setGridResolution(50);
     surface->setRadiusFactor(1);
     surface->setIsoValue(0.6);
-    surface->setIdentifyRegions(true);
-    surface->setMapParticlesToRegions(true);
+    surface->setIdentifyRegions(identifyRegions);
+    surface->setMapParticlesToRegions(identifyRegions);
     pipeline->applyModifier(AnimationTime::fromFrame(0), false, surface);
     return {pipeline->evaluatePipeline(PipelineEvaluationRequest(AnimationTime::fromFrame(0), true, false)).blockForResult()};
 }
@@ -238,6 +238,13 @@ bool ConstructSurfaceSelfTestService::runTest()
                     std::isinf(r.attr("empty_volume")) && std::isnan(r.attr("cell_volume")) && std::isnan(r.attr("filled_fraction"))
                     && std::isnan(r.attr("empty_fraction")) && std::isnan(r.attr("specific_surface_area")), {});
             }
+            // The status panel shows every attribute next to the surface area.
+            const QString status = r.state.status().text();
+            for(const char* label : {"Surface area: ", "Specific surface area: ", "Cell volume: ", "Filled regions: ", "Filled volume: ",
+                                     "Filled fraction: ", "Empty regions: ", "Empty volume: ", "Empty fraction: ", "Void regions: ",
+                                     "Void volume: ", "Box volume: ", "Filled volume in box: ", "Filled fraction in box: ",
+                                     "Empty volume in box: ", "Empty fraction in box: ", "Specific surface area in box: "})
+                ok &= check(QStringLiteral("status shows '%1'").arg(QLatin1String(label)), status.contains(QLatin1String(label)), {});
             const double filled = r.attr("filled_volume"), empty = r.attr("empty_volume_in_cell"), voids = r.attr("void_volume");
 
             ok &= check(QStringLiteral("filled_region_count = 1"), r.attr("filled_region_count") == 1, QString::number(r.attr("filled_region_count")));
@@ -273,6 +280,13 @@ bool ConstructSurfaceSelfTestService::runTest()
                 ok &= check(QStringLiteral("region_memberships attribute"), r.state.getAttributeValue(QStringLiteral("ConstructSurfaceMesh.region_memberships")).isValid(), {});
             }
         }
+    }
+
+    // Without region identification only the surface area is computed: the status says how to get the volumes.
+    for(Method method : {ConstructSurfaceModifier::AlphaShape, ConstructSurfaceModifier::GaussianDensity}) {
+        Result r = evaluate(dir, method, "pp pp pp", {0, 0, 0}, {L, L, L}, nullptr, PORE_RADIUS, 0, false);
+        ok &= check(QStringLiteral("%1, no regions: status points to 'Identify volumetric regions'").arg(methodName(method)),
+            r.state.status().text().contains(QStringLiteral("Identify volumetric regions")), r.state.status().text());
     }
 
     // 2. Alpha shape in an open cell that cuts the crystal at z = 2.5 and z = 30: the filled volume outside the

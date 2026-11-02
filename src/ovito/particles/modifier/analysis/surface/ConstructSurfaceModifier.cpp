@@ -951,11 +951,12 @@ void ConstructSurfaceModifier::ConstructSurfaceEngineBase::applyResults(Pipeline
         // of the infinite exterior region inside the cell, i.e. everything in the cell that is not filled. Filled volume
         // sticking out of the cell (e.g. a Gaussian density surface around atoms close to an open cell face) is not
         // subtracted from the cell volume. For a fully periodic cell these equal the standard attributes.
+        const FloatType nan = std::numeric_limits<FloatType>::quiet_NaN();
+        FloatType boxVolume = nan, filledInCell = nan, emptyInCell = nan;
         if(simCell) {
-            const FloatType boxVolume = simCell->volume3D();
-            const FloatType filledInCell = periodic ? _aggregateVolumes.totalFilledVolume : _aggregateVolumes.totalFilledVolume - _filledVolumeOutsideCell;
-            const FloatType emptyInCell = periodic ? _aggregateVolumes.totalEmptyVolume : std::max(boxVolume - filledInCell, FloatType(0));
-            const FloatType nan = std::numeric_limits<FloatType>::quiet_NaN();
+            boxVolume = simCell->volume3D();
+            filledInCell = periodic ? _aggregateVolumes.totalFilledVolume : _aggregateVolumes.totalFilledVolume - _filledVolumeOutsideCell;
+            emptyInCell = periodic ? _aggregateVolumes.totalEmptyVolume : std::max(boxVolume - filledInCell, FloatType(0));
             state.addAttribute(QStringLiteral("ConstructSurfaceMesh.box_volume"), QVariant::fromValue(boxVolume), _createdByNode);
             state.addAttribute(QStringLiteral("ConstructSurfaceMesh.filled_volume_in_cell"), QVariant::fromValue(filledInCell), _createdByNode);
             state.addAttribute(QStringLiteral("ConstructSurfaceMesh.empty_volume_in_cell"), QVariant::fromValue(emptyInCell), _createdByNode);
@@ -988,20 +989,49 @@ void ConstructSurfaceModifier::ConstructSurfaceEngineBase::applyResults(Pipeline
         state.addAttribute(QStringLiteral("ConstructSurfaceMesh.void_region_count"), QVariant::fromValue(_aggregateVolumes.voidRegionCount),
                            _createdByNode);
 
-        QString statusString =
-            tr("Surface area: %1\n# filled regions (volume): %2 (%3)\n# empty regions (volume): %4 (%5)\n# void regions (volume): %6 (%7)")
-                .arg(surfaceArea())
-                .arg(_aggregateVolumes.filledRegionCount)
-                .arg(_aggregateVolumes.totalFilledVolume)
-                .arg(_aggregateVolumes.emptyRegionCount)
-                .arg(_aggregateVolumes.totalEmptyVolume)
-                .arg(_aggregateVolumes.voidRegionCount)
-                .arg(_aggregateVolumes.totalVoidVolume);
+        // Show every output attribute in the status panel, next to the surface area.
+        QString statusString = tr("Surface area: %1\n"
+                                  "Specific surface area: %2\n"
+                                  "Cell volume: %3\n"
+                                  "Filled regions: %4\n"
+                                  "Filled volume: %5\n"
+                                  "Filled fraction: %6\n"
+                                  "Empty regions: %7\n"
+                                  "Empty volume: %8\n"
+                                  "Empty fraction: %9\n")
+                                   .arg(surfaceArea())
+                                   .arg(totalCellVolume ? surfaceArea() / totalCellVolume : nan)
+                                   .arg(totalCellVolume)
+                                   .arg(_aggregateVolumes.filledRegionCount)
+                                   .arg(_aggregateVolumes.totalFilledVolume)
+                                   .arg(totalCellVolume ? _aggregateVolumes.totalFilledVolume / totalCellVolume : nan)
+                                   .arg(_aggregateVolumes.emptyRegionCount)
+                                   .arg(_aggregateVolumes.totalEmptyVolume)
+                                   .arg(totalCellVolume ? _aggregateVolumes.totalEmptyVolume / totalCellVolume : nan);
+        statusString += tr("Void regions: %1\nVoid volume: %2")
+                            .arg(_aggregateVolumes.voidRegionCount)
+                            .arg(_aggregateVolumes.totalVoidVolume);
+        if(simCell) {
+            statusString += tr("\n\nInside the simulation box:\n"
+                               "Box volume: %1\n"
+                               "Filled volume in box: %2\n"
+                               "Filled fraction in box: %3\n"
+                               "Empty volume in box: %4\n"
+                               "Empty fraction in box: %5\n"
+                               "Specific surface area in box: %6")
+                                .arg(boxVolume)
+                                .arg(filledInCell)
+                                .arg(boxVolume ? filledInCell / boxVolume : nan)
+                                .arg(emptyInCell)
+                                .arg(boxVolume ? emptyInCell / boxVolume : nan)
+                                .arg(boxVolume ? surfaceArea() / boxVolume : nan);
+        }
 
         state.setStatus(PipelineStatus(PipelineStatus::Success, std::move(statusString)));
     }
     else {
-        state.setStatus(PipelineStatus(PipelineStatus::Success, tr("Surface area: %1").arg(surfaceArea())));
+        state.setStatus(PipelineStatus(PipelineStatus::Success,
+            tr("Surface area: %1\n\nVolumes, fractions and region counts: turn on 'Identify volumetric regions'.").arg(surfaceArea())));
     }
 }
 
