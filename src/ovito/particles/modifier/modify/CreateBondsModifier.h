@@ -73,6 +73,8 @@ public:
         UniformCutoff,      ///< A uniform distance cutoff for all pairs of particles.
         PairCutoff,         ///< Individual cutoff for each pair-wise combination of particle types.
         TypeRadiusCutoff,   ///< Cutoff based on Van der Waals radii of the two particle types involved.
+        CovalentRadiusCutoff,  ///< Cutoff based on covalent radii of the two particle types involved, accounting for maximum coordination
+                               ///< numbers (Artemova et al. 2016). Ported from OVITO 3.16.
     };
     Q_ENUM(CutoffMode);
 
@@ -146,6 +148,9 @@ private:
 
     /// The cutoff radii for pairs of particle types.
     DECLARE_MODIFIABLE_PROPERTY_FIELD(PairwiseCutoffsList{}, pairwiseCutoffs, setPairwiseCutoffs);
+
+    /// If true, all bonds already existing in the modifier's input are discarded before new bonds are created.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(bool{false}, discardExistingBonds, setDiscardExistingBonds, PROPERTY_FIELD_MEMORIZE);
 
     /// If true, bonds will only be created between atoms from the same molecule.
     DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(bool{false}, onlyIntraMoleculeBonds, setOnlyIntraMoleculeBonds, PROPERTY_FIELD_MEMORIZE);

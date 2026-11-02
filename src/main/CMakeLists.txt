@@ -274,6 +274,12 @@ IF(NOT EMSCRIPTEN)
     ADD_TEST(NAME BondAnalysisSelfTest COMMAND Ovito --nogui --bond-analysis-selftest)
 ENDIF()
 
+# In-process regression test for the covalent radius mode of the Create bonds modifier (see
+# CreateBondsSelfTestService in the Particles plugin). Bond list compared with OVITO Pro 3.16.1.
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME CreateBondsSelfTest COMMAND Ovito --nogui --create-bonds-selftest)
+ENDIF()
+
 # In-process regression test for the region analysis of the Construct surface mesh modifier (see
 # ConstructSurfaceSelfTestService in the Particles plugin). fcc crystal with two spherical pores.
 IF(NOT EMSCRIPTEN)

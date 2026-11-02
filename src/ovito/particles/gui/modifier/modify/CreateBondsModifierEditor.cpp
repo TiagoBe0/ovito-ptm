@@ -62,6 +62,9 @@ void CreateBondsModifierEditor::createUI(const RolloutInsertionParameters& rollo
     connect(uniformCutoffModeBtn, &QRadioButton::toggled, uniformCutoffPUI, &FloatParameterUI::setEnabled);
     layout1->addLayout(gridlayout);
 
+    // Covalent radius mode (no settings).
+    layout1->addWidget(cutoffModePUI->addRadioButton(CreateBondsModifier::CovalentRadiusCutoff, tr("Covalent radii")));
+
     // Van der Waals mode.
     QRadioButton* typeRadiusModeBtn = cutoffModePUI->addRadioButton(CreateBondsModifier::TypeRadiusCutoff, tr("Van der Waals radii:"));
     layout1->addWidget(typeRadiusModeBtn);
@@ -100,6 +103,9 @@ void CreateBondsModifierEditor::createUI(const RolloutInsertionParameters& rollo
     connect(pairCutoffModeBtn, &QRadioButton::toggled, _pairCutoffTable, &QTableView::setEnabled);
     sublayout->addWidget(_pairCutoffTable);
     layout1->addLayout(sublayout);
+
+    BooleanParameterUI* discardExistingBondsUI = createParamUI<BooleanParameterUI>(PROPERTY_FIELD(CreateBondsModifier::discardExistingBonds));
+    layout1->addWidget(discardExistingBondsUI->checkBox());
 
     BooleanParameterUI* onlyIntraMoleculeBondsUI = createParamUI<BooleanParameterUI>(PROPERTY_FIELD(CreateBondsModifier::onlyIntraMoleculeBonds));
     layout1->addWidget(onlyIntraMoleculeBondsUI->checkBox());

@@ -70,6 +70,7 @@ SET(SourceFiles
     modifier/analysis/surface/ConstructSurfaceSelfTestService.cpp
     modifier/modify/ShrinkWrapBoxModifier.cpp
     modifier/modify/ShrinkWrapBoxSelfTestService.cpp
+    modifier/modify/CreateBondsSelfTestService.cpp
     modifier/modify/RenderLAMMPSRegionsModifier.cpp
     modifier/modify/RenderLAMMPSRegionsSelfTestService.cpp
     modifier/analysis/bader/BaderChargeIntegrationModifier.cpp
