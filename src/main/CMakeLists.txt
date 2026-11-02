@@ -280,6 +280,12 @@ IF(NOT EMSCRIPTEN)
     ADD_TEST(NAME CreateBondsSelfTest COMMAND Ovito --nogui --create-bonds-selftest)
 ENDIF()
 
+# In-process regression test for the bond order rendering of the Bonds visual element (see
+# BondsVisSelfTestService in the Particles plugin). Cylinder geometry generated without OpenGL.
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME BondsVisSelfTest COMMAND Ovito --nogui --bonds-vis-selftest)
+ENDIF()
+
 # In-process regression test for the region analysis of the Construct surface mesh modifier (see
 # ConstructSurfaceSelfTestService in the Particles plugin). fcc crystal with two spherical pores.
 IF(NOT EMSCRIPTEN)

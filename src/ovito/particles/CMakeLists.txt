@@ -71,6 +71,7 @@ SET(SourceFiles
     modifier/modify/ShrinkWrapBoxModifier.cpp
     modifier/modify/ShrinkWrapBoxSelfTestService.cpp
     modifier/modify/CreateBondsSelfTestService.cpp
+    objects/BondsVisSelfTestService.cpp
     modifier/modify/RenderLAMMPSRegionsModifier.cpp
     modifier/modify/RenderLAMMPSRegionsSelfTestService.cpp
     modifier/analysis/bader/BaderChargeIntegrationModifier.cpp

@@ -93,6 +93,30 @@ void Bonds::generatePeriodicImageProperty(const Particles* particles, const Simu
     }
 }
 
+namespace {
+
+/// Returns whether the property is the bond order property used by BondsVis.
+bool isBondOrderProperty(const Property* property)
+{
+    return property->typeId() == 0 && property->name() == QLatin1String(BondsVis::bondOrderPropertyName) && property->componentCount() == 1;
+}
+
+/// Makes the bonds from the given index on single bonds (as in OVITO 3.16). A bond order of 0, which the array
+/// would be filled with otherwise, means "no bond" and is not rendered by BondsVis.
+void initializeBondOrders(Property* property, size_t firstIndex)
+{
+    if(property->dataType() == Property::Float64) {
+        BufferWriteAccess<double, access_mode::read_write> orders(property);
+        std::fill(std::next(orders.begin(), firstIndex), orders.end(), 1.0);
+    }
+    else if(property->dataType() == Property::Float32) {
+        BufferWriteAccess<float, access_mode::read_write> orders(property);
+        std::fill(std::next(orders.begin(), firstIndex), orders.end(), 1.0f);
+    }
+}
+
+}   // End of anonymous namespace
+
 /******************************************************************************
 * Creates new bonds making sure bonds are not created twice.
 ******************************************************************************/
@@ -125,6 +149,12 @@ size_t Bonds::addBonds(const std::vector<Bond>& newBonds, BondsVis* bondsVis, co
         }
         topologyProperty.reset();
         periodicImageProperty.reset();
+
+        // Existing "Bond Order" property (e.g. kept by Create bonds after discarding all bonds): new bonds are single bonds.
+        for(Property* bondProperty : makePropertiesMutable()) {
+            if(isBondOrderProperty(bondProperty))
+                initializeBondOrders(bondProperty, 0);
+        }
 
         // Insert bond type.
         if(bondTypeProperty) {
@@ -202,7 +232,10 @@ size_t Bonds::addBonds(const std::vector<Bond>& newBonds, BondsVis* bondsVis, co
 
         // Initialize property values of existing properties for new bonds.
         for(Property* bondProperty : makePropertiesMutable()) {
-            if(bondProperty->typeId() == Bonds::ColorProperty) {
+            if(isBondOrderProperty(bondProperty)) {
+                initializeBondOrders(bondProperty, originalBondCount);
+            }
+            else if(bondProperty->typeId() == Bonds::ColorProperty) {
                 if(particles) {
                     ConstPropertyPtr bondColors;
                     if(particles->bonds() != this) {
@@ -402,7 +435,7 @@ std::pair<size_t, ConstDataObjectPath> Bonds::OOMetaClass::elementFromPickResult
 {
     // Check if a bond was picked.
     if(BondPickInfo* pickInfo = dynamic_object_cast<BondPickInfo>(pickResult.pickInfo().get())) {
-        size_t bondIndex = pickResult.subobjectId() / 2;
+        size_t bondIndex = pickInfo->bondIndexFromSubObjectID(pickResult.subobjectId());
         if(pickInfo->particles()->bonds() && bondIndex < pickInfo->particles()->bonds()->elementCount()) {
             return std::make_pair(bondIndex, ConstDataObjectPath{{pickInfo->particles(), pickInfo->particles()->bonds()}});
         }

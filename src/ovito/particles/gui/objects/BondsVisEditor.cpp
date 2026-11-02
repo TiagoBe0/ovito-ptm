@@ -23,6 +23,7 @@
 #include <ovito/particles/gui/ParticlesGui.h>
 #include <ovito/particles/objects/BondsVis.h>
 #include <ovito/gui/desktop/properties/FloatParameterUI.h>
+#include <ovito/gui/desktop/properties/IntegerParameterUI.h>
 #include <ovito/gui/desktop/properties/BooleanParameterUI.h>
 #include <ovito/gui/desktop/properties/VariantComboBoxParameterUI.h>
 #include <ovito/gui/desktop/properties/ColorParameterUI.h>
@@ -74,6 +75,17 @@ void BondsVisEditor::createUI(const RolloutInsertionParameters& rolloutParams)
 
     // By particle coloring mode.
     layout->addWidget(_coloringModeUI->addRadioButton(BondsVis::ParticleBasedColoring, tr("Use particle colors")), 5, 1, 1, 2);
+
+    // Bond order display (multiple cylinders for double/triple bonds, dashed cylinders for fractional bond orders).
+    BooleanParameterUI* visualizeBondOrderUI = createParamUI<BooleanParameterUI>(PROPERTY_FIELD(BondsVis::visualizeBondOrder));
+    layout->addWidget(visualizeBondOrderUI->checkBox(), 6, 0, 1, 3);
+    layout->addWidget(new QLabel(tr("Fractional bonds:")), 7, 1);
+    IntegerParameterUI* filledSegmentsUI = createParamUI<IntegerParameterUI>(PROPERTY_FIELD(BondsVis::filledSegments));
+    layout->addWidget(filledSegmentsUI->label(), 8, 1);
+    layout->addLayout(filledSegmentsUI->createFieldLayout(), 8, 2);
+    FloatParameterUI* filledFractionUI = createParamUI<FloatParameterUI>(PROPERTY_FIELD(BondsVis::filledFraction));
+    layout->addWidget(filledFractionUI->label(), 9, 1);
+    layout->addLayout(filledFractionUI->createFieldLayout(), 9, 2);
 
     // Whenever the pipeline input of the vis element changes, update the list of available coloring options.
     connect(this, &PropertiesEditor::pipelineInputChanged, this, &BondsVisEditor::updateColoringOptions);

@@ -74,6 +74,11 @@ public:
     /// Determines the bond widths used for rendering.
     ConstPropertyPtr bondWidths(const Bonds* bonds) const;
 
+    /// Name of the bond property whose values select single, double, triple or dashed (fractional) bond rendering.
+    /// It is the standard "Bond Order" property of OVITO 3.16, which the fork stores as a user property
+    /// (written by the Bond order modifier and the ReaxFF bond importer).
+    static constexpr const char* bondOrderPropertyName = "Bond Order";
+
 protected:
 
     /// Allows the object to parse the serialized contents of a property field in a custom way.
@@ -92,6 +97,15 @@ protected:
 
     /// Determines how the bonds are colored.
     DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(BondsVis::ColoringMode{ParticleBasedColoring}, coloringMode, setColoringMode, PROPERTY_FIELD_MEMORIZE);
+
+    /// Controls whether the bond order property is used to determine the number of cylinders to be rendered per bond.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD(bool{true}, visualizeBondOrder, setVisualizeBondOrder);
+
+    /// Number of filled segments for dashed bonds rendering.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(int{4}, filledSegments, setFilledSegments, PROPERTY_FIELD_MEMORIZE | PROPERTY_FIELD_RESETTABLE);
+
+    /// Relative length of filled segments for dashed bonds rendering.
+    DECLARE_MODIFIABLE_PROPERTY_FIELD_FLAGS(FloatType{0.5}, filledFraction, setFilledFraction, PROPERTY_FIELD_MEMORIZE | PROPERTY_FIELD_RESETTABLE);
 };
 
 /**
@@ -105,10 +119,11 @@ class OVITO_PARTICLES_EXPORT BondPickInfo : public ObjectPickInfo
 public:
 
     /// Constructor.
-    void initializeObject(DataOORef<const Particles> particles, DataOORef<const SimulationCell> simulationCell) {
+    void initializeObject(DataOORef<const Particles> particles, DataOORef<const SimulationCell> simulationCell, std::vector<int32_t> subobjectToBondMapping = {}) {
         ObjectPickInfo::initializeObject();
         _particles = std::move(particles);
         _simulationCell = std::move(simulationCell);
+        _subobjectToBondMapping = std::move(subobjectToBondMapping);
     }
 
     /// Returns the particles object.
@@ -120,6 +135,13 @@ public:
     /// Returns a human-readable string describing the picked object, which will be displayed in the status bar by OVITO.
     virtual QString infoString(const Pipeline* pipeline, uint32_t subobjectId) override;
 
+    /// Given a sub-object ID returned by the Viewport::pick() method, looks up the corresponding bond index.
+    size_t bondIndexFromSubObjectID(uint32_t subobjectId) const {
+        if(!_subobjectToBondMapping.empty())
+            return subobjectId < _subobjectToBondMapping.size() ? (size_t)_subobjectToBondMapping[subobjectId] : std::numeric_limits<size_t>::max();
+        return subobjectId / 2;
+    }
+
 private:
 
     /// The particles object.
@@ -127,6 +149,9 @@ private:
 
     /// The simulation cell object.
     DataOORef<const SimulationCell> _simulationCell;
+
+    /// Bond index of each rendered cylinder. Empty if every bond is rendered as two half-bond cylinders.
+    std::vector<int32_t> _subobjectToBondMapping;
 };
 
 }   // End of namespace
