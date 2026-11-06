@@ -236,7 +236,7 @@ ENDIF()
 
 # Link to video encoding lib.
 IF(FFMPEG_FOUND)
-    TARGET_SOURCES(Core PRIVATE utilities/io/video/VideoEncoder.cpp)
+    TARGET_SOURCES(Core PRIVATE utilities/io/video/VideoEncoder.cpp utilities/io/video/VideoSelfTestService.cpp)
     TARGET_COMPILE_DEFINITIONS(Core PUBLIC OVITO_VIDEO_OUTPUT_SUPPORT)
     TARGET_COMPILE_DEFINITIONS(Core PRIVATE __STDC_CONSTANT_MACROS __STDC_LIMIT_MACROS)
     TARGET_LINK_LIBRARIES(Core PRIVATE "${FFMPEG_LIBRARIES}")
@@ -348,7 +348,8 @@ IF(FFMPEG_FOUND AND NOT EMSCRIPTEN)
         GET_FILENAME_COMPONENT(base_name "${lib}" NAME_WE)
         GET_FILENAME_COMPONENT(lib_path "${lib}" PATH)
         IF(WIN32 AND NOT OVITO_BUILD_CONDA)
-            FILE(GLOB lib_dll "${lib_path}/${base_name}-*.dll")
+            # vcpkg keeps import libraries in lib/ and the DLLs in the sibling bin/ directory.
+            FILE(GLOB lib_dll "${lib_path}/${base_name}-*.dll" "${lib_path}/../bin/${base_name}-*.dll")
             IF(NOT lib_dll)
                 MESSAGE(FATAL_ERROR "Could not find corresponding DLL for ffmpeg library '${lib}' in same directory.")
             ENDIF()

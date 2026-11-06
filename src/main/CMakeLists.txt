@@ -321,6 +321,12 @@ IF(NOT EMSCRIPTEN)
     ADD_TEST(NAME BaderSelfTest COMMAND Ovito --nogui --bader-selftest)
 ENDIF()
 
+# PNG/GIF/AVI output test (see VideoSelfTestService in Core). Only meaningful when ffmpeg was found at configure time.
+GET_TARGET_PROPERTY(OVITO_CORE_DEFINITIONS Core INTERFACE_COMPILE_DEFINITIONS)
+IF(NOT EMSCRIPTEN AND "${OVITO_CORE_DEFINITIONS}" MATCHES "OVITO_VIDEO_OUTPUT_SUPPORT")
+    ADD_TEST(NAME VideoSelfTest COMMAND Ovito --nogui --video-selftest)
+ENDIF()
+
 # In-process regression test for the Bond order modifier (see BondOrderSelfTestService in the Particles plugin).
 # Compares with reference results obtained from OVITO Pro for the same molecules.
 IF(NOT EMSCRIPTEN)

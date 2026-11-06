@@ -101,6 +101,10 @@ QList<VideoEncoder::Format> VideoEncoder::supportedFormats()
         if(qstrcmp(fmt->name, "mov") != 0 && qstrcmp(fmt->name, "mp4") != 0 && qstrcmp(fmt->name, "avi") != 0 && qstrcmp(fmt->name, "gif") != 0)
             continue;
 
+        // Skip formats whose default video codec is not part of this ffmpeg build (e.g. H.264 in an LGPL-only build).
+        if(fmt->video_codec == AV_CODEC_ID_NONE || !::avcodec_find_encoder(fmt->video_codec))
+            continue;
+
         Format format;
         format.name = fmt->name;
         format.longName = QString::fromLocal8Bit(fmt->long_name);

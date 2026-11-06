@@ -43,6 +43,16 @@ jobs:
           ls "$VCPKG_DIR/installed/x64-windows-static-md/lib"
           echo "$VCPKG_DIR/installed/x64-windows-static-md/bin" >> "$GITHUB_PATH"
 
+      # ffmpeg writes the animated GIF and AVI output. Dynamic triplet on purpose: ffmpeg is LGPL, so it stays a set
+      # of DLLs next to ovito.exe instead of being linked into it. The default features carry no GPL component (no
+      # x264), which means MP4/MOV (H.264) are not offered; GIF and AVI (MPEG-4) are.
+      - name: Install ffmpeg
+        shell: bash
+        run: |
+          "$VCPKG_DIR/vcpkg" install --triplet x64-windows ffmpeg
+          ls "$VCPKG_DIR/installed/x64-windows/bin" | grep -iE 'av|sw' || true
+          echo "$VCPKG_DIR/installed/x64-windows/bin" >> "$GITHUB_PATH"
+
       - name: Set up MSVC environment
         uses: ilammy/msvc-dev-cmd@v1
 
@@ -54,6 +64,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_DIR/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET=x64-windows-static-md \
+            -DFFMPEG_INCLUDE_DIR="$VCPKG_DIR/installed/x64-windows/include" \
+            -DFFMPEG_LIBRARY_DIR="$VCPKG_DIR/installed/x64-windows/lib" \
             -DOVITO_BUILD_PLUGIN_NETCDFPLUGIN=OFF \
             -DOVITO_BUILD_PLUGIN_AIAGENT=OFF \
             -DOVITO_BUILD_PLUGIN_ML=OFF \
@@ -105,6 +117,8 @@ jobs:
           cmake --install build --prefix "$PKG" 2>&1 | tee install.log
           EXE_DIR=$(dirname "$(find "$PKG" -name ovito.exe | head -n 1)")
           cp "$VCPKG_DIR"/installed/x64-windows-static-md/bin/*.dll "$EXE_DIR"/ 2>/dev/null || true
+          # ffmpeg and its own dependencies (zlib, bzip2, lzma, iconv...), from the dynamic triplet.
+          cp "$VCPKG_DIR"/installed/x64-windows/bin/*.dll "$EXE_DIR"/
           CRT=$(ls -d "$(cygpath -u "$VCToolsRedistDir")"/x64/Microsoft.VC*.CRT | head -n 1)
           cp "$CRT"/*.dll "$EXE_DIR"/
           BUILD_EXE_DIR=$(dirname "$(find build -name ovito.exe | head -n 1)")
@@ -143,7 +157,7 @@ jobs:
         run: |
           EXE=$(find pkg -name ovito.exe | head -n 1)
           CLEAN_PATH="/usr/bin:/c/Windows/System32:/c/Windows"
-          for t in bond-order-selftest structure-factor-selftest dxa-selftest; do
+          for t in video-selftest bond-order-selftest structure-factor-selftest dxa-selftest; do
             PATH="$CLEAN_PATH" timeout 600 "$EXE" --nogui --$t > isolated.log 2>&1 || { echo "FAILED: --$t (exit $?)"; tail -n 30 isolated.log; exit 1; }
             echo "ok: --$t"
           done
