@@ -218,10 +218,19 @@ void VideoEncoder::openFile(const QString& filename, int width, int height, floa
     // Be sure to use the correct pixel format (e.g. RGB, YUV).
     if(outputFormat->video_codec == AV_CODEC_ID_GIF)
         _codecContext->pix_fmt = AV_PIX_FMT_PAL8;
-    else if(_codec->pix_fmts)
-        _codecContext->pix_fmt = _codec->pix_fmts[0];
-    else
+    else {
         _codecContext->pix_fmt = AV_PIX_FMT_YUV422P;
+#if LIBAVCODEC_VERSION_MAJOR >= 62
+        // FFmpeg 8 removed AVCodec::pix_fmts.
+        const void* configs = nullptr;
+        int numConfigs = 0;
+        if(::avcodec_get_supported_config(nullptr, _codec, AV_CODEC_CONFIG_PIX_FORMAT, 0, &configs, &numConfigs) >= 0 && configs && numConfigs > 0)
+            _codecContext->pix_fmt = static_cast<const AVPixelFormat*>(configs)[0];
+#else
+        if(_codec->pix_fmts)
+            _codecContext->pix_fmt = _codec->pix_fmts[0];
+#endif
+    }
 
     // Some formats want stream headers to be separate.
     if(_formatContext->oformat->flags & AVFMT_GLOBALHEADER) {
@@ -313,9 +322,14 @@ void VideoEncoder::openFile(const QString& filename, int width, int height, floa
             throw Exception(tr("Failed to create the 'sink buffer' for animated GIF encoding: %1").arg(errorMessage(errCode)));
 
         // GIF has possible output of PAL8.
-        enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_PAL8, AV_PIX_FMT_NONE };
-
-        if((errCode = av_opt_set_int_list(_bufferSinkCtx, "pix_fmts", pix_fmts, AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN)) < 0)
+#if LIBAVFILTER_VERSION_MAJOR >= 11
+        // FFmpeg 8 removed the "pix_fmts" option of the buffer sink and the av_opt_set_int_list() macro.
+        errCode = av_opt_set(_bufferSinkCtx, "pixel_formats", "pal8", AV_OPT_SEARCH_CHILDREN);
+#else
+        const enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_PAL8 };
+        errCode = av_opt_set_bin(_bufferSinkCtx, "pix_fmts", reinterpret_cast<const uint8_t*>(pix_fmts), sizeof(pix_fmts), AV_OPT_SEARCH_CHILDREN);
+#endif
+        if(errCode < 0)
             throw Exception(tr("Failed to set the output pixel format for animated GIF encoding: %1").arg(errorMessage(errCode)));
 
         outputs->name = av_strdup("in");
