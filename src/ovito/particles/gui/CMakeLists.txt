@@ -59,6 +59,7 @@ OVITO_STANDARD_PLUGIN(ParticlesGui
         modifier/analysis/bader/BaderChargeIntegrationModifierEditor.cpp
         modifier/analysis/wignerseitz/WignerSeitzAnalysisModifierEditor.cpp
         modifier/analysis/vacancy/VacancyAnalysisModifierEditor.cpp
+        modifier/analysis/vacancy/DelaunayVacancyModifierEditor.cpp
         modifier/analysis/ptm/PolyhedralTemplateMatchingModifierEditor.cpp
         modifier/analysis/surface/ConstructSurfaceModifierEditor.cpp
         modifier/selection/ExpandSelectionModifierEditor.cpp

@@ -262,6 +262,12 @@ IF(NOT EMSCRIPTEN)
     ADD_TEST(NAME WignerSeitzSelfTest COMMAND Ovito --nogui --wigner-seitz-selftest)
 ENDIF()
 
+# In-process regression test for the reference-free Delaunay vacancy analysis modifier (see
+# DelaunayVacancySelfTestService in the Particles plugin). BCC and FCC crystals with known vacancies.
+IF(NOT EMSCRIPTEN)
+    ADD_TEST(NAME DelaunayVacancySelfTest COMMAND Ovito --nogui --delaunay-vacancy-selftest)
+ENDIF()
+
 # In-process regression test for the Calculate local entropy modifier (see
 # CalculateLocalEntropySelfTestService in the Particles plugin). Compares against NumPy reference values.
 IF(NOT EMSCRIPTEN)

@@ -85,6 +85,8 @@ SET(SourceFiles
     modifier/analysis/wignerseitz/WignerSeitzAnalysisModifier.cpp
     modifier/analysis/wignerseitz/WignerSeitzSelfTestService.cpp
     modifier/analysis/vacancy/VacancyAnalysisModifier.cpp
+    modifier/analysis/vacancy/DelaunayVacancyModifier.cpp
+    modifier/analysis/vacancy/DelaunayVacancySelfTestService.cpp
     modifier/analysis/vacancy/VacancyAnalysisSweepService.cpp
     modifier/analysis/ptm/PolyhedralTemplateMatchingModifier.cpp
     modifier/analysis/ptm/PTMAlgorithm.cpp

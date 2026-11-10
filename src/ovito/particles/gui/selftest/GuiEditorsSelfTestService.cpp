@@ -166,6 +166,7 @@ void GuiEditorsSelfTestService::applicationStarted()
             {"RenderLAMMPSRegionsModifier"}, {"BondOrderModifier"},
             {"ColorByTypeModifier"}, {"SliceModifier"}, {"ConstructSurfaceModifier"}, {"DislocationAnalysisModifier"},
             {"VacancyAnalysisModifier", false, true},       // Evaluated at the last frame, which has a vacancy.
+            {"DelaunayVacancyModifier"},
         };
     }
     else if(mode == QStringLiteral("grid")) {
