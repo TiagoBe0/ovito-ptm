@@ -30,10 +30,10 @@ namespace Ovito {
 /**
  * In-process test of the image and animation output path.
  *
- * Writes a PNG image and a 4-frame animated GIF (and an AVI where the ffmpeg build offers it) of a synthetic
- * gradient into a temporary directory and checks that each file has the right signature and a plausible size.
- * Fails if the GIF format is not offered by VideoEncoder::supportedFormats(), which is what happens when OVITO is
- * built without ffmpeg.
+ * Writes a PNG image, a 4-frame animated GIF and a 4-frame AVI of a synthetic gradient into a temporary
+ * directory and checks that each file has the right signature and a plausible size.
+ * Fails if the GIF or AVI format is not offered by VideoEncoder::supportedFormats(), which is what happens when
+ * OVITO is built without ffmpeg.
  *
  * Run with `ovito --nogui --video-selftest`; wired into `ctest` via src/main/CMakeLists.txt.
  */

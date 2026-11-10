@@ -323,7 +323,7 @@ void VideoEncoder::openFile(const QString& filename, int width, int height, floa
 
         // GIF has possible output of PAL8.
 #if LIBAVFILTER_VERSION_MAJOR >= 11
-        // FFmpeg 8 removed the "pix_fmts" option of the buffer sink and the av_opt_set_int_list() macro.
+        // FFmpeg 8 removed the "pix_fmts" option of the buffer sink in favor of "pixel_formats".
         errCode = av_opt_set(_bufferSinkCtx, "pixel_formats", "pal8", AV_OPT_SEARCH_CHILDREN);
 #else
         const enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_PAL8 };

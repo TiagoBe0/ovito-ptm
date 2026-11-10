@@ -69,7 +69,7 @@ bool checkFile(const QString& path, const QByteArray& signature)
 void VideoSelfTestService::registerCommandLineOptions(QCommandLineParser& cmdLineParser)
 {
     cmdLineParser.addOption(QCommandLineOption(QStringList{QStringLiteral("video-selftest")},
-        tr("Write a test PNG image and animated GIF and exit (0 on success, 1 on any failed check).")));
+        tr("Write a test PNG image, animated GIF and AVI and exit (0 on success, 1 on any failed check).")));
 }
 
 /******************************************************************************

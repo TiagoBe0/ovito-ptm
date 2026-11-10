@@ -87,7 +87,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download -R pal1000/mesa-dist-win --pattern '*-release-msvc.7z' -D mesa
+          # Pinned: the 26.2.6 release-msvc archive no longer contains the OpenGL driver (x64/opengl32.dll).
+          gh release download 26.2.5 -R pal1000/mesa-dist-win --pattern '*-release-msvc.7z' -D mesa
           7z x -omesa/x mesa/*.7z > /dev/null
           EXE_DIR=$(dirname "$(find build -name ovito.exe | head -n 1)")
           # Only the WGL driver: the archive also holds a d3d10warp.dll that would shadow the system's WARP device.
