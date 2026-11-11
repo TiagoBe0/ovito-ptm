@@ -318,19 +318,26 @@ void VideoEncoder::openFile(const QString& filename, int width, int height, floa
         if((errCode = ::avfilter_graph_create_filter(&_bufferSourceCtx, buffersrc, "in", args, nullptr, _filterGraph.get())) < 0)
             throw Exception(tr("Failed to create the 'source buffer' for animated GIF encoding: %1").arg(errorMessage(errCode)));
 
+        // GIF has possible output of PAL8.
+#if LIBAVFILTER_VERSION_MAJOR >= 11
+        // FFmpeg 8 removed the "pix_fmts" option of the buffer sink in favor of "pixel_formats", which
+        // can only be set before the filter is initialized, so allocate, configure and then initialize it.
+        _bufferSinkCtx = ::avfilter_graph_alloc_filter(_filterGraph.get(), buffersink, "out");
+        if(!_bufferSinkCtx)
+            throw Exception(tr("Failed to create the 'sink buffer' for animated GIF encoding."));
+        if((errCode = av_opt_set(_bufferSinkCtx, "pixel_formats", "pal8", AV_OPT_SEARCH_CHILDREN)) < 0)
+            throw Exception(tr("Failed to set the output pixel format for animated GIF encoding: %1").arg(errorMessage(errCode)));
+        if((errCode = ::avfilter_init_str(_bufferSinkCtx, nullptr)) < 0)
+            throw Exception(tr("Failed to create the 'sink buffer' for animated GIF encoding: %1").arg(errorMessage(errCode)));
+#else
         if((errCode = ::avfilter_graph_create_filter(&_bufferSinkCtx, buffersink, "out", nullptr, nullptr, _filterGraph.get())) < 0)
             throw Exception(tr("Failed to create the 'sink buffer' for animated GIF encoding: %1").arg(errorMessage(errCode)));
 
-        // GIF has possible output of PAL8.
-#if LIBAVFILTER_VERSION_MAJOR >= 11
-        // FFmpeg 8 removed the "pix_fmts" option of the buffer sink in favor of "pixel_formats".
-        errCode = av_opt_set(_bufferSinkCtx, "pixel_formats", "pal8", AV_OPT_SEARCH_CHILDREN);
-#else
         const enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_PAL8 };
         errCode = av_opt_set_bin(_bufferSinkCtx, "pix_fmts", reinterpret_cast<const uint8_t*>(pix_fmts), sizeof(pix_fmts), AV_OPT_SEARCH_CHILDREN);
-#endif
         if(errCode < 0)
             throw Exception(tr("Failed to set the output pixel format for animated GIF encoding: %1").arg(errorMessage(errCode)));
+#endif
 
         outputs->name = av_strdup("in");
         outputs->filter_ctx = _bufferSourceCtx;
