@@ -186,20 +186,20 @@ void refineGroup(const std::vector<Point3>& centers, const CutoffNeighborFinder&
 
     // Collect the atoms around the group (union of the spheres around each center), unwrapped consistently.
     struct NearAtom { size_t index; Point3 pos; };
-    std::vector<NearAtom> near;
+    std::vector<NearAtom> nearAtoms;
     for(const Point3& c : cu) {
         for(CutoffNeighborFinder::Query q(atomFinder, cell.wrapPoint(c)); !q.atEnd(); q.next())
-            near.push_back({q.current(), c + q.delta()});
+            nearAtoms.push_back({q.current(), c + q.delta()});
     }
-    std::sort(near.begin(), near.end(), [](const NearAtom& a, const NearAtom& b) { return a.index < b.index; });
+    std::sort(nearAtoms.begin(), nearAtoms.end(), [](const NearAtom& a, const NearAtom& b) { return a.index < b.index; });
     std::vector<Point3> atoms;
     const FloatType eps2 = 1e-6 * a0 * a0;
-    for(size_t i = 0; i < near.size(); i++) {
+    for(size_t i = 0; i < nearAtoms.size(); i++) {
         bool duplicate = false;
-        for(size_t k = i; k-- > 0 && near[k].index == near[i].index;) {
-            if((near[k].pos - near[i].pos).squaredLength() < eps2) { duplicate = true; break; }
+        for(size_t k = i; k-- > 0 && nearAtoms[k].index == nearAtoms[i].index;) {
+            if((nearAtoms[k].pos - nearAtoms[i].pos).squaredLength() < eps2) { duplicate = true; break; }
         }
-        if(!duplicate) atoms.push_back(near[i].pos);
+        if(!duplicate) atoms.push_back(nearAtoms[i].pos);
     }
     if(atoms.empty())
         return;
