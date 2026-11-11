@@ -130,7 +130,7 @@ bool check(const QString& name, bool ok, const QString& detail)
     return ok;
 }
 
-bool near(double a, double b) { return std::abs(a - b) < 1e-5; }
+bool approxEqual(double a, double b) { return std::abs(a - b) < 1e-5; }
 
 std::vector<const Cylinder*> ofBond(const std::vector<Cylinder>& cylinders, size_t bond)
 {
@@ -212,17 +212,17 @@ bool BondsVisSelfTestService::runTest()
         // Double bond: two pairs of half-bonds of width 0.8 w, axes 2 * 0.5 * 1.25 * 0.8 w apart.
         auto dbl = ofBond(cylinders, 1);
         bool dblOk = dbl.size() == 4;
-        for(auto c : dbl) dblOk &= near(c->width, 0.8 * w);
-        if(dblOk) dblOk &= near(separation(*dbl[0], *dbl[2]), 1.25 * 0.8 * w);
+        for(auto c : dbl) dblOk &= approxEqual(c->width, 0.8 * w);
+        if(dblOk) dblOk &= approxEqual(separation(*dbl[0], *dbl[2]), 1.25 * 0.8 * w);
         ok &= check(QStringLiteral("double bond: width 0.8 w, axes 1.25 * 0.8 w apart"), dblOk,
             dbl.size() == 4 ? QStringLiteral("width %1, separation %2").arg(dbl[0]->width).arg(separation(*dbl[0], *dbl[2])) : QStringLiteral("wrong count"));
 
         // Triple bond: width 0.63 w, central cylinder on the axis, outer ones 0.5 * 2.5 * 0.63 w away.
         auto tri = ofBond(cylinders, 2);
         bool triOk = tri.size() == 6;
-        for(auto c : tri) triOk &= near(c->width, 0.63 * w);
-        if(triOk) triOk &= near(separation(*tri[0], *tri[2]), 0.5 * 2.5 * 0.63 * w) && near(separation(*tri[0], *tri[4]), 0.5 * 2.5 * 0.63 * w)
-            && near(separation(*tri[2], *tri[4]), 2.5 * 0.63 * w);
+        for(auto c : tri) triOk &= approxEqual(c->width, 0.63 * w);
+        if(triOk) triOk &= approxEqual(separation(*tri[0], *tri[2]), 0.5 * 2.5 * 0.63 * w) && approxEqual(separation(*tri[0], *tri[4]), 0.5 * 2.5 * 0.63 * w)
+            && approxEqual(separation(*tri[2], *tri[4]), 2.5 * 0.63 * w);
         ok &= check(QStringLiteral("triple bond: width 0.63 w, spacing 0.5 * 2.5 * 0.63 w"), triOk,
             tri.size() == 6 ? QStringLiteral("width %1, outer separation %2").arg(tri[0]->width).arg(separation(*tri[2], *tri[4])) : QStringLiteral("wrong count"));
 
@@ -235,7 +235,7 @@ bool BondsVisSelfTestService::runTest()
                 if(i < 2) { solidDist += d / 2; }
                 else { dashedLength += frac[i]->length(); dashedDist += d / 4; }
             }
-            ok &= check(QStringLiteral("bond order 1.5: dashed length = 0.5 * bond length"), near(dashedLength, 0.7), QString::number(dashedLength));
+            ok &= check(QStringLiteral("bond order 1.5: dashed length = 0.5 * bond length"), approxEqual(dashedLength, 0.7), QString::number(dashedLength));
             ok &= check(QStringLiteral("bond order 1.5: dashed cylinders inside the ring"), dashedDist < solidDist,
                 QStringLiteral("mean distance to center: dashed %1, solid %2").arg(dashedDist).arg(solidDist));
         }
@@ -256,7 +256,7 @@ bool BondsVisSelfTestService::runTest()
         auto frac = ofBond(cylinders, 3);
         double dashedLength = 0;
         for(size_t i = 2; i < frac.size(); i++) dashedLength += frac[i]->length();
-        ok &= check(QStringLiteral("cylinders"), cylinders.size() == 24 && frac.size() == 6 && near(dashedLength, 0.7),
+        ok &= check(QStringLiteral("cylinders"), cylinders.size() == 24 && frac.size() == 6 && approxEqual(dashedLength, 0.7),
             QStringLiteral("%1 total, %2 for bond 3, dashed length %3").arg(cylinders.size()).arg(frac.size()).arg(dashedLength));
     }
 
@@ -268,7 +268,7 @@ bool BondsVisSelfTestService::runTest()
         OORef<BondPickInfo> pickInfo;
         std::vector<Cylinder> cylinders = renderBonds(buildRing(variant == 0 ? ringOrders : std::vector<double>(6, 1.0)), vis, pickInfo);
         bool plain = cylinders.size() == 12;
-        for(size_t i = 0; i < cylinders.size(); i++) plain &= cylinders[i].bond == i / 2 && near(cylinders[i].width, w);
+        for(size_t i = 0; i < cylinders.size(); i++) plain &= cylinders[i].bond == i / 2 && approxEqual(cylinders[i].width, w);
         ok &= check(variant == 0 ? QStringLiteral("visualizeBondOrder = false") : QStringLiteral("all bond orders 1"), plain,
             QStringLiteral("%1 cylinders").arg(cylinders.size()));
     }

@@ -416,22 +416,22 @@ void testScalingStatistics(Checker& c)
         return SomAlgorithm::trainTree(layers, samples, featureIndex, rng).som.scaling[0];
     };
 
-    auto near = [](double got, double expected) { return std::abs(got - expected) < 1e-6; };
+    auto approxEqual = [](double got, double expected) { return std::abs(got - expected) < 1e-6; };
 
     const SomAlgorithm::FeatureScaling normal = statsFor(SomAlgorithm::ScalingMethod::Normal);
     c.check(QStringLiteral("normal scaling stores (min, max) = (1, 10)"),
-        near(normal.stat1, 1.0) && near(normal.stat2, 10.0));
+        approxEqual(normal.stat1, 1.0) && approxEqual(normal.stat2, 10.0));
 
     const SomAlgorithm::FeatureScaling standard = statsFor(SomAlgorithm::ScalingMethod::Standard);
-    c.check(QStringLiteral("standard scaling stores mean = 4"), near(standard.stat1, 4.0));
+    c.check(QStringLiteral("standard scaling stores mean = 4"), approxEqual(standard.stat1, 4.0));
     c.check(QStringLiteral("standard scaling uses the sample std (ddof=1), as pandas does"),
-        near(standard.stat2, std::sqrt(12.5)));
+        approxEqual(standard.stat2, std::sqrt(12.5)));
     c.check(QStringLiteral("standard scaling is NOT the population std (ddof=0)"),
-        !near(standard.stat2, std::sqrt(10.0)));
+        !approxEqual(standard.stat2, std::sqrt(10.0)));
 
     const SomAlgorithm::FeatureScaling robust = statsFor(SomAlgorithm::ScalingMethod::Robust);
     c.check(QStringLiteral("robust scaling stores (median, IQR) = (3, 2)"),
-        near(robust.stat1, 3.0) && near(robust.stat2, 2.0));
+        approxEqual(robust.stat1, 3.0) && approxEqual(robust.stat2, 2.0));
 }
 
 /// Test 6: the same seed must give the same model, bit for bit. A SOM starts from random
