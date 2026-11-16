@@ -267,6 +267,14 @@ ENDIF()
 IF(NOT EMSCRIPTEN)
     ADD_TEST(NAME DelaunayVacancySelfTest COMMAND Ovito --nogui --delaunay-vacancy-selftest)
 ENDIF()
+# Same test with a nonsensical lattice constant and no site output memorized as the user's defaults in Ovito.conf, which the
+# command-line service must ignore. QSettings reads XDG_CONFIG_HOME only on Linux and macOS (Windows: registry).
+IF(NOT EMSCRIPTEN AND NOT WIN32)
+    SET(_delaunay_user_config "${CMAKE_CURRENT_BINARY_DIR}/delaunay_vacancy_user_defaults_config")
+    FILE(WRITE "${_delaunay_user_config}/Ovito/Ovito.conf" "[Particles]\nDelaunayVacancyModifier\\latticeConstant=0.9\nDelaunayVacancyModifier\\outputVacancySites=false\n")
+    ADD_TEST(NAME DelaunayVacancyUserDefaultsSelfTest COMMAND Ovito --nogui --delaunay-vacancy-selftest)
+    SET_TESTS_PROPERTIES(DelaunayVacancyUserDefaultsSelfTest PROPERTIES ENVIRONMENT "XDG_CONFIG_HOME=${_delaunay_user_config}")
+ENDIF()
 
 # In-process regression test for the Calculate local entropy modifier (see
 # CalculateLocalEntropySelfTestService in the Particles plugin). Compares against NumPy reference values.

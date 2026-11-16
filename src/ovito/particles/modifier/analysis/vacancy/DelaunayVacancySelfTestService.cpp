@@ -33,6 +33,7 @@
 #include <ovito/core/dataset/pipeline/PipelineEvaluationRequest.h>
 #include <ovito/core/dataset/scene/Pipeline.h>
 #include <ovito/core/utilities/Exception.h>
+#include <ovito/core/utilities/concurrent/MainThreadOperation.h>
 #include "DelaunayVacancySelfTestService.h"
 #include <QCommandLineParser>
 #include <QCoreApplication>
@@ -206,13 +207,18 @@ void DelaunayVacancySelfTestService::registerCommandLineOptions(QCommandLinePars
 void DelaunayVacancySelfTestService::applicationStarted()
 {
     const QCommandLineParser& parser = StandaloneApplication::instance()->cmdLineParser();
+    if(!parser.isSet(QStringLiteral("delaunay-vacancy-run")) && !parser.isSet(QStringLiteral("delaunay-vacancy-selftest")))
+        return;
+
+    // Run as a non-interactive operation, like a script, so that the modifier starts from its documented
+    // defaults (lattice constant 0 = estimate) instead of the parameter values saved as defaults in the GUI.
+    MainThreadOperation operation(*this_task::ui(), MainThreadOperation::Isolated, false);
+
     if(parser.isSet(QStringLiteral("delaunay-vacancy-run"))) {
         runBatch(parser);
         QCoreApplication::exit(0);
         return;
     }
-    if(!parser.isSet(QStringLiteral("delaunay-vacancy-selftest")))
-        return;
 
     bool ok = false;
     try {
