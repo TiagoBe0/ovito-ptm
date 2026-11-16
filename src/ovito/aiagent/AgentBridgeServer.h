@@ -74,6 +74,10 @@ public:
     /// Returns the error message of the last failed operation.
     const QString& errorString() const { return _errorString; }
 
+    /// Returns the pipeline of the scene addressed by a 'pipeline' request parameter (an index in scene
+    /// order, a name, or undefined for the selected pipeline), or throws an Exception.
+    static Pipeline* selectPipeline(Scene* scene, const QJsonValue& selector);
+
 Q_SIGNALS:
 
     /// Emitted whenever a request has been handled, for logging purposes.

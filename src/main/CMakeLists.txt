@@ -364,3 +364,9 @@ IF(NOT EMSCRIPTEN)
         ENVIRONMENT "${_gui_test_env}"
         TIMEOUT 400)
 ENDIF()
+
+# In-process regression test for the pipeline selection of the AI agent bridge (see
+# AgentBridgeSelfTestService in the AIAgentGui plugin). Scene with several pipelines, some sharing a name.
+IF(NOT EMSCRIPTEN AND TARGET AIAgentGui)
+    ADD_TEST(NAME AgentBridgeSelfTest COMMAND Ovito --nogui --agent-bridge-selftest)
+ENDIF()

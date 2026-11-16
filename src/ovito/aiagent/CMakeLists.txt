@@ -26,6 +26,7 @@ OVITO_STANDARD_PLUGIN(AIAgentGui
     SOURCES
         AIAgentApplet.cpp
         AgentBridgeServer.cpp
+        AgentBridgeSelfTestService.cpp
         PtyProcess.cpp
         TerminalWidget.cpp
     PLUGIN_DEPENDENCIES StdObj

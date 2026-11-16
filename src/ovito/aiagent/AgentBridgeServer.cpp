@@ -219,7 +219,14 @@ Pipeline* AgentBridgeServer::resolvePipeline(const QJsonObject& params) const
     Scene* scene = _ui.datasetContainer().activeScene();
     if(!scene)
         throw Exception(tr("There is no active scene."));
+    return selectPipeline(scene, params.value(QStringLiteral("pipeline")));
+}
 
+/******************************************************************************
+* Returns the pipeline of the scene addressed by a 'pipeline' request parameter.
+******************************************************************************/
+Pipeline* AgentBridgeServer::selectPipeline(Scene* scene, const QJsonValue& selector)
+{
     // Collect the pipelines in scene order, which is the order the agent sees them in.
     std::vector<SceneNode*> nodes;
     for(SceneNode* node : scene->children()) {
@@ -229,7 +236,6 @@ Pipeline* AgentBridgeServer::resolvePipeline(const QJsonObject& params) const
     if(nodes.empty())
         throw Exception(tr("The scene contains no pipeline. Import a data file first."));
 
-    const QJsonValue selector = params.value(QStringLiteral("pipeline"));
     if(selector.isUndefined() || selector.isNull()) {
         // Default to what the user has selected in the pipeline selector, so that the agent
         // and the user talk about the same object when nothing else is said.
@@ -247,12 +253,24 @@ Pipeline* AgentBridgeServer::resolvePipeline(const QJsonObject& params) const
             throw Exception(tr("There is no pipeline with index %1. The scene contains %2 pipeline(s).").arg(index).arg(nodes.size()));
         return nodes[index]->pipeline();
     }
+    // Several pipelines can share a name (two dumps with the same file name, a clone that was not renamed).
+    // Refuse instead of picking the first one, so that the agent does not modify or delete the wrong pipeline.
     const QString name = selector.toString();
-    for(SceneNode* node : nodes) {
-        if(node->sceneNodeName() == name || node->pipeline()->objectTitle() == name)
-            return node->pipeline();
+    std::vector<int> matches;
+    for(int index = 0; index < (int)nodes.size(); index++) {
+        if(nodes[index]->sceneNodeName() == name || nodes[index]->pipeline()->objectTitle() == name)
+            matches.push_back(index);
     }
-    throw Exception(tr("There is no pipeline named '%1' in the scene.").arg(name));
+    if(matches.empty())
+        throw Exception(tr("There is no pipeline named '%1' in the scene.").arg(name));
+    if(matches.size() > 1) {
+        QStringList indices;
+        for(int index : matches)
+            indices.push_back(QString::number(index));
+        throw Exception(tr("The name '%1' matches %2 pipelines (indices %3). Address the pipeline by its index instead.")
+            .arg(name).arg(matches.size()).arg(indices.join(QStringLiteral(", "))));
+    }
+    return nodes[matches.front()]->pipeline();
 }
 
 /******************************************************************************
