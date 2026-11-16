@@ -100,6 +100,10 @@ void MainWindow::initializeWindow()
     dataInspectorSplitter->addWidget(_dataInspector);
     dataInspectorSplitter->setStretchFactor(0, 1);
     dataInspectorSplitter->setStretchFactor(1, 0);
+    // Start with the data inspector collapsed to its tab bar, so that the viewports get all the vertical space.
+    // Otherwise the splitter sizes the panel to the preferred height of its largest tab page.
+    // The user expands it with the button next to the tabs or by clicking a tab.
+    dataInspectorSplitter->setSizes({ QWIDGETSIZE_MAX, 0 });
     setCentralWidget(dataInspectorSplitter);
     _viewportsPanel->setFocus(Qt::OtherFocusReason);
 

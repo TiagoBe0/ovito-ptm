@@ -26,6 +26,7 @@
 #include <ovito/gui/desktop/mainwin/MainWindowUI.h>
 #include <ovito/gui/desktop/mainwin/cmdpanel/CommandPanel.h>
 #include <ovito/gui/desktop/mainwin/cmdpanel/ModifyCommandPage.h>
+#include <ovito/gui/desktop/mainwin/data_inspector/DataInspectorPanel.h>
 #include <ovito/gui/desktop/properties/PropertiesPanel.h>
 #include <ovito/gui/desktop/properties/PropertiesEditor.h>
 #include <ovito/gui/desktop/properties/DefaultPropertiesEditor.h>
@@ -238,6 +239,25 @@ void GuiEditorsSelfTestService::tick()
     ModifyCommandPage* page = _ui->mainWindow()->commandPanel()->modifyPage();
     PipelineListModel* pipelineModel = page->pipelineListModel();
     _ticksInPhase++;
+
+    // The data inspector panel must start collapsed, leaving the viewports all the vertical space.
+    if(!_inspectorChecked) {
+        _inspectorChecked = true;
+        DataInspectorPanel* inspector = _ui->mainWindow()->findChild<DataInspectorPanel*>();
+        QSplitter* splitter = inspector ? qobject_cast<QSplitter*>(inspector->parentWidget()) : nullptr;
+        if(!splitter) {
+            qCritical().noquote() << "  FAIL data inspector: panel or its splitter not found";
+            _failures++;
+        }
+        else if(splitter->sizes().value(1) > inspector->minimumSizeHint().height()) {
+            qCritical().noquote() << "  FAIL data inspector collapsed at startup: splitter sizes" << splitter->sizes()
+                << "(panel minimum" << inspector->minimumSizeHint().height() << ")";
+            _failures++;
+        }
+        else {
+            qInfo().noquote() << "  PASS data inspector collapsed at startup: splitter sizes" << splitter->sizes();
+        }
+    }
 
     switch(_phase) {
     case Phase::WaitForImport:

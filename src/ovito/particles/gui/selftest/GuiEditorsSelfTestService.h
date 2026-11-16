@@ -107,6 +107,7 @@ private:
     QElapsedTimer _stepClock;
     QStringList _report;
     int _failures = 0;
+    bool _inspectorChecked = false;    ///< The startup state of the data inspector panel has been checked.
 };
 
 }   // End of namespace
